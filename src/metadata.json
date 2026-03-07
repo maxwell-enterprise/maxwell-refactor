@@ -1,0 +1,7 @@
+{
+  "name": "Maxwell Leadership Enterprise V1.0",
+  "description": "An integrated end-to-end platform for leadership training management, combining Event Management, LMS, E-Commerce, Finance, and AI-driven CRM.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
