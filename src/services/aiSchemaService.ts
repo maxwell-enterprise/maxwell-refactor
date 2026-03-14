@@ -117,6 +117,7 @@ export const AISchemaService = {
           responseMimeType: "application/json"
       }
     });
+    const responseText = response.text ?? "";
 
     // Log AI usage
     await AIUsageService.logCall({
@@ -124,9 +125,9 @@ export const AISchemaService = {
         featureName: 'AI Schema Architect (Context Aware)',
         model,
         prompt: 'Generate Schema with Lock & Key Context',
-        response: response.text
+        response: responseText
     });
 
-    return JSON.parse(response.text) as AISchemaResponse;
+    return JSON.parse(responseText || "{}") as AISchemaResponse;
   }
 };

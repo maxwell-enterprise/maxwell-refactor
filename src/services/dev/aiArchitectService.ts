@@ -74,8 +74,9 @@ export const AIArchitectService = {
                 responseMimeType: "application/json"
             }
         });
+        const responseText = response.text ?? "{}";
 
-        const result = JSON.parse(response.text);
+        const result = JSON.parse(responseText);
 
         // Log usage
         await AIUsageService.logCall({
@@ -83,7 +84,7 @@ export const AIArchitectService = {
             featureName: `Architect Iteration - ${phase}`,
             model,
             prompt,
-            response: response.text
+            response: responseText
         });
 
         return result;

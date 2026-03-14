@@ -1,3 +1,4 @@
+"use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useEffect } from 'react';
 import { Role, SecurityAuditLog, AccessPolicy, AccessLevel, DataScope } from '../types/security';

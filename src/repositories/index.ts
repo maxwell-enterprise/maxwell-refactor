@@ -39,14 +39,21 @@ import { MockWhatsappRepository } from './mock/mockWhatsappRepository';
 import { SupabaseWhatsappRepository } from './supabase/supabaseWhatsappRepository';
 import { MockEventRepository } from './mock/mockEventRepository';
 import { SupabaseEventRepository } from './supabase/supabaseEventRepository';
+import { ApiEventRepository } from './api/apiEventRepository';
 import { MockEntitlementRepository } from './mock/mockEntitlementRepository';
 import { SupabaseEntitlementRepository } from './supabase/supabaseEntitlementRepository';
 import { MockCreditTagRepository } from './mock/mockCreditTagRepository';
 import { SupabaseCreditTagRepository } from './supabase/supabaseCreditTagRepository';
+import { ApiCreditTagRepository } from './api/apiCreditTagRepository';
 import { MockCartRepository } from './mock/mockCartRepository';
 import { SupabaseCartRepository } from './supabase/supabaseCartRepository';
+import { ApiCartRepository } from './api/apiCartRepository';
 import { MockInvitationRepository } from './mock/mockInvitationRepository';
 import { SupabaseInvitationRepository } from './supabase/supabaseInvitationRepository';
+import { ApiInvitationRepository } from './api/apiInvitationRepository';
+import { ApiEntitlementRepository } from './api/apiEntitlementRepository';
+import { ApiMemberRepository } from './api/apiMemberRepository';
+import { ApiProductRepository } from './api/apiProductRepository';
 
 // Re-export contracts for consumers
 export * from './contracts';
@@ -71,32 +78,56 @@ let invitationRepo: IInvitationRepository;
 export const RepositoryFactory = {
     getMemberRepository: (): IMemberRepository => {
         if (!memberRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.MEMBERS === 'SUPABASE';
-            memberRepo = useRealDb ? new SupabaseMemberRepository() : new MockMemberRepository();
+            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.MEMBERS;
+            if (mode === 'API') {
+                memberRepo = new ApiMemberRepository();
+            } else if (mode === 'SUPABASE') {
+                memberRepo = new SupabaseMemberRepository();
+            } else {
+                memberRepo = new MockMemberRepository();
+            }
         }
         return memberRepo;
     },
 
     getProductRepository: (): IProductRepository => {
         if (!productRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.PRODUCTS === 'SUPABASE';
-            productRepo = useRealDb ? new SupabaseProductRepository() : new MockProductRepository();
+            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.PRODUCTS;
+            if (mode === 'API') {
+                productRepo = new ApiProductRepository();
+            } else if (mode === 'SUPABASE') {
+                productRepo = new SupabaseProductRepository();
+            } else {
+                productRepo = new MockProductRepository();
+            }
         }
         return productRepo;
     },
 
     getEventRepository: (): IEventRepository => {
         if (!eventRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.EVENTS === 'SUPABASE';
-            eventRepo = useRealDb ? new SupabaseEventRepository() : new MockEventRepository();
+            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.EVENTS;
+            if (mode === 'API') {
+                eventRepo = new ApiEventRepository();
+            } else if (mode === 'SUPABASE') {
+                eventRepo = new SupabaseEventRepository();
+            } else {
+                eventRepo = new MockEventRepository();
+            }
         }
         return eventRepo;
     },
 
     getInvitationRepository: (): IInvitationRepository => {
         if (!invitationRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.EVENTS === 'SUPABASE'; // Grouped with Events Domain
-            invitationRepo = useRealDb ? new SupabaseInvitationRepository() : new MockInvitationRepository();
+            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.INVITATIONS;
+            if (mode === 'API') {
+                invitationRepo = new ApiInvitationRepository();
+            } else if (mode === 'SUPABASE') {
+                invitationRepo = new SupabaseInvitationRepository();
+            } else {
+                invitationRepo = new MockInvitationRepository();
+            }
         }
         return invitationRepo;
     },
@@ -167,24 +198,42 @@ export const RepositoryFactory = {
 
     getEntitlementRepository: (): IEntitlementRepository => {
         if (!entitlementRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.MEMBERS === 'SUPABASE';
-            entitlementRepo = useRealDb ? new SupabaseEntitlementRepository() : new MockEntitlementRepository();
+            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.ENTITLEMENTS;
+            if (mode === 'API') {
+                entitlementRepo = new ApiEntitlementRepository();
+            } else if (mode === 'SUPABASE') {
+                entitlementRepo = new SupabaseEntitlementRepository();
+            } else {
+                entitlementRepo = new MockEntitlementRepository();
+            }
         }
         return entitlementRepo;
     },
 
     getCreditTagRepository: (): ICreditTagRepository => {
         if (!creditTagRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.OPS === 'SUPABASE';
-            creditTagRepo = useRealDb ? new SupabaseCreditTagRepository() : new MockCreditTagRepository();
+            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS;
+            if (mode === 'API') {
+                creditTagRepo = new ApiCreditTagRepository();
+            } else if (mode === 'SUPABASE') {
+                creditTagRepo = new SupabaseCreditTagRepository();
+            } else {
+                creditTagRepo = new MockCreditTagRepository();
+            }
         }
         return creditTagRepo;
     },
 
     getCartRepository: (): ICartRepository => {
         if (!cartRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'SUPABASE';
-            cartRepo = useRealDb ? new SupabaseCartRepository() : new MockCartRepository();
+            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMERCE;
+            if (mode === 'API') {
+                cartRepo = new ApiCartRepository();
+            } else if (mode === 'SUPABASE') {
+                cartRepo = new SupabaseCartRepository();
+            } else {
+                cartRepo = new MockCartRepository();
+            }
         }
         return cartRepo;
     }

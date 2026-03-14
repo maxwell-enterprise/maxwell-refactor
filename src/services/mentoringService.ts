@@ -123,7 +123,7 @@ export const MentoringService = {
             config: { responseMimeType: 'application/json' }
         });
         try {
-            const rawItems = JSON.parse(extractRes.text);
+            const rawItems = JSON.parse(extractRes.text ?? "[]");
             const newActions: ActionItem[] = rawItems.map((ri: any) => ({
                 id: `ACT-${Math.random()}`,
                 task: ri.task,

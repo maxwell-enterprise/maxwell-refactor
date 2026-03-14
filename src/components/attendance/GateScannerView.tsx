@@ -230,12 +230,14 @@ const GateScannerView: React.FC = () => {
 
   // --- RENDER: ACTIVE SCANNER MODE ---
   const activeEvent = activeEvents.find(e => e.id === config.eventId);
+  const fallbackGate = availableGates.find((gate) => gate.id === config.gateId);
   
   // Find gate info either from event.gates OR fallback seeds
   let activeGateName = config.gateId;
   const gateFromEvent = activeEvent?.gates?.find(g => g.id === config.gateId);
   const gateFromSeed = ATTENDANCE_TEST_GATES.find(g => g.id === config.gateId);
   if (gateFromEvent) activeGateName = gateFromEvent.name;
+  else if (fallbackGate) activeGateName = fallbackGate.name;
   else if (gateFromSeed) activeGateName = gateFromSeed.label;
 
   return (

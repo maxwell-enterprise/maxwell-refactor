@@ -8,6 +8,27 @@ import { APP_CONFIG } from '../lib/config';
 import { supabase } from '../lib/supabaseClient';
 import { EventBus } from './eventBus';
 import { AuditService } from './auditService'; // Import Audit
+import { apiRequest } from '../repositories/api/apiClient';
+
+const shouldUseApi = () =>
+    !APP_CONFIG.USE_MOCK_GLOBAL &&
+    (APP_CONFIG.DOMAINS.OPS === 'API' || APP_CONFIG.DOMAINS.EVENTS === 'API');
+
+interface ApiMasterDoneTag {
+    id: string;
+    code: string;
+    label: string;
+    category: 'CORE' | 'ELECTIVE' | 'SPECIAL';
+    description?: string | null;
+}
+
+const mapApiMasterDoneTag = (tag: ApiMasterDoneTag): MasterDoneTag => ({
+    id: tag.id,
+    code: tag.code,
+    label: tag.label,
+    category: tag.category,
+    description: tag.description ?? undefined
+});
 
 export const CertificationService = {
 
@@ -37,6 +58,11 @@ export const CertificationService = {
 
     // --- NEW: MASTER TAG MANAGEMENT ---
     getMasterTags: async (): Promise<MasterDoneTag[]> => {
+        if (shouldUseApi()) {
+            const data = await apiRequest<ApiMasterDoneTag[]>('/master-done-tags');
+            return data.map(mapApiMasterDoneTag);
+        }
+
         if (APP_CONFIG.USE_MOCK) {
             try {
                 if (await DevDatabase.isEmpty('master_done_tags')) {
@@ -52,6 +78,29 @@ export const CertificationService = {
     },
 
     saveMasterTag: async (tag: MasterDoneTag): Promise<void> => {
+        if (shouldUseApi()) {
+            const payload = JSON.stringify({
+                code: tag.code,
+                label: tag.label,
+                category: tag.category,
+                description: tag.description
+            });
+
+            if (tag.id && !tag.id.startsWith('TAG-')) {
+                await apiRequest<ApiMasterDoneTag>(`/master-done-tags/${encodeURIComponent(tag.id)}`, {
+                    method: 'PATCH',
+                    body: payload
+                });
+                return;
+            }
+
+            await apiRequest<ApiMasterDoneTag>('/master-done-tags', {
+                method: 'POST',
+                body: payload
+            });
+            return;
+        }
+
         if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('master_done_tags', tag);
             return;

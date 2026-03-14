@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AttendanceService } from '../../services/attendanceService';
 import { DataService } from '../../services/dataService';
 import { AttendanceRecord, Event, Member } from '../../types/index';
+import { EventGateConfig } from '../../types/attendance';
 import { ATTENDANCE_TEST_GATES } from '../../seeds/attendance_testing';
 import { 
     Calendar, Users, ArrowRight, BarChart3, Download, Search, 
@@ -64,6 +65,19 @@ const AttendanceConsole: React.FC = () => {
     };
 
     const selectedEvent = events.find(e => e.id === selectedEventId);
+    const visibleGates = useMemo<EventGateConfig[]>(() => {
+        if (selectedEvent?.gates?.length) {
+            return selectedEvent.gates.filter((gate) => gate.isActive);
+        }
+
+        return ATTENDANCE_TEST_GATES.map((gate) => ({
+            id: gate.id,
+            name: gate.label,
+            allowedTiers: gate.allowedTiers,
+            assignedUserIds: [],
+            isActive: true,
+        }));
+    }, [selectedEvent]);
 
     // --- METRICS ---
     const totalPresent = records.length;
@@ -186,9 +200,9 @@ const AttendanceConsole: React.FC = () => {
                         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm col-span-2">
                             <p className="text-xs font-bold text-slate-400 uppercase mb-3">Gate Throughput</p>
                             <div className="grid grid-cols-3 gap-2">
-                                {ATTENDANCE_TEST_GATES.map(gate => (
+                                {visibleGates.map(gate => (
                                     <div key={gate.id} className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                        <div className="text-[10px] font-bold text-slate-500 truncate">{gate.label}</div>
+                                        <div className="text-[10px] font-bold text-slate-500 truncate">{gate.name}</div>
                                         <div className="text-xl font-bold text-slate-800">{gateStats[gate.id] || 0}</div>
                                     </div>
                                 ))}

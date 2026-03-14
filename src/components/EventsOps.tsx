@@ -243,7 +243,7 @@ const EventsAdmin: React.FC = () => {
             endDate: eventData.endDate,
             time: eventData.time || '09:00',
             location: eventData.location || 'TBD',
-            locationMode: eventData.locationMode,
+            locationMode: eventData.locationMode || 'OFFLINE',
             locationMapLink: eventData.locationMapLink,
             onlineMeetingLink: eventData.onlineMeetingLink,
             capacity: eventData.capacity || 100,

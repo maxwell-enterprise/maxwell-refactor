@@ -28,6 +28,7 @@ export const AIService = {
                 contents: message,
                 config: { systemInstruction: systemPrompt }
             });
+            const responseText = response.text ?? "";
 
             // Log usage
             await AIUsageService.logCall({
@@ -35,10 +36,10 @@ export const AIService = {
                 featureName: 'AI Coach Chat',
                 model,
                 prompt: message,
-                response: response.text
+                response: responseText
             });
 
-            return response.text;
+            return responseText;
         } catch (e) {
             console.error("Gemini API Error", e);
             // Fallback to mock if API fails

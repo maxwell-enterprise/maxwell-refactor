@@ -160,16 +160,18 @@ export const AIOptimizerService = {
                     temperature: 0 
                 }
             });
+            const responseText = response.text ?? "";
 
             await AIUsageService.logCall({
                 userId: 'admin',
                 featureName: `Schema Opt - ${category}`,
                 model,
                 prompt: `Optimization for ${category}`,
-                response: response.text
+                response: responseText
             });
 
-            const result = JSON.parse(response.text);
+            if (!responseText) continue;
+            const result = JSON.parse(responseText);
             
             if (result.changes) allChanges = [...allChanges, ...result.changes];
             if (result.sqlFragment) accumulatedSQL += `\n/* --- ${category} --- */\n${result.sqlFragment}\n`;

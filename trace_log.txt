@@ -1,0 +1,139 @@
+================================================================================
+TRACE LOG — Event Catalogue Admission Policy Fix
+================================================================================
+Date    : 2026-03-09
+Purpose : Membuat event di Event Catalogue (My Zone) bisa diklik & di-register
+          tanpa harus punya Credit Pass, berdasarkan admissionPolicy event.
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 1: src/components/EventMarketplace.tsx
+────────────────────────────────────────────────────────────────────────────────
+
+[EDIT 1] — Tambah fungsi getEventAccess()
+  Location : Setelah fungsi checkEligibility() (sekitar line 95)
+  Type     : INSERT (kode baru ditambahkan)
+  Detail   :
+    - Ditambahkan fungsi getEventAccess(event) yang mengembalikan objek
+      { accessible, label, type } berdasarkan event.admissionPolicy:
+        * OPEN_MEMBER / OPEN_PUBLIC  → { accessible: true, label: 'Free', type: 'FREE' }
+        * ON_SITE_DEDUCTION          → { accessible: true, label: 'Pay at Gate', type: 'GATE' }
+        * PRE_BOOKED + punya pass    → { accessible: true, label: '1 Credit', type: 'CREDIT' }
+        * PRE_BOOKED + tanpa pass    → { accessible: false, label: 'Credit Required', type: 'LOCKED' }
+
+[EDIT 2] — Update handleOpenRedeem()
+  Location : Fungsi handleOpenRedeem (sekitar line 130-145)
+  Type     : REPLACE (logika lama diganti)
+  Original :
+    - Hanya cek checkEligibility(event), jika ada pass baru buka modal,
+      jika tidak ada pass → showToast error.
+  Changed  :
+    - Cek getEventAccess(event) dulu:
+        * FREE / GATE → langsung buka modal, setSelectedCreditPass(null)
+        * CREDIT      → buka modal dengan credit pass
+        * LOCKED      → showToast error
+
+[EDIT 3] — Update handleConfirmRedeem()
+  Location : Fungsi handleConfirmRedeem (sekitar line 148-175)
+  Type     : REPLACE (logika lama diganti)
+  Original :
+    - Guard: if (!selectedEvent || !selectedCreditPass || !user) return
+    - Selalu panggil EntitlementService.redeemAndAssign()
+    - Toast: 'Redemption Successful!'
+  Changed  :
+    - Guard: if (!selectedEvent || !user) return  (creditPass tidak wajib lagi)
+    - Branching berdasarkan access.type:
+        * FREE / GATE → panggil EntitlementService.registerFreeEvent()
+        * CREDIT      → panggil EntitlementService.redeemAndAssign()
+    - Toast disesuaikan per tipe:
+        * FREE → 'Registration Successful!'
+        * GATE → 'Registered! Pay at gate on event day.'
+        * CREDIT → 'Redemption Successful!'
+
+[EDIT 4] — Update event card rendering (grid)
+  Location : Di dalam upcomingEvents.map() (sekitar line 260-270)
+  Type     : REPLACE
+  Original :
+    - const eligiblePass = checkEligibility(event)
+    - const isEligible = !!eligiblePass
+  Changed  :
+    - const access = getEventAccess(event)
+    - const isEligible = access.accessible
+
+[EDIT 5] — Update overlay badges
+  Location : Di dalam div "Overlay Badges" pada event card (sekitar line 285-295)
+  Type     : INSERT + MODIFY
+  Original :
+    - Hanya badge "Restricted" (Lock) jika !isEligible && !isContainer
+  Changed  :
+    - Tambah badge "Open" (CheckCircle, hijau) jika access.type === 'FREE'
+    - Tambah badge "Pay at Gate" (CreditCard, kuning) jika access.type === 'GATE'
+    - Badge "Restricted" tetap ada untuk LOCKED
+
+[EDIT 6] — Update tombol aksi di card footer
+  Location : Di bagian bawah event card, setelah isContainer check (sekitar line 310-335)
+  Type     : REPLACE
+  Original :
+    - Label: isEligible ? '1 Credit' : 'Credit Required'
+    - Button: isEligible ? 'Redeem' : 'Pass Needed' (disabled)
+    - Warna: selalu bg-slate-900
+  Changed  :
+    - Label: access.label (Free / Pay at Gate / 1 Credit / Credit Required)
+    - Warna label: hijau (FREE), kuning (GATE), indigo (CREDIT), abu (LOCKED)
+    - Button teks: 'Register' (FREE/GATE) atau 'Redeem' (CREDIT)
+    - Warna button: hijau (FREE), kuning (GATE), hitam (CREDIT)
+    - Disabled 'Pass Needed' tetap untuk LOCKED
+
+[EDIT 7] — Tambah Registration/Redemption Modal
+  Location : Sebelum closing </div> komponen, menggantikan komentar placeholder
+  Type     : REPLACE (komentar "Rest of the file (Modals)" diganti modal lengkap)
+  Original :
+    - {/* ... Rest of the file (Modals) ... */}
+  Changed  :
+    - Modal registrasi/redemption lengkap dengan:
+        * Header: nama event, tanggal, lokasi, badge tipe akses
+        * Form assignee: 3 pilihan (MYSELF / GUEST / DRAFT)
+        * Input guest: name, email, phone
+        * Info draft ticket
+        * Footer: Cancel + Confirm button (warna sesuai tipe akses)
+    - Modal series viewing untuk CONTAINER events:
+        * Daftar child sessions
+        * Tiap session punya tombol Register/Redeem sesuai aksesnya
+
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 2: src/services/entitlementService.ts
+────────────────────────────────────────────────────────────────────────────────
+
+[EDIT 1] — Tambah method registerFreeEvent()
+  Location : Sebelum revokeTicketGift() (sekitar line 155)
+  Type     : INSERT (method baru ditambahkan)
+  Detail   :
+    - Method: registerFreeEvent(userId, eventId, assignee)
+    - Fungsi: Membuat tiket langsung TANPA konsumsi credit
+    - Digunakan untuk event dengan admissionPolicy:
+        * OPEN_MEMBER
+        * OPEN_PUBLIC
+        * ON_SITE_DEDUCTION
+    - Flow:
+        1. Fetch event data dari DataService.getEvents()
+        2. Buat WalletItem bertipe 'TICKET' dengan id TKT-FREE-{timestamp}
+        3. Subtitle disesuaikan: 'Pay at Gate' atau 'Free Registration'
+        4. Meta menyimpan admissionPolicy untuk referensi
+        5. Jika assignee bukan MYSELF → panggil distributeTickets()
+        6. Persist via repo.upsertWalletItem()
+
+
+================================================================================
+SUMMARY PERUBAHAN
+================================================================================
+
+Total file diubah : 2
+Total edit points  : 8 (7 di EventMarketplace.tsx, 1 di entitlementService.ts)
+
+Tipe perubahan:
+  - INSERT  : 3 (getEventAccess, modal, registerFreeEvent)
+  - REPLACE : 5 (handleOpenRedeem, handleConfirmRedeem, card var, badges, buttons)
+
+Tidak ada file yang dihapus atau di-rename.
+================================================================================

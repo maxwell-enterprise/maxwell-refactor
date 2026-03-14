@@ -111,7 +111,7 @@ export const CommissionService = {
             const randomMember = members[Math.floor(Math.random() * members.length)]; // Simulating lookup
             
             // Check for Sponsor
-            let suggestedBeneficiary = undefined;
+            let suggestedBeneficiary: CommissionCandidate['suggestedBeneficiary'];
             if (randomMember) {
                 const entitlements = await EntitlementService.getUserEntitlements(randomMember.id);
                 const sponsorId = entitlements?.attributes.sponsorId;

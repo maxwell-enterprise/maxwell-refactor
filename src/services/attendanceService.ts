@@ -7,8 +7,8 @@ import { QRService } from './qrService';
 import { DataService } from './dataService';
 import { EntitlementService } from './entitlementService';
 import { APP_CONFIG } from '../lib/config';
-import { supabase } from '../lib/supabaseClient';
 import { ExcelHelper } from '../utils/excelHelper';
+import { ApiAttendanceService } from './apiAttendanceService';
 
 // TIER MAPPING for simple checks if not in DB
 const TIER_MAPPING: Record<string, 'GENERAL' | 'VIP' | 'VVIP'> = {
@@ -18,14 +18,19 @@ const TIER_MAPPING: Record<string, 'GENERAL' | 'VIP' | 'VVIP'> = {
     'IMC_GENERAL_ACCESS': 'GENERAL'
 };
 
+const useApiAttendance = () => !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.ATTENDANCE === 'API';
+
 export const AttendanceService = {
     
     // --- CORE: Validate Scan at Gate ---
     validateGateEntry: async (
         qrString: string, 
         eventId: string, 
-        gateId: string
+        gateId?: string
     ): Promise<ScanValidationResult> => {
+        if (useApiAttendance()) {
+            return ApiAttendanceService.validateGateEntry(qrString, eventId, gateId);
+        }
         
         // 1. Parse QR
         const qrData = QRService.parseQRString(qrString);
@@ -162,6 +167,9 @@ export const AttendanceService = {
     },
 
     getAttendance: async (eventId?: string): Promise<AttendanceRecord[]> => {
+        if (useApiAttendance()) {
+            return ApiAttendanceService.getAttendance(eventId);
+        }
         const records = await QRService.getAttendanceLog();
         if (eventId) {
             return records.filter(r => r.eventId === eventId);
@@ -174,7 +182,10 @@ export const AttendanceService = {
     },
 
     recordAttendance: async (member: Member, event: Event, method: 'SELF_SCAN' | 'ADMIN_OVERRIDE'): Promise<AttendanceRecord> => {
-        // Validation for self scan
+        if (useApiAttendance()) {
+            return ApiAttendanceService.recordAttendance(member, event, method);
+        }
+
         if (method === 'SELF_SCAN') {
             const wallet = await EntitlementService.getWalletItems(member.id);
             const ticket = wallet.find(w => w.type === 'TICKET' && w.meta?.eventId === event.id && w.status === 'ACTIVE');
@@ -197,9 +208,6 @@ export const AttendanceService = {
             eventColor: '#4F46E5', // Default
             status: 'SUCCESS'
         };
-        
-        // In a real implementation, persist this record to DB
-        // For now, we return it for the UI to display
         
         return record;
     }

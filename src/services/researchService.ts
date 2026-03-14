@@ -116,17 +116,18 @@ export const ResearchService = {
         }
       }
     });
-
+    const responseText = response.text ?? "";
+    
     // --- LOG AI USAGE ---
     await AIUsageService.logCall({
         userId: context.userId || 'unknown',
         featureName: context.featureName || 'CRM Deep Research',
         model,
         prompt,
-        response: response.text
+        response: responseText
     });
     
-    const result = JSON.parse(response.text);
+    const result = JSON.parse(responseText || "{}");
     
     // Grounding for manual audit
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];

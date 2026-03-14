@@ -2,13 +2,13 @@
 import React, { useState } from 'react';
 import { QRService } from '../../services/qrService';
 import { AttendanceService } from '../../services/attendanceService';
+import { DataService } from '../../services/dataService';
 import { useAuth } from '../../context/AuthContext';
 import { Member, Event, AttendanceRecord } from '../../types/index';
 import { ScanResult } from '../../types/qr';
 import { Camera, QrCode, Sparkles, X, AlertTriangle } from 'lucide-react';
 import QRScanner from '../common/QRScanner';
 import AttendanceConfirmation from './AttendanceConfirmation';
-import { EVENTS_DATA } from '../../constants';
 
 const MemberAttendanceScanner: React.FC = () => {
   const { user } = useAuth();
@@ -29,9 +29,9 @@ const MemberAttendanceScanner: React.FC = () => {
     if ((qrParts[0] === 'EVENT_ATTENDANCE' || qrParts[0] === 'EVENT') && qrParts[1]) {
         const eventId = qrParts[1];
         
-        // Find event details
-        // In real app, we might need to fetch it if not in constants
-        const event = EVENTS_DATA.find(e => e.id === eventId);
+        const event = await DataService.getEvents().then((events) =>
+            events.find((item) => item.id === eventId),
+        );
         
         if (!event) {
             setScanError("Invalid Event Code. Please scan the official screen.");

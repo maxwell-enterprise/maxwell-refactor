@@ -1,3 +1,4 @@
+"use client";
 
 import React, { createContext, useContext, useState, useRef, ReactNode, useCallback } from 'react';
 import GlobalDialog, { DialogOptions } from '../components/organisms/GlobalDialog';

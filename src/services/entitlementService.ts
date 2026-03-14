@@ -152,6 +152,47 @@ export const EntitlementService = {
       }
   },
 
+  // Register for free/open events (OPEN_MEMBER, OPEN_PUBLIC, ON_SITE_DEDUCTION)
+  registerFreeEvent: async (userId: string, eventId: string, assignee: { type: string, name: string, email: string, phone: string }): Promise<void> => {
+      const allEvents = await DataService.getEvents();
+      const event = allEvents.find(e => e.id === eventId);
+      if (!event) throw new Error("Event not found");
+
+      const repo = RepositoryFactory.getEntitlementRepository();
+      const ticketId = `TKT-FREE-${Date.now()}`;
+
+      const newTicket: WalletItem = {
+          id: ticketId,
+          userId: assignee.type === 'MYSELF' ? userId : 'PENDING_GUEST',
+          type: 'TICKET',
+          title: event.name,
+          subtitle: assignee.type === 'MYSELF' 
+              ? `${event.admissionPolicy === 'ON_SITE_DEDUCTION' ? 'Pay at Gate' : 'Free Registration'}` 
+              : `Guest: ${assignee.name}`,
+          status: 'ACTIVE',
+          isTransferable: assignee.type !== 'MYSELF',
+          expiryDate: event.date,
+          qrData: `TICKET:${event.id}:${userId}:${ticketId}`,
+          meta: {
+              eventId,
+              location: event.location,
+              locationMode: event.locationMode,
+              onlineMeetingLink: event.onlineMeetingLink,
+              admissionPolicy: event.admissionPolicy,
+              recipientName: assignee.name,
+              recipientEmail: assignee.email,
+              recipientPhone: assignee.phone
+          }
+      };
+
+      if (assignee.type !== 'MYSELF') {
+          await repo.upsertWalletItem(newTicket);
+          await EntitlementService.distributeTickets(userId, 'Sponsor', [{ ...assignee, ticketId }]);
+      } else {
+          await repo.upsertWalletItem(newTicket);
+      }
+  },
+
   // Fix: Added revokeTicketGift for DistributionLedger and GiftManagementModal
   revokeTicketGift: async (userId: string, giftId: string): Promise<void> => {
       const repo = RepositoryFactory.getEntitlementRepository();

@@ -42,6 +42,8 @@ const AISchemaArchitect: React.FC = () => {
         showToast('SQL copied to clipboard!', 'success');
     };
 
+    const blueprint = response;
+
     return (
         <div className="flex h-full bg-slate-50 overflow-hidden animate-fade-in">
             {/* LEFT: Chat & Context */}
@@ -107,7 +109,7 @@ const AISchemaArchitect: React.FC = () => {
                             <p className="text-xs text-slate-500">Normalizing tables, establishing relations, and defining security.</p>
                         </div>
                     </div>
-                ) : (
+                ) : blueprint ? (
                     <div className="flex-1 overflow-y-auto p-8 animate-fade-in custom-scrollbar bg-white">
                         <div className="max-w-5xl mx-auto space-y-10 pb-20">
                             
@@ -118,7 +120,7 @@ const AISchemaArchitect: React.FC = () => {
                                     Architectural Logic
                                 </h3>
                                 <div className="prose prose-sm max-w-none text-slate-600 bg-slate-50 p-6 rounded-2xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
-                                    {response.explanation}
+                                    {blueprint.explanation}
                                 </div>
                             </section>
 
@@ -138,7 +140,7 @@ const AISchemaArchitect: React.FC = () => {
                                 </div>
                                 <div className="relative group">
                                     <pre className="bg-slate-900 text-blue-100 p-6 rounded-2xl overflow-x-auto text-xs font-mono border border-slate-800 shadow-xl max-h-[500px]">
-                                        {response.sql}
+                                        {blueprint.sql}
                                     </pre>
                                     <div className="absolute top-4 right-4 bg-white/10 px-2 py-1 rounded text-[10px] text-white/50 uppercase font-bold">PostgreSQL</div>
                                 </div>
@@ -149,7 +151,7 @@ const AISchemaArchitect: React.FC = () => {
                             </section>
 
                             {/* Diagram Logic Placeholder (Optional visualization logic) */}
-                            {response.visualDiagramCode && (
+                            {blueprint.visualDiagramCode && (
                                 <section>
                                     <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-4">
                                         <Layers size={20} className="text-emerald-600" />
@@ -157,12 +159,12 @@ const AISchemaArchitect: React.FC = () => {
                                     </h3>
                                     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm overflow-hidden flex flex-col items-center">
                                          <pre className="text-[10px] text-slate-400 font-mono w-full bg-slate-50 p-4 rounded overflow-x-auto">
-                                             {response.visualDiagramCode}
-                                         </pre>
-                                         <p className="mt-4 text-xs text-slate-400">Copy this code into a Mermaid Live Editor to visualize the connections.</p>
-                                    </div>
-                                </section>
-                            )}
+                                             {blueprint.visualDiagramCode}
+                                          </pre>
+                                          <p className="mt-4 text-xs text-slate-400">Copy this code into a Mermaid Live Editor to visualize the connections.</p>
+                                     </div>
+                                 </section>
+                             )}
 
                             <div className="bg-green-50 p-6 rounded-3xl border border-green-100 flex items-center gap-4">
                                 <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0">
@@ -175,7 +177,7 @@ const AISchemaArchitect: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                )}
+                ) : null}
             </div>
         </div>
     );

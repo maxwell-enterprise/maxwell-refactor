@@ -101,6 +101,29 @@ const EventMarketplace: React.FC = () => {
         );
     };
 
+    // Determine access type based on admission policy
+    const getEventAccess = (event: Event): { accessible: boolean; label: string; type: 'CREDIT' | 'FREE' | 'GATE' | 'LOCKED' } => {
+        const policy = event.admissionPolicy;
+        
+        // Open events - anyone can register
+        if (policy === 'OPEN_MEMBER' || policy === 'OPEN_PUBLIC') {
+            return { accessible: true, label: 'Free', type: 'FREE' };
+        }
+        
+        // On-site deduction - can register but pay at gate
+        if (policy === 'ON_SITE_DEDUCTION') {
+            return { accessible: true, label: 'Pay at Gate', type: 'GATE' };
+        }
+        
+        // Pre-booked - needs credit pass
+        const pass = checkEligibility(event);
+        if (pass) {
+            return { accessible: true, label: '1 Credit', type: 'CREDIT' };
+        }
+        
+        return { accessible: false, label: 'Credit Required', type: 'LOCKED' };
+    };
+
     // --- INVITATION HANDLERS ---
     // FIXED: Now accepts second argument for Option Selections
     const handleAcceptInvite = async (invId: string, selectedSubIds?: string[]) => {
@@ -124,11 +147,22 @@ const EventMarketplace: React.FC = () => {
     };
 
     const handleOpenRedeem = (event: Event) => {
-        const pass = checkEligibility(event);
+        const access = getEventAccess(event);
         
-        if (pass) {
+        if (access.type === 'FREE' || access.type === 'GATE') {
+            // Open/gate events - go directly to assignee form without requiring credit pass
             setSelectedEvent(event);
-            setSelectedCreditPass(pass);
+            setSelectedCreditPass(null); // No pass needed
+            setAssignee({
+                type: 'MYSELF',
+                name: user?.fullName || '',
+                email: user?.email || '',
+                phone: ''
+            });
+        } else if (access.type === 'CREDIT') {
+            const pass = checkEligibility(event);
+            setSelectedEvent(event);
+            setSelectedCreditPass(pass!);
             setAssignee({
                 type: 'MYSELF',
                 name: user?.fullName || '',
@@ -141,27 +175,48 @@ const EventMarketplace: React.FC = () => {
     };
 
     const handleConfirmRedeem = async () => {
-        if (!selectedEvent || !selectedCreditPass || !user) return;
+        if (!selectedEvent || !user) return;
         
         if (assignee.type === 'GUEST' && (!assignee.name || !assignee.email)) {
             showToast('Guest name and email are required.', 'error');
             return;
         }
 
-        try {
-            await EntitlementService.redeemAndAssign(
-                user.id,
-                selectedCreditPass.id,
-                selectedEvent.id,
-                {
-                    type: assignee.type,
-                    name: assignee.name,
-                    email: assignee.email,
-                    phone: assignee.phone
-                }
-            );
+        const access = getEventAccess(selectedEvent);
 
-            showToast('Redemption Successful!', 'success');
+        try {
+            if (access.type === 'FREE' || access.type === 'GATE') {
+                // Free registration - no credit consumption
+                await EntitlementService.registerFreeEvent(
+                    user.id,
+                    selectedEvent.id,
+                    {
+                        type: assignee.type,
+                        name: assignee.name,
+                        email: assignee.email,
+                        phone: assignee.phone
+                    }
+                );
+            } else {
+                // Credit-based redemption
+                if (!selectedCreditPass) {
+                    showToast('No valid credit pass found.', 'error');
+                    return;
+                }
+                await EntitlementService.redeemAndAssign(
+                    user.id,
+                    selectedCreditPass.id,
+                    selectedEvent.id,
+                    {
+                        type: assignee.type,
+                        name: assignee.name,
+                        email: assignee.email,
+                        phone: assignee.phone
+                    }
+                );
+            }
+
+            showToast(access.type === 'FREE' ? 'Registration Successful!' : access.type === 'GATE' ? 'Registered! Pay at gate on event day.' : 'Redemption Successful!', 'success');
             setSelectedEvent(null);
             setViewingSeries(null); // Close series modal if open
             loadData(); // Refresh wallet and lists
@@ -264,8 +319,8 @@ const EventMarketplace: React.FC = () => {
                                     // Special Handling: Hide INVITED_ONLY from grid, assuming accepted via banner
                                     if (event.admissionPolicy === 'INVITED_ONLY') return null;
 
-                                    const eligiblePass = checkEligibility(event);
-                                    const isEligible = !!eligiblePass;
+                                    const access = getEventAccess(event);
+                                    const isEligible = access.accessible;
                                     const isContainer = event.type === 'CONTAINER';
 
                                     return (
@@ -282,6 +337,16 @@ const EventMarketplace: React.FC = () => {
                                                     {isContainer && (
                                                         <span className="bg-slate-900/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm flex items-center border border-slate-700">
                                                             <Layers size={10} className="mr-1.5"/> Series Bundle
+                                                        </span>
+                                                    )}
+                                                    {access.type === 'FREE' && (
+                                                        <span className="bg-emerald-600/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm flex items-center">
+                                                            <CheckCircle size={10} className="mr-1.5"/> Open
+                                                        </span>
+                                                    )}
+                                                    {access.type === 'GATE' && (
+                                                        <span className="bg-amber-600/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm flex items-center">
+                                                            <CreditCard size={10} className="mr-1.5"/> Pay at Gate
                                                         </span>
                                                     )}
                                                     {!isEligible && !isContainer && (
@@ -320,16 +385,24 @@ const EventMarketplace: React.FC = () => {
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <span className={`text-xs font-bold px-2 py-1 rounded ${isEligible ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500 bg-slate-100'}`}>
-                                                                {isEligible ? '1 Credit' : 'Credit Required'}
+                                                            <span className={`text-xs font-bold px-2 py-1 rounded ${
+                                                                access.type === 'FREE' ? 'text-emerald-600 bg-emerald-50' :
+                                                                access.type === 'GATE' ? 'text-amber-600 bg-amber-50' :
+                                                                isEligible ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500 bg-slate-100'
+                                                            }`}>
+                                                                {access.label}
                                                             </span>
                                                             
                                                             {isEligible ? (
                                                                 <button 
                                                                     onClick={() => handleOpenRedeem(event)}
-                                                                    className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors shadow-lg flex items-center"
+                                                                    className={`text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-lg flex items-center ${
+                                                                        access.type === 'FREE' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                                                                        access.type === 'GATE' ? 'bg-amber-600 hover:bg-amber-700' :
+                                                                        'bg-slate-900 hover:bg-slate-800'
+                                                                    }`}
                                                                 >
-                                                                    Redeem <ChevronRight size={14} className="ml-1"/>
+                                                                    {access.type === 'FREE' ? 'Register' : access.type === 'GATE' ? 'Register' : 'Redeem'} <ChevronRight size={14} className="ml-1"/>
                                                                 </button>
                                                             ) : (
                                                                 <button disabled className="text-slate-400 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 cursor-not-allowed">
@@ -374,7 +447,186 @@ const EventMarketplace: React.FC = () => {
                 )}
             </div>
             
-            {/* ... Rest of the file (Modals) ... */}
+            {/* REDEMPTION / REGISTRATION MODAL */}
+            {selectedEvent && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-fade-in overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-start">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">{selectedEvent.name}</h3>
+                                <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
+                                    <span className="flex items-center"><Calendar size={12} className="mr-1"/> {new Date(selectedEvent.date).toLocaleDateString()}</span>
+                                    <span className="flex items-center"><MapPin size={12} className="mr-1"/> {selectedEvent.location}</span>
+                                </div>
+                                {(() => {
+                                    const access = getEventAccess(selectedEvent);
+                                    return (
+                                        <span className={`inline-block mt-2 text-xs font-bold px-2 py-1 rounded ${
+                                            access.type === 'FREE' ? 'text-emerald-700 bg-emerald-50' :
+                                            access.type === 'GATE' ? 'text-amber-700 bg-amber-50' :
+                                            'text-indigo-700 bg-indigo-50'
+                                        }`}>
+                                            {access.type === 'FREE' ? '🎉 Free Registration' : access.type === 'GATE' ? '💳 Pay at Gate' : '⚡ 1 Credit Redemption'}
+                                        </span>
+                                    );
+                                })()}
+                            </div>
+                            <button onClick={() => { setSelectedEvent(null); setSelectedCreditPass(null); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <X size={20} className="text-slate-400"/>
+                            </button>
+                        </div>
+
+                        {/* Assignee Form */}
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Register For</label>
+                                <div className="flex gap-2">
+                                    {(['MYSELF', 'GUEST', 'DRAFT'] as const).map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => setAssignee(prev => ({ 
+                                                ...prev, 
+                                                type,
+                                                name: type === 'MYSELF' ? (user?.fullName || '') : '',
+                                                email: type === 'MYSELF' ? (user?.email || '') : '',
+                                                phone: ''
+                                            }))}
+                                            className={`flex-1 p-3 rounded-lg text-xs font-bold border-2 transition-all ${
+                                                assignee.type === type 
+                                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700' 
+                                                    : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                                            }`}
+                                        >
+                                            {type === 'MYSELF' && <><User size={14} className="inline mr-1"/> Myself</>}
+                                            {type === 'GUEST' && <><UserPlus size={14} className="inline mr-1"/> Guest</>}
+                                            {type === 'DRAFT' && <><Ticket size={14} className="inline mr-1"/> Draft</>}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {assignee.type === 'GUEST' && (
+                                <div className="space-y-3 bg-slate-50 p-4 rounded-xl">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Guest Name *</label>
+                                        <input 
+                                            type="text" value={assignee.name} 
+                                            onChange={e => setAssignee(prev => ({ ...prev, name: e.target.value }))}
+                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm"
+                                            placeholder="Full name"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Guest Email *</label>
+                                        <input 
+                                            type="email" value={assignee.email} 
+                                            onChange={e => setAssignee(prev => ({ ...prev, email: e.target.value }))}
+                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm"
+                                            placeholder="email@example.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Phone (Optional)</label>
+                                        <input 
+                                            type="tel" value={assignee.phone} 
+                                            onChange={e => setAssignee(prev => ({ ...prev, phone: e.target.value }))}
+                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm"
+                                            placeholder="+62..."
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {assignee.type === 'DRAFT' && (
+                                <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs text-amber-700">
+                                    <AlertCircle size={14} className="inline mr-1"/> A draft ticket will be created in your wallet. You can assign it to someone later.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+                            <button 
+                                onClick={() => { setSelectedEvent(null); setSelectedCreditPass(null); }}
+                                className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleConfirmRedeem}
+                                className={`px-6 py-2.5 text-sm font-bold text-white rounded-lg transition-colors shadow-lg flex items-center ${
+                                    getEventAccess(selectedEvent).type === 'FREE' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                                    getEventAccess(selectedEvent).type === 'GATE' ? 'bg-amber-600 hover:bg-amber-700' :
+                                    'bg-indigo-600 hover:bg-indigo-700'
+                                }`}
+                            >
+                                <CheckCircle size={16} className="mr-2"/>
+                                {getEventAccess(selectedEvent).type === 'FREE' ? 'Confirm Registration' : 
+                                 getEventAccess(selectedEvent).type === 'GATE' ? 'Confirm Registration' : 
+                                 'Confirm Redemption'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SERIES VIEWING MODAL */}
+            {viewingSeries && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl animate-fade-in max-h-[80vh] overflow-hidden flex flex-col">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-start shrink-0">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900 flex items-center">
+                                    <Layers size={20} className="mr-2 text-indigo-600"/> {viewingSeries.name}
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">Series Bundle • {getSeriesChildren(viewingSeries.id).length} sessions</p>
+                            </div>
+                            <button onClick={() => setViewingSeries(null)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <X size={20} className="text-slate-400"/>
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto space-y-3">
+                            {getSeriesChildren(viewingSeries.id).length === 0 ? (
+                                <p className="text-sm text-slate-400 text-center py-8">No sessions in this series yet.</p>
+                            ) : (
+                                getSeriesChildren(viewingSeries.id).map(child => {
+                                    const childAccess = getEventAccess(child);
+                                    return (
+                                        <div key={child.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                                            childAccess.accessible ? 'bg-white border-slate-200 hover:shadow-md' : 'bg-slate-50 border-slate-200 opacity-70'
+                                        }`}>
+                                            <div className="flex-1">
+                                                <h4 className="font-bold text-sm text-slate-800">{child.name}</h4>
+                                                <div className="flex gap-3 mt-1 text-xs text-slate-500">
+                                                    <span className="flex items-center"><Calendar size={10} className="mr-1"/> {new Date(child.date).toLocaleDateString()}</span>
+                                                    <span className="flex items-center"><MapPin size={10} className="mr-1"/> {child.location}</span>
+                                                </div>
+                                            </div>
+                                            <div className="ml-4">
+                                                {childAccess.accessible ? (
+                                                    <button 
+                                                        onClick={() => handleOpenRedeem(child)}
+                                                        className={`text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow flex items-center ${
+                                                            childAccess.type === 'FREE' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                                                            childAccess.type === 'GATE' ? 'bg-amber-600 hover:bg-amber-700' :
+                                                            'bg-slate-900 hover:bg-slate-800'
+                                                        }`}
+                                                    >
+                                                        {childAccess.type === 'FREE' ? 'Register' : childAccess.type === 'GATE' ? 'Register' : 'Redeem'}
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400 font-bold px-3 py-2 border border-slate-200 rounded-lg">Pass Needed</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
