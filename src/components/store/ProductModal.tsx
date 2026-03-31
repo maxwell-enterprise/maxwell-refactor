@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Product, ProductItem, InventoryItem, Event, ProductEntitlementType, ProductVariant } from '../../types/index';
 import { OpsService } from '../../services/opsService';
 import { DataService } from '../../services/dataService';
@@ -23,6 +23,34 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     const { can } = useAccess('fin_royalties'); 
     const canManageRoyalties = can('WRITE');
 
+    const parseIdrInput = (raw: string): number => {
+        const digitsOnly = raw.replace(/[^\d]/g, '');
+        const n = digitsOnly ? Number.parseInt(digitsOnly, 10) : 0;
+        return Number.isFinite(n) ? n : 0;
+    };
+
+    const formatIdrWithComma = (n: number): string => {
+        const safe = Number.isFinite(n) ? n : 0;
+        // Use comma grouping (user asked for "koma").
+        return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(safe);
+    };
+
+    const findCaretPosByDigits = (formatted: string, digitsBeforeCaret: number) => {
+        if (digitsBeforeCaret <= 0) return 0;
+        let seen = 0;
+        for (let i = 0; i < formatted.length; i += 1) {
+            const ch = formatted[i];
+            if (/\d/.test(ch)) {
+                seen += 1;
+                if (seen >= digitsBeforeCaret) return i + 1;
+            }
+        }
+        return formatted.length;
+    };
+
+    const priceInputRef = useRef<HTMLInputElement | null>(null);
+    const variantPriceInputRef = useRef<HTMLInputElement | null>(null);
+
     // --- MASTER DATA ---
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
@@ -36,7 +64,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     const [activeTab, setActiveTab] = useState<'MARKETING' | 'ITEMS' | 'ROYALTIES'>('MARKETING');
 
     // --- FORM STATE ---
-    const [formData, setFormData] = useState<Partial<Product>>(initialData || {
+    const productDefaults: Partial<Product> = {
         title: '',
         description: '',
         priceIdr: 0,
@@ -45,9 +73,22 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
         items: [],
         hasVariants: false,
         variants: [],
-        installmentConfig: { enabled: false, minDownPaymentPercent: 20, maxTenorMonths: 3, interestRatePercent: 0 },
-        isActive: true // Default to active for new products
+        installmentConfig: {
+            enabled: false,
+            minDownPaymentPercent: 20,
+            maxTenorMonths: 3,
+            interestRatePercent: 0,
+        },
+        isActive: true, // Default to active for new products
+    };
+
+    const [formData, setFormData] = useState<Partial<Product>>({
+        ...productDefaults,
+        ...(initialData || {}),
     });
+
+    const [priceIdrInput, setPriceIdrInput] = useState<string>('0');
+    const [variantPriceIdrInput, setVariantPriceIdrInput] = useState<string>('0');
 
     // --- ITEM BUILDER STATE ---
     const [itemType, setItemType] = useState<ProductEntitlementType>('PHYSICAL');
@@ -83,6 +124,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
             }
         }
     }, [isOpen, initialData]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        // Initialize displayed string once when modal opens.
+        setPriceIdrInput(String(Number(formData.priceIdr ?? 0)));
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        // Re-initialize only when switching variant, not while typing.
+        if (!formData.variants || activeVariantIndex < 0) return;
+        const current = formData.variants?.[activeVariantIndex];
+        setVariantPriceIdrInput(String(Number(current?.priceIdr ?? 0)));
+    }, [isOpen, activeVariantIndex]);
 
     // Handle Variant Toggling
     const toggleVariants = (enabled: boolean) => {
@@ -328,10 +383,42 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center"><DollarSign size={12} className="mr-1"/> Price (IDR)</label>
                                         <input 
-                                            type="number" required 
+                                            type="text" required
+                                            inputMode="numeric"
                                             className="w-full p-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={formData.priceIdr}
-                                            onChange={e => setFormData({...formData, priceIdr: Number(e.target.value)})}
+                                            value={priceIdrInput}
+                                            ref={priceInputRef}
+                                            onChange={(e) => {
+                                                const nextRaw = e.target.value;
+                                                const caret = e.target.selectionStart ?? nextRaw.length;
+                                                const digitsBeforeCaret = nextRaw
+                                                    .slice(0, caret)
+                                                    .replace(/[^\d]/g, '')
+                                                    .length;
+                                                const digitsOnly = nextRaw.replace(/[^\d]/g, '');
+                                                const n = parseIdrInput(nextRaw);
+                                                const formatted = digitsOnly.length
+                                                    ? formatIdrWithComma(n)
+                                                    : '0';
+                                                setPriceIdrInput(formatted);
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    priceIdr: n,
+                                                }));
+                                                requestAnimationFrame(() => {
+                                                    if (!priceInputRef.current) return;
+                                                    const pos = findCaretPosByDigits(
+                                                        formatted,
+                                                        digitsBeforeCaret,
+                                                    );
+                                                    priceInputRef.current.setSelectionRange(pos, pos);
+                                                });
+                                            }}
+                                            onBlur={() => {
+                                                const n = parseIdrInput(priceIdrInput);
+                                                setPriceIdrInput(formatIdrWithComma(n));
+                                                setFormData((prev) => ({ ...prev, priceIdr: n }));
+                                            }}
                                         />
                                     </div>
                                 )}
@@ -491,9 +578,38 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                         <div>
                                             <label className="block text-[10px] text-slate-400 font-bold mb-1">Price (IDR)</label>
                                             <input 
-                                                type="number" className="w-full p-2 border border-slate-200 rounded text-sm"
-                                                value={formData.variants![activeVariantIndex].priceIdr}
-                                                onChange={e => updateVariant(activeVariantIndex, 'priceIdr', Number(e.target.value))}
+                                                type="text" inputMode="numeric"
+                                                className="w-full p-2 border border-slate-200 rounded text-sm"
+                                                value={variantPriceIdrInput}
+                                                ref={variantPriceInputRef}
+                                                onChange={(e) => {
+                                                    const nextRaw = e.target.value;
+                                                    const caret = e.target.selectionStart ?? nextRaw.length;
+                                                    const digitsBeforeCaret = nextRaw
+                                                        .slice(0, caret)
+                                                        .replace(/[^\d]/g, '')
+                                                        .length;
+                                                    const digitsOnly = nextRaw.replace(/[^\d]/g, '');
+                                                    const n = parseIdrInput(nextRaw);
+                                                    const formatted = digitsOnly.length
+                                                        ? formatIdrWithComma(n)
+                                                        : '0';
+                                                    setVariantPriceIdrInput(formatted);
+                                                    updateVariant(activeVariantIndex, 'priceIdr', n);
+                                                    requestAnimationFrame(() => {
+                                                        if (!variantPriceInputRef.current) return;
+                                                        const pos = findCaretPosByDigits(
+                                                            formatted,
+                                                            digitsBeforeCaret,
+                                                        );
+                                                        variantPriceInputRef.current.setSelectionRange(pos, pos);
+                                                    });
+                                                }}
+                                                onBlur={() => {
+                                                    const n = parseIdrInput(variantPriceIdrInput);
+                                                    setVariantPriceIdrInput(formatIdrWithComma(n));
+                                                    updateVariant(activeVariantIndex, 'priceIdr', n);
+                                                }}
                                             />
                                         </div>
                                     </div>

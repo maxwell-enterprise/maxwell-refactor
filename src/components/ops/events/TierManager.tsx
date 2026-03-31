@@ -182,8 +182,14 @@ const TierManager: React.FC<TierManagerProps> = ({
                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Quota</label>
                                             <input 
                                                 type="number" className="w-full p-2 text-sm border border-slate-200 rounded"
-                                                value={tier.quota}
-                                                onChange={(e) => updateTier(idx, 'quota', Number(e.target.value))}
+                                                value={tier.quota ?? 0}
+                                                onChange={(e) =>
+                                                    updateTier(
+                                                        idx,
+                                                        'quota',
+                                                        Number(e.target.value || 0),
+                                                    )
+                                                }
                                             />
                                         </div>
                                     </div>

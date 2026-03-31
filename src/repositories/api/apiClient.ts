@@ -24,9 +24,15 @@ export async function apiRequest<T>(
     throw new Error(message || `API request failed with status ${response.status}`);
   }
 
-  if (response.status === 204) {
+  // DELETE often returns 204; Nest can also return 200 with an empty body for void handlers.
+  if (response.status === 204 || response.status === 205) {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  const text = await response.text();
+  if (!text.trim()) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }

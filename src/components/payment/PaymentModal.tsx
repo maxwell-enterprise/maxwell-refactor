@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, CreditCard, QrCode, Building2, Smartphone, Copy, UploadCloud, CheckCircle, AlertCircle, Clock, ShieldCheck, Loader2, Tag, ChevronRight, Mail, Trash2, Plus, Minus, Zap, PieChart } from 'lucide-react';
 import { PaymentMethodType, PaymentTransaction, Product, UserRole, Discount, CartItem } from '../../types/index';
 import { PaymentService } from '../../services/paymentService';
@@ -16,15 +16,26 @@ interface PaymentModalProps {
   onRemoveItem: (productId: string) => void;
   preAppliedDiscountCode?: string; 
   attributionSource?: string; 
+  onPaymentSuccess?: () => void;
 }
 
-type Step = 'SUMMARY' | 'METHOD_SELECTION' | 'PAYMENT_DETAILS' | 'SUCCESS';
+type Step = 'SUMMARY';
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ 
-    isOpen, onClose, cart, products, userEmail, userRole, onUpdateQuantity, onRemoveItem, preAppliedDiscountCode, attributionSource
+    isOpen,
+    onClose,
+    cart,
+    products,
+    userEmail,
+    userRole,
+    onUpdateQuantity,
+    onRemoveItem,
+    preAppliedDiscountCode,
+    attributionSource,
+    onPaymentSuccess,
 }) => {
   const [step, setStep] = useState<Step>('SUMMARY');
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethodType | null>(null);
+  const [selectedMethod] = useState<PaymentMethodType>('BANK_TRANSFER');
   const [transaction, setTransaction] = useState<PaymentTransaction | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -44,6 +55,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   // NEW: Installment State
   const [payMode, setPayMode] = useState<'FULL' | 'INSTALLMENT'>('FULL');
   const [dpAmount, setDpAmount] = useState(0);
+  const snapPayInFlightRef = useRef(false);
+  const [isMidtransPopupOpen, setIsMidtransPopupOpen] = useState(false);
 
   // Determine if installments are available for this cart
   // Logic: All items in cart must allow installments, or at least the main high-value item?
@@ -84,7 +97,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   // Calculate Tax (PPN) AFTER discount
   const discountVal = appliedDiscount?.amount || 0;
   const taxableAmount = Math.max(0, subTotal - discountVal);
-  const tax = taxableAmount * 0.11; // 11% PPN Mock
+  const ppnRatePercent = Number(
+    process.env.NEXT_PUBLIC_PAYMENT_PPN_RATE_PERCENT ?? 0,
+  );
+  const tax = taxableAmount * (ppnRatePercent / 100);
   const totalAmount = taxableAmount + tax;
 
   // Recalculate DP when total changes
@@ -163,12 +179,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
   };
 
-  const handleMethodSelect = (method: PaymentMethodType) => {
-    setSelectedMethod(method);
-  };
-
   const handleInitiatePayment = async () => {
-    if (!selectedMethod) return;
+    if (snapPayInFlightRef.current) return; // prevent double snap.pay while popup is still open
     if (!customerEmail || !customerEmail.includes('@')) {
         alert("Please enter a valid email address for the receipt.");
         return;
@@ -176,20 +188,21 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
     setIsLoading(true);
     setErrorMessage(null); // Reset error
+    snapPayInFlightRef.current = true;
 
     try {
       const transactionItems = cart.map(item => {
-          const p = products.find(prod => prod.id === item.productId);
-          return {
-              id: item.productId,
-              name: p?.title || 'Unknown Item',
-              price: p?.priceIdr || 0,
-              quantity: item.quantity,
-              variantId: item.variantId // Critical Fix: Pass variantId so EntitlementService can find the correct items
-          };
+        const p = products.find(prod => prod.id === item.productId);
+        return {
+          id: item.productId,
+          name: p?.title || 'Unknown Item',
+          price: p?.priceIdr || 0,
+          quantity: item.quantity,
+          variantId: item.variantId,
+        };
       });
 
-      const trx = await PaymentService.initiateTransaction({
+      const { transaction: trx, snapToken } = await PaymentService.initiateTransaction({
         items: transactionItems,
         subTotal,
         tax,
@@ -199,17 +212,114 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         customerEmail,
         method: selectedMethod,
         attributionSource,
-        // New Props
         isInstallment: payMode === 'INSTALLMENT',
-        downPaymentAmount: payMode === 'INSTALLMENT' ? dpAmount : undefined
+        downPaymentAmount: payMode === 'INSTALLMENT' ? dpAmount : undefined,
       });
+
       setTransaction(trx);
-      setStep('PAYMENT_DETAILS');
+
+      // Load Midtrans Snap JS then open the hosted payment page.
+      const loadSnapJs = () =>
+        new Promise<void>((resolve, reject) => {
+          if (typeof window === 'undefined') return reject(new Error('No window'));
+          if ((window as any).snap) return resolve();
+
+          const existing = document.getElementById('midtrans-snap-script');
+          if (existing) {
+            // If script exists but points to wrong domain (sandbox vs prod), reload it.
+            const isProduction =
+              String(process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION ?? 'false').toLowerCase() ===
+              'true';
+            const expectedSrc = isProduction
+              ? 'https://app.midtrans.com/snap/snap.js'
+              : 'https://app.sandbox.midtrans.com/snap/snap.js';
+            if ((existing as HTMLScriptElement).src === expectedSrc) {
+              // Script is being/was loaded; wait a tick.
+              setTimeout(
+                () =>
+                  (window as any).snap
+                    ? resolve()
+                    : reject(new Error('Midtrans snap not ready')),
+                500,
+              );
+              return;
+            }
+
+            existing.remove();
+          }
+
+          const script = document.createElement('script');
+          script.id = 'midtrans-snap-script';
+          const isProduction =
+            String(process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION ?? 'false').toLowerCase() ===
+            'true';
+          script.src = isProduction
+            ? 'https://app.midtrans.com/snap/snap.js'
+            : 'https://app.sandbox.midtrans.com/snap/snap.js';
+          script.async = true;
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error('Failed loading midtrans snap.js'));
+          document.body.appendChild(script);
+        });
+
+      await loadSnapJs();
+
+      // Only after Snap is loaded and token exists, open the popup.
+      let snapPayStarted = false;
+      try {
+        snapPayStarted = true;
+        setIsMidtransPopupOpen(true);
+        (window as any).snap.pay(snapToken, {
+          onSuccess: async () => {
+            try {
+              if (!trx.itemsSnapshot) throw new Error('Missing cart snapshot');
+              await PaymentService.confirmManualTransfer(
+                trx.id,
+                trx.totalAmount,
+                trx.itemsSnapshot,
+              );
+              onPaymentSuccess?.();
+              onClose();
+            } catch (e: any) {
+              setErrorMessage(e?.message || 'Failed to finalize payment');
+            } finally {
+              setIsLoading(false);
+              setIsMidtransPopupOpen(false);
+              snapPayInFlightRef.current = false;
+            }
+          },
+          onPending: () => {
+            setIsLoading(false);
+            setIsMidtransPopupOpen(false);
+            snapPayInFlightRef.current = false;
+            // Pending payment does not grant entitlements immediately.
+            onClose();
+          },
+          onError: (err: any) => {
+            setIsLoading(false);
+            setIsMidtransPopupOpen(false);
+            snapPayInFlightRef.current = false;
+            setErrorMessage(err?.message || 'Midtrans payment error');
+          },
+          onClose: () => {
+            setIsLoading(false);
+            setIsMidtransPopupOpen(false);
+            snapPayInFlightRef.current = false;
+          },
+        });
+      } finally {
+        // If snap.pay threw synchronously, allow retry.
+        if (!snapPayStarted) {
+          snapPayInFlightRef.current = false;
+          setIsMidtransPopupOpen(false);
+        }
+      }
     } catch (error: any) {
       console.error("Payment Init Failed", error);
-      setErrorMessage(error.message || "High traffic detected. Please try again.");
-    } finally {
       setIsLoading(false);
+      snapPayInFlightRef.current = false;
+      setIsMidtransPopupOpen(false);
+      setErrorMessage(error.message || "High traffic detected. Please try again.");
     }
   };
 
@@ -222,7 +332,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     setIsUploading(true);
     try {
       await PaymentService.uploadPaymentProof(transaction.id, uploadFile);
-      setStep('SUCCESS');
+      onClose();
     } catch (error) {
       console.error("Upload failed");
     } finally {
@@ -236,8 +346,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setIsLoading(true);
       try {
           // This call ensures Entitlements are granted even for manual/simulated payments
-          await PaymentService.confirmManualTransfer(transaction.id, transaction.totalAmount);
-          setStep('SUCCESS');
+          await PaymentService.confirmManualTransfer(
+            transaction.id,
+            transaction.totalAmount,
+            transaction.itemsSnapshot,
+          );
+          onClose();
       } catch (e) {
           setErrorMessage("Simulation failed. Try again.");
       } finally {
@@ -245,57 +359,99 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
   };
 
-  const renderSummary = () => (
-    <div className="space-y-6">
-      {/* Items List with Edit Capabilities */}
-      <div className="bg-slate-50 p-4 rounded-lg space-y-4 max-h-60 overflow-y-auto">
-        {cart.length === 0 && <p className="text-center text-slate-400 text-sm">Your cart is empty.</p>}
-        {cart.map((item) => {
-            const product = products.find(p => p.id === item.productId);
-            if(!product) return null;
-            
-            const variantName = product.variants?.find(v => v.id === item.variantId)?.name;
+  const renderSummary = () => {
+    if (isMidtransPopupOpen) {
+      return (
+        <div className="space-y-4">
+          {/* Show backend/payment errors if any */}
+          {errorMessage && (
+            <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2 text-sm text-red-700 animate-pulse">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
+            Menunggu konfirmasi pembayaran di Midtrans...
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Show backend/payment errors in the only visible step (Summary). */}
+        {errorMessage && (
+          <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2 text-sm text-red-700 animate-pulse">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {/* Items List with Edit Capabilities */}
+        <div className="bg-slate-50 p-4 rounded-lg space-y-4 max-h-60 overflow-y-auto">
+          {cart.length === 0 && (
+            <p className="text-center text-slate-400 text-sm">
+              Your cart is empty.
+            </p>
+          )}
+          {cart.map((item) => {
+            const product = products.find((p) => p.id === item.productId);
+            if (!product) return null;
+            const variantName = product.variants?.find((v) => v.id === item.variantId)?.name;
 
             return (
-              <div key={`${item.productId}-${item.variantId}`} className="flex justify-between items-center text-sm border-b border-slate-100 last:border-0 pb-3 last:pb-0">
+              <div
+                key={`${item.productId}-${item.variantId}`}
+                className="flex justify-between items-center text-sm border-b border-slate-100 last:border-0 pb-3 last:pb-0"
+              >
                 <div className="flex-1 pr-4">
-                    <span className="text-slate-800 font-medium block truncate">{product.title}</span>
-                    {variantName && <span className="text-xs text-indigo-600 font-medium block">{variantName}</span>}
-                    <span className="text-slate-500 text-xs">{formatIDR(product.priceIdr)}</span>
+                  <span className="text-slate-800 font-medium block truncate">
+                    {product.title}
+                  </span>
+                  {variantName && (
+                    <span className="text-xs text-indigo-600 font-medium block">
+                      {variantName}
+                    </span>
+                  )}
+                  <span className="text-slate-500 text-xs">
+                    {formatIDR(product.priceIdr)}
+                  </span>
                 </div>
-                
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-white border border-slate-200 rounded-md">
-                        <button 
-                            onClick={() => onUpdateQuantity(item.productId, -1)}
-                            className="px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
-                            disabled={item.quantity <= 1}
-                        >
-                            <Minus size={12} />
-                        </button>
-                        <span className="px-2 text-xs font-semibold w-6 text-center">{item.quantity}</span>
-                        <button 
-                            onClick={() => onUpdateQuantity(item.productId, 1)}
-                            className="px-2 py-1 text-slate-500 hover:bg-slate-100"
-                        >
-                            <Plus size={12} />
-                        </button>
-                    </div>
 
-                    <button 
-                        onClick={() => onRemoveItem(item.productId)}
-                        className="text-red-400 hover:text-red-600 transition-colors"
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center bg-white border border-slate-200 rounded-md">
+                    <button
+                      onClick={() => onUpdateQuantity(item.productId, -1)}
+                      className="px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                      disabled={item.quantity <= 1}
                     >
-                        <Trash2 size={16} />
+                      <Minus size={12} />
                     </button>
+                    <span className="px-2 text-xs font-semibold w-6 text-center">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => onUpdateQuantity(item.productId, 1)}
+                      className="px-2 py-1 text-slate-500 hover:bg-slate-100"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => onRemoveItem(item.productId)}
+                    className="text-red-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             );
-        })}
-      </div>
+          })}
+        </div>
 
-      {/* Guest/User Email Input */}
-      <div>
+        {/* Guest/User Email Input */}
+        <div>
           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Receipt Email</label>
           <div className="relative">
               <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -348,28 +504,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           )}
       </div>
       
-      {/* --- PAYMENT TERM SELECTION (New Feature) --- */}
-      {canInstallment && installmentConfig && (
-          <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Payment Terms</label>
-              <div className="flex gap-3">
-                  <button 
-                    onClick={() => setPayMode('FULL')}
-                    className={`flex-1 p-3 rounded-xl border text-left transition-all ${payMode === 'FULL' ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
-                  >
-                      <div className="text-sm font-bold text-slate-900">Full Payment</div>
-                      <div className="text-xs text-slate-500">Instant Access</div>
-                  </button>
-                  <button 
-                    onClick={() => setPayMode('INSTALLMENT')}
-                    className={`flex-1 p-3 rounded-xl border text-left transition-all ${payMode === 'INSTALLMENT' ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
-                  >
-                      <div className="text-sm font-bold text-slate-900">Term of Payment</div>
-                      <div className="text-xs text-slate-500">DP {installmentConfig.minDownPaymentPercent}% + Cicilan</div>
-                  </button>
-              </div>
-          </div>
-      )}
+      {/* Installment selection removed to keep UI single-step summary */}
 
       {/* Totals Calculation */}
       <div className="border-t border-slate-200 pt-3 space-y-2">
@@ -386,7 +521,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         )}
 
         <div className="flex justify-between text-sm text-slate-500">
-          <span>PPN (11%)</span>
+          <span>PPN ({ppnRatePercent}%)</span>
           <span>{formatIDR(tax)}</span>
         </div>
         
@@ -395,91 +530,21 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           <span className="text-2xl text-blue-600">{formatIDR(totalAmount)}</span>
         </div>
         
-        {payMode === 'INSTALLMENT' && (
-            <div className="mt-3 bg-blue-50 border border-blue-100 p-3 rounded-lg text-sm text-blue-900">
-                <div className="flex justify-between font-bold mb-1">
-                    <span>Down Payment (To Pay Now)</span>
-                    <span>{formatIDR(dpAmount)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-blue-700">
-                    <span>Remaining Balance (Cicilan)</span>
-                    <span>{formatIDR(totalAmount - dpAmount)}</span>
-                </div>
-            </div>
-        )}
+        {/* Installment breakdown removed (Midtrans token uses full total) */}
       </div>
 
       <button 
-        onClick={() => setStep('METHOD_SELECTION')}
-        disabled={totalAmount <= 0 || cart.length === 0}
+        onClick={handleInitiatePayment}
+        disabled={totalAmount <= 0 || cart.length === 0 || isMidtransPopupOpen}
         className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg flex justify-center items-center group disabled:opacity-50"
       >
-        Proceed to Pay {payMode === 'INSTALLMENT' ? formatIDR(dpAmount) : formatIDR(totalAmount)}
+        Proceed to Pay {formatIDR(totalAmount)}
         <ChevronRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
       </button>
     </div>
   );
 
-  const renderMethodSelection = () => (
-    <div className="space-y-4">
-      
-      {/* High Traffic Warning */}
-      {errorMessage && (
-          <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2 text-sm text-red-700 animate-pulse">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
-          </div>
-      )}
-
-      <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex justify-between items-center mb-4">
-          <span className="text-sm text-blue-800 font-medium">Total to Pay Now</span>
-          <span className="text-lg font-bold text-blue-900">
-              {formatIDR(payMode === 'INSTALLMENT' ? dpAmount : totalAmount)}
-          </span>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3">
-        {['BANK_TRANSFER', 'VIRTUAL_ACCOUNT_BCA', 'QRIS', 'CREDIT_CARD'].map((method) => (
-            <button 
-                key={method}
-                onClick={() => handleMethodSelect(method as PaymentMethodType)}
-                className={`flex items-center p-4 border rounded-xl transition-all ${selectedMethod === method ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-slate-200 hover:border-blue-300'}`}
-            >
-                <div className={`p-2 rounded-lg mr-4 ${
-                    method === 'BANK_TRANSFER' ? 'bg-blue-100 text-blue-600' : 
-                    method === 'QRIS' ? 'bg-rose-100 text-rose-600' :
-                    method === 'CREDIT_CARD' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'
-                }`}>
-                    {method === 'BANK_TRANSFER' && <Building2 size={24} />}
-                    {method === 'QRIS' && <QrCode size={24} />}
-                    {method === 'CREDIT_CARD' && <CreditCard size={24} />}
-                    {method === 'VIRTUAL_ACCOUNT_BCA' && <Smartphone size={24} />}
-                </div>
-                <div className="text-left">
-                    <h4 className="font-bold text-slate-900">
-                        {method.replace(/_/g, ' ')}
-                        {method === 'QRIS' && <span className="ml-2 bg-rose-100 text-rose-700 text-[10px] px-2 py-0.5 rounded-full">Instant</span>}
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                        {method === 'BANK_TRANSFER' ? 'Verification with Unique Code' : 'Automatic Verification'}
-                    </p>
-                </div>
-            </button>
-        ))}
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <button onClick={() => setStep('SUMMARY')} className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-xl">Back</button>
-        <button 
-          onClick={handleInitiatePayment}
-          disabled={!selectedMethod || isLoading}
-          className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 flex justify-center items-center"
-        >
-          {isLoading ? <><Loader2 className="animate-spin mr-2" size={18} /> Processing...</> : 'Pay Now'}
-        </button>
-      </div>
-    </div>
-  );
+  };
 
   const renderDetails = () => {
     if (!transaction) return null;
@@ -642,33 +707,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     );
   };
 
-  const renderSuccess = () => (
-    <div className="text-center space-y-6 py-8 animate-fade-in">
-       <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-          <ShieldCheck size={40} />
-       </div>
-       <div>
-          <h3 className="text-2xl font-bold text-slate-900">Payment Processed</h3>
-          <p className="text-slate-500 mt-2">
-             {transaction?.method === 'BANK_TRANSFER' 
-                ? 'Your receipt has been uploaded and is waiting for verification.' 
-                : 'Transaction successful! You will receive an email shortly.'}
-          </p>
-          <p className="text-sm text-slate-400 mt-2">Receipt sent to: <b>{transaction?.customerEmail}</b></p>
-       </div>
-       <div className="bg-slate-50 p-4 rounded-xl text-sm border border-slate-200">
-          <div className="flex justify-between mb-2"><span>Transaction ID</span><span className="font-mono text-slate-900">{transaction?.id}</span></div>
-          {payMode === 'INSTALLMENT' && (
-              <div className="flex justify-between mb-2 text-blue-600"><span>Installment Active</span><span className="font-bold">Next Due: {new Date(transaction?.installmentPlan?.[0]?.dueDate || '').toLocaleDateString()}</span></div>
-          )}
-          <div className="flex justify-between"><span>Amount Paid</span><span className="font-bold text-slate-900">{formatIDR(transaction?.paidAmount || 0)}</span></div>
-       </div>
-       <button onClick={onClose} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800">
-          Return to Store
-       </button>
-    </div>
-  );
-
   if (!isOpen) return null;
 
   return (
@@ -679,15 +717,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <div>
              <h2 className="text-lg font-bold text-slate-900">Checkout</h2>
-             <div className="flex gap-2 mt-1">
-               {['SUMMARY', 'METHOD_SELECTION', 'PAYMENT_DETAILS'].map((s, i) => (
-                 <div key={s} className={`h-1.5 w-8 rounded-full transition-colors ${
-                    step === s || (step === 'SUCCESS' && i===2) || Object.keys({SUMMARY:0, METHOD_SELECTION:1, PAYMENT_DETAILS:2}).indexOf(step) > i 
-                    ? 'bg-blue-600' 
-                    : 'bg-slate-200'
-                 }`}></div>
-               ))}
-             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-900 p-2 rounded-full hover:bg-slate-100 transition-colors">
             <X size={24} />
@@ -697,9 +726,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1">
           {step === 'SUMMARY' && renderSummary()}
-          {step === 'METHOD_SELECTION' && renderMethodSelection()}
-          {step === 'PAYMENT_DETAILS' && renderDetails()}
-          {step === 'SUCCESS' && renderSuccess()}
         </div>
 
         {/* Modal Footer (Security Badge) */}

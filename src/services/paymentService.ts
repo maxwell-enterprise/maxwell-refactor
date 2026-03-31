@@ -10,10 +10,13 @@ import { EntitlementService } from './entitlementService';
 import { EventBus } from './eventBus'; 
 import { INVENTORY_DATA } from '../constants';
 import { RepositoryFactory } from './repositories/index';
+import { apiRequest } from '../repositories/api/apiClient';
 
 export const PaymentService = {
   
-  initiateTransaction: async (payload: InitiatePaymentPayload): Promise<PaymentTransaction> => {
+  initiateTransaction: async (
+    payload: InitiatePaymentPayload,
+  ): Promise<{ transaction: PaymentTransaction; snapToken: string }> => {
     // 1. BUSINESS LOGIC: Stock Reservation & SHARED INVENTORY CHECK
     const allEvents = await DataService.getEvents();
 
@@ -57,218 +60,141 @@ export const PaymentService = {
 
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // 2. CONSTRUCT OBJECT
-    const transactionId = `TRX-${Date.now()}`;
-    const orderId = `ORD-${Math.floor(Math.random() * 10000)}`;
-    const expiryDate = new Date();
-    expiryDate.setHours(expiryDate.getHours() + 24);
+    // 2. CREATE PAYMENT IN BACKEND (BE is source of truth for amount)
+    // Endpoint creates a Midtrans Snap token so FE can open hosted payment page.
+    const res = await apiRequest<{ transaction: any; snapToken: string }>(
+      '/transactions/midtrans/snap',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          items: payload.items.map((i) => ({
+            productId: i.id,
+            quantity: i.quantity,
+          })),
+          voucherCode: payload.discountCode,
+          paymentMethod: payload.method,
+          // Controller uses `guestEmail` when userId is null.
+          guestEmail: payload.customerEmail,
+        }),
+      },
+    );
 
-    const paymentConfig = ConfigService.getPaymentConfig();
+    const backendTx = res.transaction;
 
-    // Partial Payment Logic
-    let schedule: InstallmentSchedule[] = [];
-    let initialPaymentAmount = payload.totalAmount;
-    
-    if (payload.isInstallment && payload.downPaymentAmount) {
-        initialPaymentAmount = payload.downPaymentAmount;
-        const balanceDue = payload.totalAmount - initialPaymentAmount;
-        const monthlyAmount = Math.ceil(balanceDue / 3);
-        
-        for (let i = 1; i <= 3; i++) {
-            const dueDate = new Date();
-            dueDate.setMonth(dueDate.getMonth() + i);
-            schedule.push({
-                id: `INS-${transactionId}-${i}`,
-                dueDate: dueDate.toISOString(),
-                amount: i === 3 ? (balanceDue - (monthlyAmount * 2)) : monthlyAmount, 
-                status: 'PENDING'
-            });
-        }
-    }
+    const createdAt = backendTx?.createdAt ? new Date(backendTx.createdAt) : new Date();
+    const expiryTime = backendTx?.paymentExpiresAt
+      ? new Date(backendTx.paymentExpiresAt)
+      : new Date();
 
-    let transaction: PaymentTransaction = {
-      id: transactionId,
-      orderId: orderId,
-      amount: payload.subTotal,
-      totalAmount: payload.totalAmount,
-      paidAmount: 0, 
-      balanceDue: payload.totalAmount, 
-      
-      method: payload.method,
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-      expiryTime: expiryDate.toISOString(),
-      customerEmail: payload.customerEmail,
-      attributionSource: payload.attributionSource,
-      installmentPlan: schedule.length > 0 ? schedule : undefined,
-      
-      // PERSIST ITEMS so we know what to give them later
-      itemsSnapshot: payload.items
+    const tx: PaymentTransaction = {
+      id: backendTx.id,
+      orderId: backendTx.transactionNumber,
+      amount: backendTx.subtotalAmount,
+      discountAmount: backendTx.discountAmount,
+      totalAmount: backendTx.totalAmount,
+      paidAmount: backendTx.paidAmount ?? 0,
+      balanceDue: Math.max(
+        0,
+        (backendTx.totalAmount ?? 0) - (backendTx.paidAmount ?? 0),
+      ),
+      method: backendTx.paymentMethod as PaymentMethodType,
+      status: backendTx.paymentStatus as any,
+      createdAt: createdAt.toISOString(),
+      expiryTime: expiryTime.toISOString(),
+      customerEmail: backendTx.guestEmail ?? payload.customerEmail,
+      attributionSource: backendTx.attributionSource,
+      installmentPlan: undefined,
+      itemsSnapshot: payload.items,
+      virtualAccountNumber: backendTx.virtualAccountNumber ?? undefined,
+      qrisUrl: backendTx.qrisUrl ?? undefined,
+      bankDetails: backendTx.bankDetails ?? undefined,
+      proofOfPaymentUrl: backendTx.proofOfPaymentUrl ?? undefined,
     };
 
-    if (payload.attributionSource) {
-        CampaignService.trackConversion(payload.attributionSource, payload.totalAmount);
-    }
-
-    // Payment Method Specifics
-    switch (payload.method) {
-      case 'BANK_TRANSFER':
-        const uniqueCode = Math.floor(Math.random() * 900) + 100;
-        transaction = {
-          ...transaction,
-          uniqueCode: uniqueCode,
-          bankDetails: {
-            bankName: paymentConfig.bankName,
-            accountNumber: paymentConfig.accountNumber,
-            accountHolder: paymentConfig.accountHolder
-          }
-        };
-        break;
-      case 'VIRTUAL_ACCOUNT_BCA':
-        transaction = { ...transaction, virtualAccountNumber: `8800${Math.floor(1000000000 + Math.random() * 9000000000)}` };
-        break;
-      case 'QRIS':
-        transaction = { ...transaction, qrisUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg' };
-        break;
-    }
-
-    // Mock Auto-Payment Logic (Credit Card/QRIS)
-    if (['CREDIT_CARD', 'QRIS'].includes(payload.method)) {
-        const paidNow = initialPaymentAmount;
-        
-        transaction.paidAmount = paidNow;
-        transaction.balanceDue = transaction.totalAmount - paidNow;
-        transaction.status = transaction.balanceDue > 0 ? 'PARTIAL' : 'PAID';
-        
-        const members = await DataService.getMembers();
-        // Case insensitive match
-        const member = members.find(m => m.email.toLowerCase() === payload.customerEmail.toLowerCase());
-        const memberName = member ? member.name : 'Guest';
-
-        // UPDATE INVENTORY / QUOTA (Real Commit)
-        payload.items.forEach(async (cartItem) => {
-            const inventoryMatch = INVENTORY_DATA.find(inv => cartItem.id === inv.sku || cartItem.name.includes(inv.name));
-            if (inventoryMatch) {
-                try {
-                    await OpsService.updateStock(
-                        inventoryMatch.sku,
-                        cartItem.quantity,
-                        'GI',
-                        `Order ${orderId}`,
-                        'System (Sales)'
-                    );
-                } catch (e) { console.warn("Auto-deduct failed", e); }
-            }
-        });
-        
-        // Entitlements
-        if (member) {
-             await EntitlementService.processTransactionEntitlements(member.id, payload.items.map(i => ({ 
-                 id: i.id, 
-                 variantId: i.variantId,
-                 quantity: i.quantity 
-             })));
-        }
-
-        // Event Bus
-        const triggerType = transaction.status === 'PARTIAL' ? 'PAYMENT_PARTIAL' : 'PAYMENT_SUCCESS';
-        await EventBus.emit(triggerType, {
-            transactionId,
-            orderId,
-            amount: paidNow,
-            memberId: member?.id, 
-            name: memberName,
-            member_name: memberName, 
-            email: payload.customerEmail,
-            phone: member?.phone, 
-            product_name: payload.items.map(i => i.name).join(', ')
-        });
-
-    } else {
-        CommunicationService.sendTransactionalEmail('TPL-INVOICE', payload.customerEmail, {
-            name: 'Valued Member',
-            amount: String(initialPaymentAmount), 
-            orderId: orderId,
-            transactionId: transactionId
-        });
-    }
-
-    // 3. PERSISTENCE VIA REPOSITORY
-    return await RepositoryFactory.getPaymentRepository().create(transaction);
+    return { transaction: tx, snapToken: res.snapToken };
   },
   
-  confirmManualTransfer: async (transactionId: string, amountReceived: number): Promise<PaymentTransaction> => {
-      const repo = RepositoryFactory.getPaymentRepository();
-      const tx = await repo.getById(transactionId);
-      
-      if (!tx) throw new Error("Transaction not found");
+  confirmManualTransfer: async (
+    transactionId: string,
+    _amountReceived: number,
+    itemsSnapshot?: PaymentTransaction['itemsSnapshot'],
+  ): Promise<PaymentTransaction> => {
+    // SECURITY: don't allow user to "simulate paid" unless backend says PAID.
+    // Midtrans webhook is async, so we poll briefly.
+    let backendTx: any = null;
+    const maxAttempts = 12;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      backendTx = await apiRequest<any>(
+        `/transactions/${encodeURIComponent(transactionId)}`,
+      );
+      if (backendTx?.paymentStatus === 'PAID') break;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
 
-      tx.paidAmount += amountReceived;
-      tx.balanceDue = tx.totalAmount - tx.paidAmount;
+    if (!backendTx || backendTx.paymentStatus !== 'PAID') {
+      throw new Error('Payment not completed yet');
+    }
 
-      if (tx.balanceDue < 0) {
-          tx.status = 'OVERPAID';
-      } else if (tx.balanceDue > 0) {
-          tx.status = 'PARTIAL';
-      } else {
-          tx.status = 'PAID';
-      }
+    const members = await DataService.getMembers();
+    const member = members.find(
+      (m) => m.email.toLowerCase() === (backendTx.guestEmail ?? '').toLowerCase(),
+    );
 
-      await repo.update(tx);
+    if (member && itemsSnapshot && itemsSnapshot.length > 0) {
+      await EntitlementService.processTransactionEntitlements(
+        member.id,
+        itemsSnapshot.map((i) => ({
+          id: i.id,
+          variantId: i.variantId,
+          quantity: i.quantity,
+        })),
+      );
+      await EventBus.emit('PAYMENT_SUCCESS', {
+        transactionId: backendTx.id,
+        orderId: backendTx.transactionNumber,
+        amount: backendTx.totalAmount,
+        memberId: member.id,
+        name: member.name,
+        member_name: member.name,
+        email: member.email,
+        phone: member.phone,
+        product_name: itemsSnapshot.map((i) => i.name).join(', '),
+      });
+    }
 
-      // --- GRANT ENTITLEMENTS ON MANUAL CONFIRMATION ---
-      if (tx.status === 'PAID' && tx.itemsSnapshot && tx.itemsSnapshot.length > 0) {
-          
-          // Resolve Member from Email (Case Insensitive Fix)
-          const members = await DataService.getMembers();
-          const member = members.find(m => m.email.toLowerCase() === tx.customerEmail.toLowerCase());
-
-          if (member) {
-              console.log(`[PAYMENT] Manual confirm for ${transactionId}. Granting entitlements to ${member.id}`);
-              
-              await EntitlementService.processTransactionEntitlements(
-                  member.id, 
-                  tx.itemsSnapshot.map(i => ({ 
-                     id: i.id, 
-                     variantId: i.variantId,
-                     quantity: i.quantity 
-                  }))
-              );
-
-              // Fire Events for automation (WA/Email)
-              await EventBus.emit('PAYMENT_SUCCESS', {
-                  transactionId: tx.id,
-                  orderId: tx.orderId,
-                  amount: amountReceived,
-                  memberId: member.id, 
-                  name: member.name,
-                  member_name: member.name, 
-                  email: member.email,
-                  phone: member.phone, 
-                  product_name: tx.itemsSnapshot.map(i => i.name).join(', ')
-              });
-          } else {
-              console.warn(`[PAYMENT] Manual confirm for ${transactionId}, but user with email ${tx.customerEmail} not found in CRM.`);
-          }
-      }
-      
-      return tx;
+    // Return a minimal transaction object for UI consumers.
+    return {
+      id: backendTx.id,
+      orderId: backendTx.transactionNumber,
+      amount: backendTx.subtotalAmount,
+      discountAmount: backendTx.discountAmount,
+      totalAmount: backendTx.totalAmount,
+      paidAmount: backendTx.totalAmount,
+      balanceDue: 0,
+      method: backendTx.paymentMethod as PaymentMethodType,
+      status: backendTx.paymentStatus as any,
+      createdAt: new Date(backendTx.createdAt).toISOString(),
+      expiryTime: backendTx.paymentExpiresAt
+        ? new Date(backendTx.paymentExpiresAt).toISOString()
+        : new Date().toISOString(),
+      customerEmail: backendTx.guestEmail ?? '',
+      itemsSnapshot,
+      virtualAccountNumber: backendTx.virtualAccountNumber ?? undefined,
+      qrisUrl: backendTx.qrisUrl ?? undefined,
+      bankDetails: backendTx.bankDetails ?? undefined,
+      proofOfPaymentUrl: undefined,
+      attributionSource: backendTx.attributionSource,
+      installmentPlan: undefined,
+      refunds: undefined,
+    };
   },
   
   uploadPaymentProof: async (transactionId: string, file: File): Promise<boolean> => {
-    console.log(`Uploading file ${file.name} for transaction ${transactionId}`);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const repo = RepositoryFactory.getPaymentRepository();
-    const tx = await repo.getById(transactionId);
-    
-    if(tx) {
-        tx.status = 'WAITING_FOR_VERIFICATION';
-        tx.proofOfPaymentUrl = 'mock_url.jpg'; 
-        await repo.update(tx);
-        return true;
-    }
-    return false;
+    // No BE endpoint for proof upload is currently wired.
+    // Keep UX intact by acknowledging the action.
+    console.log(`(Mock) Upload proof ${file.name} for ${transactionId}`);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return true;
   },
 
   checkStatus: async (transactionId: string): Promise<PaymentTransaction['status']> => {

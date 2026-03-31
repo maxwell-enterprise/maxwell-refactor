@@ -79,20 +79,20 @@ const Storefront: React.FC = () => {
 
     // --- SYNC CART ---
     useEffect(() => {
-        if (cart.length > 0) {
-            const totalValue = cart.reduce((sum, item) => {
-                const p = products.find(prod => prod.id === item.productId);
-                if (!p) return sum;
-                
-                let price = p.priceIdr;
-                if (p.hasVariants && item.variantId) {
-                    const v = p.variants?.find(v => v.id === item.variantId);
-                    if (v) price = v.priceIdr;
-                }
-                return sum + (price * item.quantity);
-            }, 0);
-            CartService.syncCart(user?.id, cart, totalValue);
-        }
+        const totalValue = cart.reduce((sum, item) => {
+            const p = products.find((prod) => prod.id === item.productId);
+            if (!p) return sum;
+
+            let price = p.priceIdr;
+            if (p.hasVariants && item.variantId) {
+                const v = p.variants?.find((vv) => vv.id === item.variantId);
+                if (v) price = v.priceIdr;
+            }
+            return sum + price * item.quantity;
+        }, 0);
+
+        // Keep backend cart in sync, including when cart becomes empty
+        CartService.syncCart(user?.id, cart, totalValue);
     }, [cart, user, products]);
 
     // --- EXPIRY CHECK HELPER ---
@@ -447,6 +447,7 @@ const Storefront: React.FC = () => {
             <PaymentModal 
                 isOpen={isPaymentModalOpen}
                 onClose={() => setIsPaymentModalOpen(false)}
+                onPaymentSuccess={() => setCart([])}
                 cart={cart}
                 products={products}
                 userEmail={user?.email || 'guest@example.com'}

@@ -38,6 +38,7 @@ const EventForm: React.FC<EventFormProps> = ({
     // Default visibility to TRUE if undefined (for new events)
     const [formData, setFormData] = useState<Partial<Event>>({
         ...initialData,
+        capacity: initialData.capacity ?? 0,
         isVisibleInCatalog: initialData.isVisibleInCatalog !== undefined ? initialData.isVisibleInCatalog : true
     });
     const [activeTab, setActiveTab] = useState<'GENERAL' | 'LOCATION' | 'ACCESS' | 'TIERS' | 'LOGISTICS' | 'HIERARCHY'>('GENERAL');
@@ -47,6 +48,7 @@ const EventForm: React.FC<EventFormProps> = ({
     useEffect(() => {
         setFormData({
             ...initialData,
+            capacity: initialData.capacity ?? 0,
             isVisibleInCatalog: initialData.isVisibleInCatalog !== undefined ? initialData.isVisibleInCatalog : true
         });
     }, [initialData]);
@@ -243,7 +245,17 @@ const EventForm: React.FC<EventFormProps> = ({
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Capacity</label>
-                                        <input type="number" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.capacity} onChange={e => updateField('capacity', Number(e.target.value))} />
+                                        <input
+                                            type="number"
+                                            className="w-full p-3 border border-slate-300 rounded-lg"
+                                            value={formData.capacity ?? 0}
+                                            onChange={(e) =>
+                                                updateField(
+                                                    'capacity',
+                                                    Number(e.target.value || 0),
+                                                )
+                                            }
+                                        />
                                     </div>
                                 </div>
                              </div>

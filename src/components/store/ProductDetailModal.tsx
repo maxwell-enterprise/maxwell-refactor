@@ -235,11 +235,21 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 
                 {/* LEFT: IMAGE & PREVIEW */}
                 <div className="w-full md:w-5/12 bg-slate-100 relative h-48 md:h-auto">
-                    <img 
-                        src={product.imageUrl} 
-                        alt={product.title} 
-                        className={`absolute inset-0 w-full h-full object-cover ${isExpired ? 'grayscale' : ''}`}
-                    />
+                    {product.imageUrl ? (
+                        <img
+                            src={product.imageUrl}
+                            alt={product.title}
+                            className={`absolute inset-0 w-full h-full object-cover ${
+                                isExpired ? 'grayscale' : ''
+                            }`}
+                        />
+                    ) : (
+                        <div
+                            className={`absolute inset-0 w-full h-full object-cover bg-slate-200 ${
+                                isExpired ? 'grayscale' : ''
+                            }`}
+                        />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                     <div className="absolute bottom-4 left-4 text-white">
                         <span className="bg-white/20 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase mb-2 inline-block border border-white/30">
