@@ -1,10 +1,32 @@
+const PRODUCTION_API_BASE_URL =
+  'https://server-maxwell-production.up.railway.app/fe';
+const LOCAL_API_BASE_URL = 'http://localhost:3002/fe';
+
+/**
+ * Resolves the Nest API base (global prefix `/fe`).
+ * Vercel builds often set NEXT_PUBLIC_API_BASE_URL to localhost by mistake; in
+ * production we never call localhost from the browser.
+ */
+function resolveApiBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (!raw) {
+    return process.env.NODE_ENV === 'production'
+      ? PRODUCTION_API_BASE_URL
+      : LOCAL_API_BASE_URL;
+  }
+  const looksLocal =
+    /localhost|127\.0\.0\.1/i.test(raw) ||
+    /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(raw);
+  if (looksLocal && process.env.NODE_ENV === 'production') {
+    return PRODUCTION_API_BASE_URL;
+  }
+  return raw;
+}
 
 // ENVIRONMENT VARIABLES (Next.js uses process.env.NEXT_PUBLIC_* for client-side)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  'https://server-maxwell-production.up.railway.app/fe';
+const apiBaseUrl = resolveApiBaseUrl();
 
 const hasSupabaseKeys = !!(supabaseUrl && supabaseAnonKey);
 
