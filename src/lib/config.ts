@@ -2,7 +2,9 @@
 // ENVIRONMENT VARIABLES (Next.js uses process.env.NEXT_PUBLIC_* for client-side)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'https://server-maxwell-production.up.railway.app/fe';
 
 const hasSupabaseKeys = !!(supabaseUrl && supabaseAnonKey);
 
