@@ -10,7 +10,7 @@ interface ProductListResponse {
 export class ApiProductRepository implements IProductRepository {
   async getAll(): Promise<Product[]> {
     const response = await apiRequest<ProductListResponse>(
-      '/products?limit=1000&sortBy=title&sortOrder=asc',
+      '/products?sortBy=title&sortOrder=asc',
     );
 
     return response.data;
