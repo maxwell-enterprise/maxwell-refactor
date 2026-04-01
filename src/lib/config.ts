@@ -27,6 +27,7 @@ function resolveApiBaseUrl(): string {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const apiBaseUrl = resolveApiBaseUrl();
+const externalApiOnly = process.env.NEXT_PUBLIC_EXTERNAL_API_ONLY === 'true';
 
 const hasSupabaseKeys = !!(supabaseUrl && supabaseAnonKey);
 
@@ -53,6 +54,7 @@ function resolveDomainMode(preferred: string | undefined): BackendMode {
 export const APP_CONFIG = {
   // GLOBAL FORCE MOCK (Overrides everything else if true)
   USE_MOCK_GLOBAL: false, 
+  EXTERNAL_API_ONLY: externalApiOnly,
   
   // Supabase Credentials
   SUPABASE_URL: supabaseUrl,
@@ -82,11 +84,20 @@ export const APP_CONFIG = {
 
   // FEATURE FLAGS
   FEATURES: {
-    AUTH: hasSupabaseKeys
+    AUTH: hasSupabaseKeys && !externalApiOnly
   },
 
   // Legacy compatibility getter
   get USE_MOCK() {
+    if (this.EXTERNAL_API_ONLY) return false;
     return this.USE_MOCK_GLOBAL || !hasSupabaseKeys;
   }
 };
+
+export function assertExternalApiMode(feature: string, mode: BackendMode): void {
+  if (externalApiOnly && mode !== 'API') {
+    throw new Error(
+      `[External API Only] ${feature} is not allowed to use ${mode}. Configure an API backend before testing this feature.`,
+    );
+  }
+}

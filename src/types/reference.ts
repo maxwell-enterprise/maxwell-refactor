@@ -1,7 +1,12 @@
 
 export interface MasterTier {
-    id: string;   // e.g. "VIP", "REGULAR"
+    id: string; // Business code, e.g. "VIP", "REGULAR"
+    backendId?: string; // UUID row id from BE when available
     name: string; // e.g. "VIP Access"
-    category: 'PAID' | 'COMPLIMENTARY' | 'STAFF';
-    defaultColor?: string; // Hex code for UI badges
+    description?: string;
+    basePriceIdr?: number;
+    createdAt?: string;
+    // Legacy presentation fields kept optional for mock-only UI compatibility.
+    category?: 'PAID' | 'COMPLIMENTARY' | 'STAFF';
+    defaultColor?: string;
 }

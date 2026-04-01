@@ -24,6 +24,11 @@ export const SeedService = {
      * Runs once on app startup to ensure IndexedDB is populated with necessary mock data.
      */
     init: async () => {
+        if (APP_CONFIG.EXTERNAL_API_ONLY) {
+            console.log('[SeedService] External API only mode enabled. Local seeding disabled.');
+            return;
+        }
+
         // CHECK OVERRIDE FLAG
         if (localStorage.getItem('MAXWELL_SKIP_SEED') === 'true') {
             console.log('[SeedService] Seeding skipped by user preference.');

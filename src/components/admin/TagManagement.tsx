@@ -46,22 +46,28 @@ const TagManagement: React.FC = () => {
 
     const loadData = async () => {
         setLoading(true);
-        // Load Tags, Events, Wallets, and Members concurrently
-        const [tagsData, eventsData, dTags, cTags, wItems, membersData] = await Promise.all([
-            CreditTagService.getAllTags(),
-            DataService.getEvents(),
-            CertificationService.getMasterTags(),
-            CreditTagService.getTagOptions(),
-            EntitlementService.getAllWalletItems(), // NEW: For Holders View
-            DataService.getMembers() // NEW: For Name Resolution
-        ]);
-        setTags(tagsData);
-        setEvents(eventsData);
-        setMasterDoneTags(dTags);
-        setAvailableCreditTags(cTags);
-        setWalletItems(wItems);
-        setMembers(membersData);
-        setLoading(false);
+        try {
+            // Load Tags, Events, Wallets, and Members concurrently
+            const [tagsData, eventsData, dTags, cTags, wItems, membersData] = await Promise.all([
+                CreditTagService.getAllTags(),
+                DataService.getEvents(),
+                CertificationService.getMasterTags(),
+                CreditTagService.getTagOptions(),
+                EntitlementService.getAllWalletItems(), // NEW: For Holders View
+                DataService.getMembers() // NEW: For Name Resolution
+            ]);
+            setTags(tagsData);
+            setEvents(eventsData);
+            setMasterDoneTags(dTags);
+            setAvailableCreditTags(cTags);
+            setWalletItems(wItems);
+            setMembers(membersData);
+        } catch (error) {
+            console.error('Failed to load tag management data', error);
+            showToast(error instanceof Error ? error.message : 'Failed to load Credit Tag data.', 'error');
+        } finally {
+            setLoading(false);
+        }
     };
 
     // --- COMPUTED: ORPHAN COUNTS ---

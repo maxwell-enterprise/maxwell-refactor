@@ -1,5 +1,5 @@
 
-import { APP_CONFIG } from '../lib/config';
+import { APP_CONFIG, assertExternalApiMode, BackendMode } from '../lib/config';
 import {
     IMemberRepository,
     IProductRepository,
@@ -75,10 +75,15 @@ let creditTagRepo: ICreditTagRepository;
 let cartRepo: ICartRepository;
 let invitationRepo: IInvitationRepository;
 
+function getDomainMode(feature: string, mode: BackendMode): BackendMode {
+    assertExternalApiMode(feature, mode);
+    return mode;
+}
+
 export const RepositoryFactory = {
     getMemberRepository: (): IMemberRepository => {
         if (!memberRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.MEMBERS;
+            const mode = getDomainMode('Members', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.MEMBERS);
             if (mode === 'API') {
                 memberRepo = new ApiMemberRepository();
             } else if (mode === 'SUPABASE') {
@@ -92,7 +97,7 @@ export const RepositoryFactory = {
 
     getProductRepository: (): IProductRepository => {
         if (!productRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.PRODUCTS;
+            const mode = getDomainMode('Products', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.PRODUCTS);
             if (mode === 'API') {
                 productRepo = new ApiProductRepository();
             } else if (mode === 'SUPABASE') {
@@ -106,7 +111,7 @@ export const RepositoryFactory = {
 
     getEventRepository: (): IEventRepository => {
         if (!eventRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.EVENTS;
+            const mode = getDomainMode('Events', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.EVENTS);
             if (mode === 'API') {
                 eventRepo = new ApiEventRepository();
             } else if (mode === 'SUPABASE') {
@@ -120,7 +125,7 @@ export const RepositoryFactory = {
 
     getInvitationRepository: (): IInvitationRepository => {
         if (!invitationRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.INVITATIONS;
+            const mode = getDomainMode('Invitations', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.INVITATIONS);
             if (mode === 'API') {
                 invitationRepo = new ApiInvitationRepository();
             } else if (mode === 'SUPABASE') {
@@ -134,7 +139,8 @@ export const RepositoryFactory = {
 
     getTransactionRepository: (): ITransactionRepository => {
         if (!transactionRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.TRANSACTIONS === 'SUPABASE';
+            const mode = getDomainMode('Transactions', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.TRANSACTIONS);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             transactionRepo = useRealDb ? new SupabaseTransactionRepository() : new MockTransactionRepository();
         }
         return transactionRepo;
@@ -142,7 +148,8 @@ export const RepositoryFactory = {
 
     getPaymentRepository: (): IPaymentRepository => {
         if (!paymentRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.PAYMENTS === 'SUPABASE';
+            const mode = getDomainMode('Payments', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.PAYMENTS);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             paymentRepo = useRealDb ? new SupabasePaymentRepository() : new MockPaymentRepository();
         }
         return paymentRepo;
@@ -150,7 +157,8 @@ export const RepositoryFactory = {
 
     getInventoryRepository: (): IInventoryRepository => {
         if (!inventoryRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.OPS === 'SUPABASE';
+            const mode = getDomainMode('Inventory', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             inventoryRepo = useRealDb ? new SupabaseInventoryRepository() : new MockInventoryRepository();
         }
         return inventoryRepo;
@@ -158,7 +166,8 @@ export const RepositoryFactory = {
 
     getWorkflowRepository: (): IWorkflowRepository => {
         if (!workflowRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.OPS === 'SUPABASE';
+            const mode = getDomainMode('Workflows', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             workflowRepo = useRealDb ? new SupabaseWorkflowRepository() : new MockWorkflowRepository();
         }
         return workflowRepo;
@@ -166,7 +175,8 @@ export const RepositoryFactory = {
 
     getGamificationRepository: (): IGamificationRepository => {
         if (!gamificationRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.GAMIFICATION === 'SUPABASE';
+            const mode = getDomainMode('Gamification', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.GAMIFICATION);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             gamificationRepo = useRealDb ? new SupabaseGamificationRepository() : new MockGamificationRepository();
         }
         return gamificationRepo;
@@ -174,7 +184,8 @@ export const RepositoryFactory = {
 
     getContentRepository: (): IContentRepository => {
         if (!contentRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.CONTENT === 'SUPABASE';
+            const mode = getDomainMode('Content', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.CONTENT);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             contentRepo = useRealDb ? new SupabaseContentRepository() : new MockContentRepository();
         }
         return contentRepo;
@@ -182,7 +193,8 @@ export const RepositoryFactory = {
 
     getCommunicationRepository: (): ICommunicationRepository => {
         if (!commsRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMUNICATION === 'SUPABASE';
+            const mode = getDomainMode('Communication', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMUNICATION);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             commsRepo = useRealDb ? new SupabaseCommunicationRepository() : new MockCommunicationRepository();
         }
         return commsRepo;
@@ -190,7 +202,8 @@ export const RepositoryFactory = {
 
     getWhatsappRepository: (): IWhatsappRepository => {
         if (!waRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMUNICATION === 'SUPABASE';
+            const mode = getDomainMode('WhatsApp', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMUNICATION);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             waRepo = useRealDb ? new SupabaseWhatsappRepository() : new MockWhatsappRepository();
         }
         return waRepo;
@@ -198,7 +211,7 @@ export const RepositoryFactory = {
 
     getEntitlementRepository: (): IEntitlementRepository => {
         if (!entitlementRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.ENTITLEMENTS;
+            const mode = getDomainMode('Entitlements', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.ENTITLEMENTS);
             if (mode === 'API') {
                 entitlementRepo = new ApiEntitlementRepository();
             } else if (mode === 'SUPABASE') {
@@ -212,7 +225,7 @@ export const RepositoryFactory = {
 
     getCreditTagRepository: (): ICreditTagRepository => {
         if (!creditTagRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS;
+            const mode = getDomainMode('Credit tags', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS);
             if (mode === 'API') {
                 creditTagRepo = new ApiCreditTagRepository();
             } else if (mode === 'SUPABASE') {
@@ -226,7 +239,7 @@ export const RepositoryFactory = {
 
     getCartRepository: (): ICartRepository => {
         if (!cartRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMERCE;
+            const mode = getDomainMode('Commerce cart', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMERCE);
             if (mode === 'API') {
                 cartRepo = new ApiCartRepository();
             } else if (mode === 'SUPABASE') {

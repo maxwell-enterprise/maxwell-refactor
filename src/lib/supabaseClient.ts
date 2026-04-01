@@ -6,7 +6,7 @@ const supabaseUrl = APP_CONFIG.SUPABASE_URL;
 const supabaseAnonKey = APP_CONFIG.SUPABASE_ANON_KEY;
 
 // Only initialize if keys are present to prevent runtime errors in Mock mode
-export const supabase = (supabaseUrl && supabaseAnonKey) 
+export const supabase = (!APP_CONFIG.EXTERNAL_API_ONLY && supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 

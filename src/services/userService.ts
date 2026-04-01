@@ -1,6 +1,6 @@
 
 import { UserProfile, UserRole } from '../types/index';
-import { APP_CONFIG } from '../lib/config';
+import { APP_CONFIG, assertExternalApiMode } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { DataService } from './dataService'; 
@@ -27,6 +27,7 @@ const SEED_USERS: UserProfile[] = [
 
 export const UserService = {
     getAllUsers: async (): Promise<UserProfile[]> => {
+        assertExternalApiMode('Internal users', APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
         if (APP_CONFIG.USE_MOCK) {
             try {
                 // 1. Get Internal Staff from DB (or Seed)
@@ -74,6 +75,7 @@ export const UserService = {
     },
 
     updateUserRole: async (userId: string, newRole: UserRole): Promise<void> => {
+        assertExternalApiMode('Internal users', APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
         if (APP_CONFIG.USE_MOCK) {
             const users = await DevDatabase.getAll<UserProfile>('sys_internal_users');
             const user = users.find(u => u.id === userId);
@@ -90,6 +92,7 @@ export const UserService = {
     },
 
     updateUserProfile: async (userId: string, updates: Partial<UserProfile>): Promise<void> => {
+        assertExternalApiMode('Internal users', APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
         if (APP_CONFIG.USE_MOCK) {
             const users = await UserService.getAllUsers(); 
             const user = users.find(u => u.id === userId);
@@ -113,6 +116,7 @@ export const UserService = {
     },
 
     addUser: async (user: UserProfile): Promise<void> => {
+        assertExternalApiMode('Internal users', APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
         if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('sys_internal_users', user);
             return;
