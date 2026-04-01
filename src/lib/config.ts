@@ -2,6 +2,18 @@ const PRODUCTION_API_BASE_URL =
   'https://server-maxwell-production.up.railway.app/fe';
 const LOCAL_API_BASE_URL = 'http://localhost:3002/fe';
 
+function isLocalHostname(hostname: string): boolean {
+  return /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0)$/i.test(
+    hostname.trim(),
+  );
+}
+
+function isLikelyProductionRuntime(): boolean {
+  if (process.env.NODE_ENV === 'production') return true;
+  const vercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.VERCEL_ENV;
+  return (vercelEnv ?? '').toLowerCase() === 'production';
+}
+
 /**
  * Resolves the Nest API base (global prefix `/fe`).
  * Vercel builds often set NEXT_PUBLIC_API_BASE_URL to localhost by mistake; in
@@ -9,15 +21,19 @@ const LOCAL_API_BASE_URL = 'http://localhost:3002/fe';
  */
 function resolveApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  const browserHost =
+    typeof window !== 'undefined' ? window.location.hostname : '';
+  const browserOnRemoteHost = browserHost !== '' && !isLocalHostname(browserHost);
+
   if (!raw) {
-    return process.env.NODE_ENV === 'production'
+    return browserOnRemoteHost || isLikelyProductionRuntime()
       ? PRODUCTION_API_BASE_URL
       : LOCAL_API_BASE_URL;
   }
   const looksLocal =
     /localhost|127\.0\.0\.1/i.test(raw) ||
     /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(raw);
-  if (looksLocal && process.env.NODE_ENV === 'production') {
+  if (looksLocal && (browserOnRemoteHost || isLikelyProductionRuntime())) {
     return PRODUCTION_API_BASE_URL;
   }
   return raw;
