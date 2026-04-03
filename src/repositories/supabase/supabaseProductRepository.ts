@@ -1,5 +1,5 @@
 
-import { IProductRepository } from '../contracts';
+import { IProductRepository, ProductListQuery } from '../contracts';
 import { Product } from '../../types/index';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -18,6 +18,50 @@ export class SupabaseProductRepository implements IProductRepository {
         }
 
         return data as Product[];
+    }
+
+    async listProducts(
+        query: ProductListQuery,
+    ): Promise<{ data: Product[]; total: number }> {
+        if (!supabase) throw new Error('Supabase client not initialized');
+
+        const from = (query.page - 1) * query.limit;
+        const to = from + query.limit - 1;
+
+        let q = supabase.from('products').select('*', { count: 'exact' });
+
+        const s = query.search?.trim();
+        if (s) {
+            q = q.or(`title.ilike.%${s}%,description.ilike.%${s}%`);
+        }
+        if (query.category) {
+            q = q.eq('category', query.category);
+        }
+        if (typeof query.isActive === 'boolean') {
+            q = q.eq('isActive', query.isActive);
+        }
+
+        const sortCol =
+            query.sortBy === 'priceIdr'
+                ? 'priceIdr'
+                : query.sortBy === 'category'
+                  ? 'category'
+                  : 'title';
+        const ascending = (query.sortOrder ?? 'asc') === 'asc';
+
+        const { data, error, count } = await q
+            .order(sortCol, { ascending })
+            .range(from, to);
+
+        if (error) {
+            console.error('Supabase Product Page Fetch Error:', error);
+            return { data: [], total: 0 };
+        }
+
+        return {
+            data: (data ?? []) as Product[],
+            total: count ?? 0,
+        };
     }
 
     async getById(id: string): Promise<Product | null> {

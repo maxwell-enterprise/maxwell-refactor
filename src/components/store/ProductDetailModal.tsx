@@ -69,14 +69,15 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
             product.variants.forEach(v => scanItems(v.items));
         }
 
-        // Fetch Data
-        const allEvents = await DataService.getEvents();
-        const relevantEvents = allEvents.filter(e => eventIds.has(e.id));
+        const eventFetchList = [...eventIds];
+        const fetchedEvents = await Promise.all(
+            eventFetchList.map((id) => DataService.getEventById(id)),
+        );
+        const relevantEvents = fetchedEvents.filter((e): e is Event => e != null);
         const eventMap: Record<string, Event> = {};
-        
-        relevantEvents.forEach(e => {
+
+        relevantEvents.forEach((e) => {
             eventMap[e.id] = e;
-            // Check Event Expiry
             if (e.date < today) expiredFlag = true;
         });
 

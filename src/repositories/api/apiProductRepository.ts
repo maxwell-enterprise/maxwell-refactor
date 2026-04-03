@@ -1,10 +1,25 @@
 import { Product } from '../../types/index';
-import { IProductRepository } from '../contracts';
+import { IProductRepository, ProductListQuery } from '../contracts';
 import { apiRequest } from './apiClient';
 
 interface ProductListResponse {
   data: Product[];
   total: number;
+}
+
+function buildProductQueryString(query: ProductListQuery): string {
+  const params = new URLSearchParams();
+  params.set('sortBy', query.sortBy ?? 'title');
+  params.set('sortOrder', query.sortOrder ?? 'asc');
+  params.set('page', String(query.page));
+  params.set('limit', String(query.limit));
+  const s = query.search?.trim();
+  if (s) params.set('search', s);
+  if (query.category) params.set('category', query.category);
+  if (typeof query.isActive === 'boolean') {
+    params.set('isActive', String(query.isActive));
+  }
+  return params.toString();
 }
 
 export class ApiProductRepository implements IProductRepository {
@@ -14,6 +29,14 @@ export class ApiProductRepository implements IProductRepository {
     );
 
     return response.data;
+  }
+
+  async listProducts(
+    query: ProductListQuery,
+  ): Promise<{ data: Product[]; total: number }> {
+    return apiRequest<ProductListResponse>(
+      `/products?${buildProductQueryString(query)}`,
+    );
   }
 
   async getById(id: string): Promise<Product | null> {

@@ -15,6 +15,18 @@ export interface TransactionQueryParams {
     offset?: number;
 }
 
+/** Server-backed product listing (Nest `/products` supports page/limit/search/category). */
+export interface ProductListQuery {
+    page: number;
+    limit: number;
+    search?: string;
+    category?: string;
+    sortBy?: 'title' | 'priceIdr' | 'category' | 'createdAt';
+    sortOrder?: 'asc' | 'desc';
+    /** When false, only active products; omit for admin views that need inactive rows too. */
+    isActive?: boolean;
+}
+
 export interface IMemberRepository {
     getAll(): Promise<Member[]>;
     getById(id: string): Promise<Member | null>;
@@ -24,6 +36,9 @@ export interface IMemberRepository {
 
 export interface IProductRepository {
     getAll(): Promise<Product[]>;
+    listProducts(
+        query: ProductListQuery,
+    ): Promise<{ data: Product[]; total: number }>;
     getById(id: string): Promise<Product | null>;
     upsert(product: Product): Promise<void>;
     delete(id: string): Promise<void>;

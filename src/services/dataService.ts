@@ -3,7 +3,7 @@ import { Member, Event, Transaction, Product } from '../types/index';
 import { PaymentService } from './paymentService';
 import { RepositoryFactory } from './repositories/index';
 import { DataUtils } from '../utils/dataUtils';
-import { TransactionQueryParams } from './repositories/types';
+import { TransactionQueryParams, ProductListQuery } from './repositories/types';
 
 /**
  * INTELLIGENT DATA SERVICE
@@ -16,6 +16,10 @@ export const DataService = {
   // --- MEMBERS ---
   getMembers: async (): Promise<Member[]> => {
     return await RepositoryFactory.getMemberRepository().getAll();
+  },
+
+  getMemberById: async (id: string): Promise<Member | null> => {
+    return await RepositoryFactory.getMemberRepository().getById(id);
   },
 
   updateMember: async (id: string, updates: Partial<Member & { notes?: string }>): Promise<void> => {
@@ -31,6 +35,12 @@ export const DataService = {
       return await RepositoryFactory.getProductRepository().getAll();
   },
 
+  listProducts: async (
+      query: ProductListQuery,
+  ): Promise<{ data: Product[]; total: number }> => {
+      return await RepositoryFactory.getProductRepository().listProducts(query);
+  },
+
   upsertProduct: async (product: Product): Promise<void> => {
       return await RepositoryFactory.getProductRepository().upsert(product);
   },
@@ -42,6 +52,10 @@ export const DataService = {
   // --- EVENTS ---
   getEvents: async (): Promise<Event[]> => {
       return await RepositoryFactory.getEventRepository().getAll();
+  },
+
+  getEventById: async (id: string): Promise<Event | null> => {
+      return await RepositoryFactory.getEventRepository().getById(id);
   },
 
   upsertEvent: async (event: Event): Promise<void> => {

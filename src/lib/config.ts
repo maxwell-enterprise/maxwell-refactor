@@ -14,10 +14,24 @@ function isLikelyProductionRuntime(): boolean {
   return (vercelEnv ?? '').toLowerCase() === 'production';
 }
 
+function looksLikeLocalApiUrl(url: string): boolean {
+  return (
+    /localhost|127\.0\.0\.1/i.test(url) ||
+    /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(url)
+  );
+}
+
+/** Hosted Railway / production URL in env — ignored during `next dev` unless forced. */
+function looksLikeHostedProductionApi(url: string): boolean {
+  return /server-maxwell-production|\.up\.railway\.app/i.test(url);
+}
+
 /**
  * Resolves the Nest API base (global prefix `/fe`).
- * Vercel builds often set NEXT_PUBLIC_API_BASE_URL to localhost by mistake; in
- * production we never call localhost from the browser.
+ * - `next dev`: uses local Nest by default (see `.env.development`). Hosted URLs
+ *   in `.env` / `.env.local` are ignored unless `NEXT_PUBLIC_USE_PRODUCTION_API=true`.
+ * - `next build` / Vercel: uses `NEXT_PUBLIC_API_BASE_URL` from `.env.production` or the dashboard.
+ * - If a production build would call localhost from a deployed origin, we swap to production.
  */
 function resolveApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
@@ -25,14 +39,28 @@ function resolveApiBaseUrl(): string {
     typeof window !== 'undefined' ? window.location.hostname : '';
   const browserOnRemoteHost = browserHost !== '' && !isLocalHostname(browserHost);
 
+  const isDev = process.env.NODE_ENV === 'development';
+
+  if (isDev) {
+    const forceProd =
+      process.env.NEXT_PUBLIC_USE_PRODUCTION_API === 'true' ||
+      process.env.NEXT_PUBLIC_USE_PRODUCTION_API === '1';
+    if (forceProd) {
+      if (raw && !looksLikeLocalApiUrl(raw)) return raw;
+      return PRODUCTION_API_BASE_URL;
+    }
+    if (raw && raw.length > 0 && !looksLikeHostedProductionApi(raw)) {
+      return raw;
+    }
+    return LOCAL_API_BASE_URL;
+  }
+
   if (!raw) {
     return browserOnRemoteHost || isLikelyProductionRuntime()
       ? PRODUCTION_API_BASE_URL
       : LOCAL_API_BASE_URL;
   }
-  const looksLocal =
-    /localhost|127\.0\.0\.1/i.test(raw) ||
-    /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(raw);
+  const looksLocal = looksLikeLocalApiUrl(raw);
   if (looksLocal && (browserOnRemoteHost || isLikelyProductionRuntime())) {
     return PRODUCTION_API_BASE_URL;
   }

@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CertificationService } from '../../services/certificationService';
 import { CertificationRule, MasterDoneTag } from '../../types/certification';
 import { useToast } from '../../context/ToastContext';
-import { Plus, Save, Trash2, Award, ListChecks, CheckCircle2, X, Tag, Edit3 } from 'lucide-react';
+import { Plus, Save, Award, ListChecks, X, Tag, Edit3, Loader2 } from 'lucide-react';
 
 const CertificationConfig: React.FC = () => {
     const { showToast } = useToast();
@@ -21,6 +21,11 @@ const CertificationConfig: React.FC = () => {
     
     // Tag Input State for Rule Editor
     const [tagInput, setTagInput] = useState('');
+
+    const [savingRule, setSavingRule] = useState(false);
+    const [savingTag, setSavingTag] = useState(false);
+    const saveRuleInFlight = useRef(false);
+    const saveTagInFlight = useRef(false);
 
     useEffect(() => {
         loadData();
@@ -57,14 +62,24 @@ const CertificationConfig: React.FC = () => {
     };
 
     const handleSaveRule = async () => {
+        if (saveRuleInFlight.current) return;
         if (!editRule.name || !editRule.requiredTags || editRule.requiredTags.length === 0) {
             showToast('Name and at least one tag are required.', 'error');
             return;
         }
-        await CertificationService.saveRule(editRule as CertificationRule);
-        showToast('Rule saved successfully', 'success');
-        setIsEditingRule(false);
-        loadData();
+        saveRuleInFlight.current = true;
+        setSavingRule(true);
+        try {
+            await CertificationService.saveRule(editRule as CertificationRule);
+            showToast('Rule saved successfully', 'success');
+            setIsEditingRule(false);
+            await loadData();
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Failed to save rule', 'error');
+        } finally {
+            saveRuleInFlight.current = false;
+            setSavingRule(false);
+        }
     };
 
     const addTagToRule = () => {
@@ -112,14 +127,24 @@ const CertificationConfig: React.FC = () => {
     };
 
     const handleSaveTag = async () => {
+        if (saveTagInFlight.current) return;
         if (!editTag.code || !editTag.label) {
             showToast('Code and Label are required.', 'error');
             return;
         }
-        await CertificationService.saveMasterTag(editTag as MasterDoneTag);
-        showToast('Master Tag saved.', 'success');
-        setIsEditingTag(false);
-        loadData();
+        saveTagInFlight.current = true;
+        setSavingTag(true);
+        try {
+            await CertificationService.saveMasterTag(editTag as MasterDoneTag);
+            showToast('Master Tag saved.', 'success');
+            setIsEditingTag(false);
+            await loadData();
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Failed to save tag', 'error');
+        } finally {
+            saveTagInFlight.current = false;
+            setSavingTag(false);
+        }
     };
 
     // --- RENDERERS ---
@@ -131,7 +156,15 @@ const CertificationConfig: React.FC = () => {
                     <h3 className="font-bold text-slate-900 flex items-center">
                         <Award className="mr-2 text-blue-600"/> {editRule.id?.startsWith('CERT') ? 'New Certification' : 'Edit Rule'}
                     </h3>
-                    <button onClick={() => setIsEditingRule(false)}><X size={20} className="text-slate-400"/></button>
+                    <button
+                        type="button"
+                        onClick={() => !savingRule && setIsEditingRule(false)}
+                        disabled={savingRule}
+                        className="disabled:opacity-40"
+                        aria-disabled={savingRule}
+                    >
+                        <X size={20} className="text-slate-400"/>
+                    </button>
                 </div>
                 
                 <div className="p-6 space-y-5 overflow-y-auto">
@@ -220,8 +253,22 @@ const CertificationConfig: React.FC = () => {
                 </div>
 
                 <div className="p-6 border-t border-slate-100 shrink-0 flex justify-end bg-slate-50">
-                    <button onClick={handleSaveRule} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold flex items-center hover:bg-blue-700">
-                        <Save size={16} className="mr-2"/> Save Configuration
+                    <button
+                        type="button"
+                        onClick={handleSaveRule}
+                        disabled={savingRule}
+                        className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold flex items-center hover:bg-blue-700 disabled:opacity-60 disabled:pointer-events-none"
+                    >
+                        {savingRule ? (
+                            <>
+                                <Loader2 size={16} className="mr-2 animate-spin" />
+                                Saving…
+                            </>
+                        ) : (
+                            <>
+                                <Save size={16} className="mr-2" /> Save Configuration
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
@@ -235,7 +282,15 @@ const CertificationConfig: React.FC = () => {
                     <h3 className="font-bold text-indigo-900 flex items-center">
                         <Tag className="mr-2"/> {editTag.id ? 'Edit Tag' : 'New Master Tag'}
                     </h3>
-                    <button onClick={() => setIsEditingTag(false)}><X size={20} className="text-slate-400"/></button>
+                    <button
+                        type="button"
+                        onClick={() => !savingTag && setIsEditingTag(false)}
+                        disabled={savingTag}
+                        className="disabled:opacity-40"
+                        aria-disabled={savingTag}
+                    >
+                        <X size={20} className="text-slate-400"/>
+                    </button>
                 </div>
                 <div className="p-6 space-y-4">
                     <div>
@@ -276,8 +331,22 @@ const CertificationConfig: React.FC = () => {
                         />
                     </div>
                     <div className="flex justify-end pt-4">
-                        <button onClick={handleSaveTag} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold flex items-center hover:bg-indigo-700">
-                            <Save size={16} className="mr-2"/> Save Tag
+                        <button
+                            type="button"
+                            onClick={handleSaveTag}
+                            disabled={savingTag}
+                            className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold flex items-center hover:bg-indigo-700 disabled:opacity-60 disabled:pointer-events-none"
+                        >
+                            {savingTag ? (
+                                <>
+                                    <Loader2 size={16} className="mr-2 animate-spin" />
+                                    Saving…
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={16} className="mr-2" /> Save Tag
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -311,17 +380,29 @@ const CertificationConfig: React.FC = () => {
             </div>
 
             {/* TAB CONTENT */}
-            
+            {loading ? (
+                <div className="flex flex-1 flex-col items-center justify-center min-h-[min(50vh,320px)] text-slate-500 text-sm">
+                    Memuat data…
+                </div>
+            ) : (
+            <>
             {activeTab === 'RULES' && (
                 <>
                 {isEditingRule && renderRuleEditor()}
                 {!isEditingRule && (
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex-1 flex flex-col min-h-0">
                         <div className="flex justify-end">
                             <button onClick={handleCreateRule} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center hover:bg-blue-700 shadow-sm">
                                 <Plus size={16} className="mr-2"/> New Rule
                             </button>
                         </div>
+                        {rules.length === 0 ? (
+                            <div className="flex flex-1 flex-col items-center justify-center min-h-[min(50vh,280px)] rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center">
+                                <Award className="text-slate-300 mb-3" size={40} strokeWidth={1.25} />
+                                <p className="text-slate-600 font-medium">Belum ada certification rule</p>
+                                <p className="text-slate-500 text-sm mt-1 max-w-md">Tambah rule baru untuk mengatur logika penerbitan sertifikat otomatis.</p>
+                            </div>
+                        ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {rules.map(rule => (
                                 <div key={rule.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative">
@@ -356,6 +437,7 @@ const CertificationConfig: React.FC = () => {
                                 </div>
                             ))}
                         </div>
+                        )}
                     </div>
                 )}
                 </>
@@ -365,12 +447,19 @@ const CertificationConfig: React.FC = () => {
                 <>
                 {isEditingTag && renderTagEditor()}
                 {!isEditingTag && (
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex-1 flex flex-col min-h-0">
                         <div className="flex justify-end">
                              <button onClick={handleCreateTag} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold flex items-center hover:bg-indigo-700 shadow-sm">
                                 <Plus size={16} className="mr-2"/> New Master Tag
                             </button>
                         </div>
+                        {tags.length === 0 ? (
+                            <div className="flex flex-1 flex-col items-center justify-center min-h-[min(50vh,280px)] rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center">
+                                <Tag className="text-slate-300 mb-3" size={40} strokeWidth={1.25} />
+                                <p className="text-slate-600 font-medium">Belum ada master tag</p>
+                                <p className="text-slate-500 text-sm mt-1 max-w-md">Buat tag selesai (done) yang bisa dipakai di event dan certification rules.</p>
+                            </div>
+                        ) : (
                         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                             <table className="w-full text-left text-sm">
                                 <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
@@ -396,13 +485,15 @@ const CertificationConfig: React.FC = () => {
                                             </td>
                                         </tr>
                                     ))}
-                                    {tags.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-400">No master tags defined.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
+                        )}
                     </div>
                 )}
                 </>
+            )}
+            </>
             )}
         </div>
     );

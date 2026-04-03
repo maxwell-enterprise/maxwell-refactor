@@ -9,10 +9,15 @@ import { supabase } from '../lib/supabaseClient';
 import { EventBus } from './eventBus';
 import { AuditService } from './auditService'; // Import Audit
 import { apiRequest } from '../repositories/api/apiClient';
+import { DataService } from './dataService';
 
 const shouldUseApi = () =>
     !APP_CONFIG.USE_MOCK_GLOBAL &&
     (APP_CONFIG.DOMAINS.OPS === 'API' || APP_CONFIG.DOMAINS.EVENTS === 'API');
+
+/** Persist members to Nest when the members domain is on API (not IndexedDB/Supabase client). */
+const membersViaApi = () =>
+    !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.MEMBERS === 'API';
 
 interface ApiMasterDoneTag {
     id: string;
@@ -30,9 +35,45 @@ const mapApiMasterDoneTag = (tag: ApiMasterDoneTag): MasterDoneTag => ({
     description: tag.description ?? undefined
 });
 
+/** Nest returns flattened rules; DB stores logic/tags in `criteria` jsonb */
+interface ApiCertificationRule {
+    id: string;
+    name: string;
+    description: string;
+    logic: CertificationRule['logic'];
+    requiredTags: string[];
+    minCountValue?: number;
+    badgeUrl?: string | null;
+    isActive: boolean;
+    validityPeriodMonths?: number;
+    createdAt?: string;
+}
+
+const mapApiCertificationRule = (r: ApiCertificationRule): CertificationRule => ({
+    id: r.id,
+    name: r.name,
+    description: r.description ?? '',
+    logic: r.logic,
+    requiredTags: r.requiredTags ?? [],
+    minCountValue: r.minCountValue,
+    badgeUrl: r.badgeUrl ?? undefined,
+    isActive: r.isActive,
+    validityPeriodMonths: r.validityPeriodMonths,
+});
+
+function isUuid(id: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id,
+    );
+}
+
 export const CertificationService = {
 
     getRules: async (): Promise<CertificationRule[]> => {
+        if (shouldUseApi()) {
+            const data = await apiRequest<ApiCertificationRule[]>('/certification-rules');
+            return data.map(mapApiCertificationRule);
+        }
         if (APP_CONFIG.USE_MOCK) {
             try {
                 if (await DevDatabase.isEmpty('certification_rules')) {
@@ -48,6 +89,31 @@ export const CertificationService = {
     },
 
     saveRule: async (rule: CertificationRule): Promise<void> => {
+        if (shouldUseApi()) {
+            const payload = {
+                name: rule.name,
+                description: rule.description ?? '',
+                logic: rule.logic,
+                requiredTags: rule.requiredTags,
+                minCountValue: rule.minCountValue,
+                badgeUrl: rule.badgeUrl ?? null,
+                isActive: rule.isActive,
+                validityPeriodMonths: rule.validityPeriodMonths,
+            };
+            const body = JSON.stringify(payload);
+            if (isUuid(rule.id)) {
+                await apiRequest<ApiCertificationRule>(
+                    `/certification-rules/${encodeURIComponent(rule.id)}`,
+                    { method: 'PATCH', body },
+                );
+            } else {
+                await apiRequest<ApiCertificationRule>('/certification-rules', {
+                    method: 'POST',
+                    body,
+                });
+            }
+            return;
+        }
         if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('certification_rules', rule);
             return;
@@ -183,9 +249,13 @@ export const CertificationService = {
             updatedMember.achievements = [...(updatedMember.achievements || []), ...newCerts];
         }
 
-        // 3. Persist Member
-        // Use DataService or direct DB access (Direct for atomic safety here)
-        if (APP_CONFIG.USE_MOCK) {
+        // 3. Persist Member (Nest API when MEMBERS=API; else mock / Supabase)
+        if (membersViaApi()) {
+            await DataService.updateMember(member.id, {
+                earnedDoneTags: updatedMember.earnedDoneTags,
+                achievements: updatedMember.achievements,
+            });
+        } else if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('members', updatedMember);
         } else if (supabase) {
             await supabase.from('members').upsert(updatedMember);
@@ -209,14 +279,22 @@ export const CertificationService = {
      * Logs the action to Audit Trail and grants the tag.
      */
     grantManualOverride: async (memberId: string, tagCode: string, reason: string, adminId: string): Promise<void> => {
-        // Fetch Member
         let member: Member | undefined;
-        if (APP_CONFIG.USE_MOCK) {
-             const members = await DevDatabase.getAll<Member>('members');
-             member = members.find(m => m.id === memberId);
+        if (membersViaApi()) {
+            member = (await DataService.getMemberById(memberId)) ?? undefined;
+        } else if (APP_CONFIG.USE_MOCK) {
+            const members = await DevDatabase.getAll<Member>('members');
+            member = members.find((m) => m.id === memberId);
+        } else if (supabase) {
+            const { data } = await supabase
+                .from('members')
+                .select('*')
+                .eq('id', memberId)
+                .maybeSingle();
+            member = (data as Member | undefined) ?? undefined;
         }
-        
-        if (!member) throw new Error("Member not found");
+
+        if (!member) throw new Error('Member not found');
 
         // Grant Tag Logic
         await CertificationService.processNewTags(member, [tagCode]);
