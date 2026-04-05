@@ -3,7 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { Transaction } from '../../types/index';
 import { DataService } from '../../services/dataService';
 import { useAuth } from '../../context/AuthContext';
-import { ShoppingBag, CheckCircle, Clock, AlertTriangle, Search } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { ShoppingBag, CheckCircle, Clock, AlertTriangle, Search, UserCircle } from 'lucide-react';
+import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 
 const PurchaseHistory: React.FC = () => {
     const { user } = useAuth();
@@ -12,7 +14,12 @@ const PurchaseHistory: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        if (user) loadOrders();
+        if (user) {
+            void loadOrders();
+        } else {
+            setOrders([]);
+            setLoading(false);
+        }
     }, [user]);
 
     const loadOrders = async () => {
@@ -45,6 +52,17 @@ const PurchaseHistory: React.FC = () => {
 
     const filtered = orders.filter(o => o.id.toLowerCase().includes(searchTerm.toLowerCase()) || o.description.toLowerCase().includes(searchTerm.toLowerCase()));
 
+    const emptyState: { icon: LucideIcon; message: string } | null =
+        !user
+            ? { icon: UserCircle, message: 'Sign in to view your orders.' }
+            : loading
+              ? null
+              : filtered.length === 0
+                ? orders.length === 0
+                    ? { icon: ShoppingBag, message: 'No orders yet.' }
+                    : { icon: Search, message: 'No orders match your search.' }
+                : null;
+
     return (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col">
             <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
@@ -64,8 +82,17 @@ const PurchaseHistory: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {loading ? <div className="text-center p-8 text-slate-400 text-xs">Loading orders...</div> : 
-                 filtered.length === 0 ? <div className="text-center p-8 text-slate-400 text-xs">No purchase history found.</div> :
+                {loading ? (
+                    <div className="flex min-h-[120px] items-center justify-center py-12 text-center text-sm text-slate-400">
+                        Loading orders…
+                    </div>
+                ) : emptyState ? (
+                    <EmptyStatePlaceholder
+                        icon={emptyState.icon}
+                        message={emptyState.message}
+                        minHeightClass="min-h-[120px]"
+                    />
+                ) : (
                  filtered.map(order => (
                     <div key={order.id} className="p-4 border border-slate-200 rounded-xl hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start mb-2">
@@ -82,7 +109,8 @@ const PurchaseHistory: React.FC = () => {
                             {order.description.replace(/Store Sale:.*? - /, '')}
                         </p>
                     </div>
-                ))}
+                ))
+                )}
             </div>
         </div>
     );

@@ -2,7 +2,7 @@
 import { Member, Transaction, Event } from '../../types/index';
 
 const DB_NAME = 'MAXWELL_DEV_SANDBOX_V1';
-const DB_VERSION = 22; // Bump version for invitations
+const DB_VERSION = 25; // Drop youth_metrics (Nest / Postgres; /fe/youth-impact/metrics)
 
 export const DevDatabase = {
 
@@ -12,6 +12,24 @@ export const DevDatabase = {
 
             request.onupgradeneeded = (event) => {
                 const db = (event.target as IDBOpenDBRequest).result;
+                const oldVersion = event.oldVersion;
+
+                if (oldVersion < 23 && db.objectStoreNames.contains('commission_rules')) {
+                    db.deleteObjectStore('commission_rules');
+                }
+
+                if (oldVersion < 24) {
+                    if (db.objectStoreNames.contains('ops_checklists')) {
+                        db.deleteObjectStore('ops_checklists');
+                    }
+                    if (db.objectStoreNames.contains('ops_templates')) {
+                        db.deleteObjectStore('ops_templates');
+                    }
+                }
+
+                if (oldVersion < 25 && db.objectStoreNames.contains('youth_metrics')) {
+                    db.deleteObjectStore('youth_metrics');
+                }
 
                 // --- CORE STORES ---
                 if (!db.objectStoreNames.contains('members')) db.createObjectStore('members', { keyPath: 'id' });
@@ -19,9 +37,7 @@ export const DevDatabase = {
                 if (!db.objectStoreNames.contains('events')) db.createObjectStore('events', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('products')) db.createObjectStore('products', { keyPath: 'id' });
 
-                // --- OPS ---
-                if (!db.objectStoreNames.contains('ops_checklists')) db.createObjectStore('ops_checklists', { keyPath: 'id' });
-                if (!db.objectStoreNames.contains('ops_templates')) db.createObjectStore('ops_templates', { keyPath: 'id' });
+                // --- OPS (workflows: Postgres via Nest; default domain mode is API when API_BASE_URL set) ---
                 if (!db.objectStoreNames.contains('inventory')) db.createObjectStore('inventory', { keyPath: 'sku' });
                 if (!db.objectStoreNames.contains('inventory_transactions')) db.createObjectStore('inventory_transactions', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('event_invitations')) db.createObjectStore('event_invitations', { keyPath: 'id' });
@@ -57,7 +73,6 @@ export const DevDatabase = {
                 if (!db.objectStoreNames.contains('royalty_splits')) db.createObjectStore('royalty_splits', { keyPath: 'sourceTransactionId' });
                 if (!db.objectStoreNames.contains('royalty_contracts')) db.createObjectStore('royalty_contracts', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('payout_transactions')) db.createObjectStore('payout_transactions', { keyPath: 'id' });
-                if (!db.objectStoreNames.contains('commission_rules')) db.createObjectStore('commission_rules', { keyPath: 'id' });
 
                 // --- COMMUNICATION ---
                 if (!db.objectStoreNames.contains('cms_content')) db.createObjectStore('cms_content', { keyPath: 'id' });
@@ -84,7 +99,6 @@ export const DevDatabase = {
                 if (!db.objectStoreNames.contains('system_background_jobs')) db.createObjectStore('system_background_jobs', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('system_settings')) db.createObjectStore('system_settings', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('round_table_sessions')) db.createObjectStore('round_table_sessions', { keyPath: 'id' });
-                if (!db.objectStoreNames.contains('youth_metrics')) db.createObjectStore('youth_metrics', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('corporate_members')) db.createObjectStore('corporate_members', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('ref_master_tiers')) db.createObjectStore('ref_master_tiers', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('certification_rules')) db.createObjectStore('certification_rules', { keyPath: 'id' });

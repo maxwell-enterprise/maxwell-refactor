@@ -5,10 +5,26 @@ import { OpsService } from '../../services/opsService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useDialog } from '../../context/DialogContext'; // NEW
-import { 
-    Package, RefreshCw, Plus, Minus, FileText, ArrowRight, ArrowLeft, 
-    AlertTriangle, Search, History, CheckCircle, BarChart3, X, Download, Upload, FileSpreadsheet, Edit3
+import {
+    Package,
+    RefreshCw,
+    Plus,
+    Minus,
+    FileText,
+    ArrowRight,
+    ArrowLeft,
+    AlertTriangle,
+    Search,
+    History,
+    CheckCircle,
+    BarChart3,
+    X,
+    Download,
+    Upload,
+    FileSpreadsheet,
+    Edit3,
 } from 'lucide-react';
+import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 import { ExcelHelper } from '../../utils/excelHelper';
 import InventoryItemModal from './InventoryItemModal'; 
 
@@ -314,7 +330,32 @@ const InventoryManager: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {filteredItems.map(item => (
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-12 text-center text-sm text-slate-400">
+                                            Loading…
+                                        </td>
+                                    </tr>
+                                ) : filteredItems.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-12">
+                                            <div className="flex flex-col items-center justify-center gap-3 text-center">
+                                                <Package
+                                                    className="shrink-0 text-slate-300"
+                                                    strokeWidth={1.25}
+                                                    size={44}
+                                                    aria-hidden
+                                                />
+                                                <p className="text-sm text-slate-500">
+                                                    {items.length === 0
+                                                        ? 'No stock items yet.'
+                                                        : 'No items match your search.'}
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                filteredItems.map(item => (
                                     <tr key={item.sku} className="hover:bg-slate-50 group">
                                         <td className="p-4">
                                             <div className="font-bold text-slate-900 flex items-center">
@@ -351,7 +392,8 @@ const InventoryManager: React.FC = () => {
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                ))
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -359,8 +401,18 @@ const InventoryManager: React.FC = () => {
 
                 {activeTab === 'HISTORY' && (
                     <div className="space-y-4">
-                        {transactions.length === 0 && <p className="text-center text-slate-400 py-8">No transactions recorded.</p>}
-                        {transactions.map(tx => (
+                        {loading ? (
+                            <div className="flex min-h-[200px] items-center justify-center text-sm text-slate-400">
+                                Loading…
+                            </div>
+                        ) : transactions.length === 0 ? (
+                            <EmptyStatePlaceholder
+                                icon={History}
+                                message="No stock movements yet."
+                                minHeightClass="min-h-[200px]"
+                            />
+                        ) : (
+                        transactions.map(tx => (
                             <div key={tx.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                                 <div className="flex items-center gap-4">
                                     <div className={`p-3 rounded-full ${tx.quantity > 0 ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
@@ -380,7 +432,8 @@ const InventoryManager: React.FC = () => {
                                     <div className="text-xs text-slate-400">Bal: {tx.balanceAfter}</div>
                                 </div>
                             </div>
-                        ))}
+                        ))
+                        )}
                     </div>
                 )}
             </div>

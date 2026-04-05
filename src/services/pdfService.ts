@@ -1,7 +1,16 @@
-import { PDFTemplate, PDFElement, PDFPage } from '../types/index';
+import { PDFTemplate } from '../types/index';
 import { DevDatabase } from '../utils/devDatabase';
 import { APP_CONFIG } from '../lib/config';
 import { supabase } from '../lib/supabaseClient';
+import { apiRequest } from '../repositories/api/apiClient';
+
+function pdfDataBackend(): 'indexeddb' | 'api' | 'supabase' {
+    if (APP_CONFIG.USE_MOCK_GLOBAL) return 'indexeddb';
+    if (APP_CONFIG.DOMAINS.COMMUNICATION === 'API') return 'api';
+    if (APP_CONFIG.DOMAINS.COMMUNICATION === 'SUPABASE' && supabase)
+        return 'supabase';
+    return 'indexeddb';
+}
 
 // MOCK TEMPLATES
 const SEED_TEMPLATES: PDFTemplate[] = [
@@ -28,30 +37,47 @@ const SEED_TEMPLATES: PDFTemplate[] = [
 export const PDFService = {
     
     getTemplates: async (): Promise<PDFTemplate[]> => {
-        if (APP_CONFIG.USE_MOCK) {
-            try {
-                if(await DevDatabase.isEmpty('sys_pdf_templates')) await DevDatabase.bulkAdd('sys_pdf_templates', SEED_TEMPLATES);
-                return await DevDatabase.getAll<PDFTemplate>('sys_pdf_templates');
-            } catch(e) { return SEED_TEMPLATES; }
+        const mode = pdfDataBackend();
+        if (mode === 'api') {
+            return apiRequest<PDFTemplate[]>('/communication/pdf/templates');
         }
-        if (!supabase) return [];
-        const { data } = await supabase.from('sys_pdf_templates').select('*');
-        return data || [];
+        if (mode === 'supabase') {
+            const { data } = await supabase!.from('sys_pdf_templates').select('*');
+            return (data as PDFTemplate[]) || [];
+        }
+        try {
+            if (await DevDatabase.isEmpty('sys_pdf_templates'))
+                await DevDatabase.bulkAdd('sys_pdf_templates', SEED_TEMPLATES);
+            return await DevDatabase.getAll<PDFTemplate>('sys_pdf_templates');
+        } catch {
+            return SEED_TEMPLATES;
+        }
     },
 
     saveTemplate: async (template: PDFTemplate): Promise<PDFTemplate> => {
         const toSave = { ...template };
         if (!toSave.id) toSave.id = `PDF-${Date.now()}`;
 
-        if (APP_CONFIG.USE_MOCK) {
-            await DevDatabase.add('sys_pdf_templates', toSave);
-            return toSave;
+        const mode = pdfDataBackend();
+        if (mode === 'api') {
+            return apiRequest<PDFTemplate>(
+                `/communication/pdf/templates/${encodeURIComponent(toSave.id)}`,
+                { method: 'PUT', body: JSON.stringify(toSave) },
+            );
+        }
+        if (mode === 'supabase') {
+            if (!supabase) throw new Error('No DB');
+            const { data, error } = await supabase
+                .from('sys_pdf_templates')
+                .upsert(toSave)
+                .select()
+                .single();
+            if (error) throw error;
+            return data as PDFTemplate;
         }
 
-        if (!supabase) throw new Error("No DB");
-        const { data, error } = await supabase.from('sys_pdf_templates').upsert(toSave).select().single();
-        if (error) throw error;
-        return data;
+        await DevDatabase.add('sys_pdf_templates', toSave);
+        return toSave;
     },
 
     previewPDF: (template: PDFTemplate, data: Record<string, string>): string => {

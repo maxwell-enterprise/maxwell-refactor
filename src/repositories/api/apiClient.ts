@@ -10,14 +10,30 @@ export async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(buildUrl(path), {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-    cache: 'no-store',
-  });
+  const url = buildUrl(path);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init.headers ?? {}),
+      },
+      cache: 'no-store',
+    });
+  } catch (err) {
+    const base = APP_CONFIG.API_BASE_URL;
+    const hint =
+      typeof err === 'object' &&
+      err !== null &&
+      'message' in err &&
+      (err as Error).message === 'Failed to fetch'
+        ? `Network error: cannot reach ${url}. Is Nest running and reachable (API base: ${base})?`
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    throw new Error(hint);
+  }
 
   if (!response.ok) {
     const message = await response.text();

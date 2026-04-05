@@ -16,7 +16,7 @@ There is no dedicated automated test runner configured in `package.json` yet. Fo
 Recent history uses short, imperative subjects such as `feat: upload brief for system` and `fixing lint`. Prefer concise commit messages with a clear action, ideally using a lightweight conventional prefix like `feat:`, `fix:`, or `refactor:`. Pull requests should include a short scope summary, linked issue or task ID when available, validation notes (`npm run lint`, `npm run build`), and screenshots for UI changes.
 
 ## Security & Configuration Tips
-Keep secrets in `.env.local` only; do not commit Supabase or Gemini credentials. Check `src/lib/config.ts` before changing backend wiring, because missing keys intentionally fall back to mock mode.
+Keep secrets in `.env.local` only; do not commit Supabase or Gemini credentials. Check `src/lib/config.ts` before changing backend wiring: data domains default to Nest `API` via `NEXT_PUBLIC_API_BASE_URL`; Supabase is optional for AUTH/CMS/WA; per-domain overrides use `NEXT_PUBLIC_<DOMAIN>_BACKEND`.
 
 ## Code Implementation IMPORTANT!!
 

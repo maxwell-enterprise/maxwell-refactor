@@ -3,12 +3,30 @@ import { RoundTableSession, TaxInvoiceDetails, RoyaltySplit, YouthMetric } from 
 import { APP_CONFIG } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
+import { apiRequest } from '../repositories/api/apiClient';
 
 const SEED_YOUTH_DATA: YouthMetric[] = [
     { id: 'SCH-001', schoolName: 'SMA Negeri 1 Jakarta', contactPerson: 'Bpk. Budi', status: 'MOU_SIGNED', studentsImpacted: 120, programType: 'iChoose' },
     { id: 'SCH-002', schoolName: 'Universitas Pelita Harapan', contactPerson: 'Ibu Sarah', status: 'PROGRAM_ACTIVE', studentsImpacted: 450, programType: 'iLead' },
     { id: 'SCH-003', schoolName: 'Binus School', contactPerson: 'Mr. James', status: 'LEAD', studentsImpacted: 0, programType: 'iDo' },
 ];
+
+let mockYouthMetrics: YouthMetric[] | null = null;
+
+function cloneYouthSeed(): YouthMetric[] {
+    return JSON.parse(JSON.stringify(SEED_YOUTH_DATA)) as YouthMetric[];
+}
+
+function mapYouthRowFromSupabase(row: Record<string, unknown>): YouthMetric {
+    return {
+        id: String(row.id ?? ''),
+        schoolName: String(row.school_name ?? ''),
+        contactPerson: String(row.contact_person ?? ''),
+        status: row.status as YouthMetric['status'],
+        studentsImpacted: Number(row.students_impacted ?? 0),
+        programType: row.program_type as YouthMetric['programType'],
+    };
+}
 
 export const SpecificBusinessService = {
     
@@ -68,14 +86,26 @@ export const SpecificBusinessService = {
         return split;
     },
 
-    // --- YOUTH ---
+    // --- YOUTH (Nest `/fe/youth-impact/metrics` when DOMAINS.YOUTH === API) ---
     getYouthMetrics: async (): Promise<YouthMetric[]> => {
-        if (APP_CONFIG.USE_MOCK) {
-            try {
-                if(await DevDatabase.isEmpty('youth_metrics')) await DevDatabase.bulkAdd('youth_metrics', SEED_YOUTH_DATA);
-                return await DevDatabase.getAll<YouthMetric>('youth_metrics');
-            } catch(e) { return SEED_YOUTH_DATA; }
+        if (APP_CONFIG.USE_MOCK_GLOBAL) {
+            if (!mockYouthMetrics) mockYouthMetrics = cloneYouthSeed();
+            return mockYouthMetrics;
         }
-        return [];
+        if (APP_CONFIG.DOMAINS.YOUTH === 'API') {
+            return apiRequest<YouthMetric[]>('/youth-impact/metrics');
+        }
+        if (APP_CONFIG.DOMAINS.YOUTH === 'SUPABASE' && supabase) {
+            const { data, error } = await supabase.from('youth_metrics').select('*');
+            if (error) {
+                console.error('Youth metrics Supabase:', error);
+                return [];
+            }
+            return (data ?? []).map((row) =>
+                mapYouthRowFromSupabase(row as Record<string, unknown>),
+            );
+        }
+        if (!mockYouthMetrics) mockYouthMetrics = cloneYouthSeed();
+        return mockYouthMetrics;
     }
 };

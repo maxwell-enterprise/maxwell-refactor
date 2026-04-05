@@ -5,7 +5,22 @@ import { DataService } from '../../services/dataService';
 import { EntitlementService } from '../../services/entitlementService'; 
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Search, Image as ImageIcon, Percent, Pencil, ShoppingCart, Plus, Zap, ChevronDown, Trash2, ToggleRight, ToggleLeft } from 'lucide-react';
+import {
+    Search,
+    Image as ImageIcon,
+    Percent,
+    Pencil,
+    ShoppingCart,
+    Plus,
+    Zap,
+    ChevronDown,
+    Trash2,
+    ToggleRight,
+    ToggleLeft,
+    Package,
+    LayoutGrid,
+    AlertCircle,
+} from 'lucide-react';
 import PaymentModal from '../payment/PaymentModal';
 import { ProductModal } from './ProductModal'; 
 import ProductDetailModal from './ProductDetailModal'; 
@@ -15,6 +30,7 @@ import { PricingEngine } from '../../services/pricingEngine';
 import { PricingRule } from '../../types/pricing';
 import { UserEntitlements } from '../../types/access'; 
 import { collectEventIdsFromProducts } from '../../utils/productEventRefs';
+import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 
 const PAGE_SIZE = 18;
 
@@ -60,6 +76,9 @@ const Storefront: React.FC = () => {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [listLoading, setListLoading] = useState(true);
+    /** Set when pricing rules / products / entitlements fetch fails (e.g. API 500 from DB timeout). */
+    const [listLoadError, setListLoadError] = useState<string | null>(null);
 
     const scrollRootRef = useRef<HTMLDivElement>(null);
     const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
@@ -114,27 +133,50 @@ const Storefront: React.FC = () => {
         fetchedEventIdsRef.current.clear();
 
         (async () => {
+            setListLoading(true);
+            setListLoadError(null);
             setProducts([]);
             setPage(1);
             pageRef.current = 1;
             setHasMore(true);
 
-            const [rules, userEnt] = await Promise.all([
-                PricingEngine.getRules(),
-                user ? EntitlementService.getUserEntitlements(user.id) : Promise.resolve(null),
-            ]);
-            if (cancelled || gen !== listFetchGenRef.current) return;
-            setPricingRules(rules);
-            setEntitlements(userEnt);
+            try {
+                const [rules, userEnt] = await Promise.all([
+                    PricingEngine.getRules(),
+                    user ? EntitlementService.getUserEntitlements(user.id) : Promise.resolve(null),
+                ]);
+                if (cancelled || gen !== listFetchGenRef.current) return;
+                setPricingRules(rules);
+                setEntitlements(userEnt);
 
-            const { data, total: t } = await DataService.listProducts(buildListQuery(1));
-            if (cancelled || gen !== listFetchGenRef.current) return;
+                const { data, total: t } = await DataService.listProducts(buildListQuery(1));
+                if (cancelled || gen !== listFetchGenRef.current) return;
 
-            setProducts(data);
-            setTotal(t);
-            pageRef.current = 1;
-            setHasMore(t > 0 && data.length < t);
-            await mergeEventsForProducts(data);
+                setProducts(data);
+                setTotal(t);
+                pageRef.current = 1;
+                setHasMore(t > 0 && data.length < t);
+                await mergeEventsForProducts(data);
+            } catch (err) {
+                if (!cancelled && gen === listFetchGenRef.current) {
+                    const raw = err instanceof Error ? err.message : String(err);
+                    let detail = raw;
+                    try {
+                        const parsed = JSON.parse(raw) as { message?: string };
+                        if (typeof parsed?.message === 'string') detail = parsed.message;
+                    } catch {
+                        /* keep raw */
+                    }
+                    setListLoadError(
+                        `Failed to load the store. ${detail} — check Nest server logs (often a database timeout or lost connection to Postgres/Supabase).`,
+                    );
+                    showToast('Failed to load store data', 'error');
+                }
+            } finally {
+                if (!cancelled && gen === listFetchGenRef.current) {
+                    setListLoading(false);
+                }
+            }
         })();
 
         return () => {
@@ -408,6 +450,25 @@ const Storefront: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-auto p-6" ref={scrollRootRef}>
+                {listLoading ? (
+                    <div className="flex min-h-[160px] items-center justify-center py-16">
+                        <p className="text-center text-sm text-slate-400">Loading products…</p>
+                    </div>
+                ) : listLoadError ? (
+                    <div className="flex min-h-[160px] flex-col items-center justify-center gap-3 py-16 px-4 text-center">
+                        <AlertCircle className="shrink-0 text-slate-300" strokeWidth={1.25} size={44} aria-hidden />
+                        <p className="max-w-lg text-sm text-slate-600">{listLoadError}</p>
+                    </div>
+                ) : filteredProducts.length === 0 ? (
+                    <EmptyStatePlaceholder
+                        icon={products.length === 0 ? Package : LayoutGrid}
+                        message={
+                            products.length === 0
+                                ? 'No products in the catalog yet.'
+                                : 'No products match the current filters.'
+                        }
+                    />
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {filteredProducts.map((product) => {
                         const selectedVariantId = activeVariantSelections[product.id];
@@ -558,7 +619,10 @@ const Storefront: React.FC = () => {
                         );
                     })}
                 </div>
-                <div ref={loadMoreSentinelRef} className="h-px w-full" aria-hidden />
+                )}
+                {!listLoading && filteredProducts.length > 0 && (
+                    <div ref={loadMoreSentinelRef} className="h-px w-full" aria-hidden />
+                )}
             </div>
 
             {viewingProduct && (

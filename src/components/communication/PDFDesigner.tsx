@@ -1,8 +1,8 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PDFTemplate, PDFElement, PDFPage } from '../../types/index';
 import { PDFService } from '../../services/pdfService';
-import { Save, Image as ImageIcon, Type, Variable, Trash2, Move, Plus, ChevronLeft, ChevronRight, Upload, Eye } from 'lucide-react';
+import { Save, Image as ImageIcon, Type, Variable, Trash2, Move, Plus, ChevronLeft, ChevronRight, Upload, Eye, Loader2 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import VariableInserter from '../common/VariableInserter'; // NEW IMPORT
 import { VARIABLE_CATALOG } from '../../constants/variableCatalog';
@@ -26,11 +26,29 @@ const PDFDesigner: React.FC = () => {
     const [activePageIndex, setActivePageIndex] = useState(0);
     const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
     const [isPreviewMode, setIsPreviewMode] = useState(false);
+    const [savedTemplateCount, setSavedTemplateCount] = useState<number | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const saveLockRef = useRef(false);
 
     const canvasRef = useRef<HTMLDivElement>(null);
     const textInputRef = useRef<HTMLInputElement>(null);
 
     const activePage = template.pages[activePageIndex];
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const list = await PDFService.getTemplates();
+                if (!cancelled) setSavedTemplateCount(Array.isArray(list) ? list.length : 0);
+            } catch {
+                if (!cancelled) setSavedTemplateCount(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     // ... (Keep existing layout logic handlers: handleOrientationChange, handleAddPage, handleDeletePage, handleBackgroundUpload) ...
     const handleOrientationChange = (orientation: 'PORTRAIT' | 'LANDSCAPE') => {
@@ -99,12 +117,31 @@ const PDFDesigner: React.FC = () => {
     };
 
     const handleSave = async () => {
+        if (saveLockRef.current || isSaving) return;
         if (!template.name) {
             showToast('Please enter a template name', 'error');
             return;
         }
-        await PDFService.saveTemplate(template);
-        showToast('Template saved successfully', 'success');
+        saveLockRef.current = true;
+        setIsSaving(true);
+        try {
+            await PDFService.saveTemplate(template);
+            showToast('Template saved successfully', 'success');
+            try {
+                const list = await PDFService.getTemplates();
+                setSavedTemplateCount(Array.isArray(list) ? list.length : 0);
+            } catch {
+                /* keep previous count */
+            }
+        } catch (e) {
+            showToast(
+                e instanceof Error ? e.message : 'Gagal menyimpan template PDF',
+                'error',
+            );
+        } finally {
+            saveLockRef.current = false;
+            setIsSaving(false);
+        }
     };
     
     // NEW: Variable Insertion Logic for PDF
@@ -153,6 +190,15 @@ const PDFDesigner: React.FC = () => {
                 {/* 1. Template Config (Existing code) */}
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                     <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Document Setup (A4)</h3>
+
+                    {savedTemplateCount === 0 && (
+                        <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-100 text-[11px] text-amber-900 leading-relaxed">
+                            <span className="font-bold">Belum ada template PDF tersimpan</span>
+                            <span className="block mt-1 text-amber-800/90">
+                                Database mengembalikan 0 template. Setelah desain selesai, klik <span className="font-semibold">Save Template</span> untuk menyimpan.
+                            </span>
+                        </div>
+                    )}
                     
                     <div className="mb-3">
                         <label className="block text-xs text-slate-400 mb-1">Template Name</label>
@@ -281,13 +327,28 @@ const PDFDesigner: React.FC = () => {
             <div className="flex-1 bg-slate-100 rounded-xl border border-slate-300 overflow-auto flex items-center justify-center p-8 relative">
                 <div className="absolute top-4 right-4 flex gap-2 z-20">
                     <button 
+                        type="button"
                         onClick={() => setIsPreviewMode(!isPreviewMode)} 
-                        className={`px-4 py-2 rounded-lg font-bold text-xs shadow-lg flex items-center ${isPreviewMode ? 'bg-amber-500 text-white' : 'bg-white text-slate-700'}`}
+                        disabled={isSaving}
+                        className={`px-4 py-2 rounded-lg font-bold text-xs shadow-lg flex items-center disabled:opacity-50 ${isPreviewMode ? 'bg-amber-500 text-white' : 'bg-white text-slate-700'}`}
                     >
                         <Eye size={14} className="mr-2"/> {isPreviewMode ? 'Exit Preview' : 'Preview Data'}
                     </button>
-                    <button onClick={handleSave} className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-lg flex items-center hover:bg-slate-800">
-                        <Save size={14} className="mr-2"/> Save Template
+                    <button
+                        type="button"
+                        onClick={() => handleSave()}
+                        disabled={isSaving}
+                        className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-lg flex items-center hover:bg-slate-800 disabled:opacity-60 disabled:pointer-events-none"
+                    >
+                        {isSaving ? (
+                            <>
+                                <Loader2 size={14} className="mr-2 animate-spin" /> Menyimpan…
+                            </>
+                        ) : (
+                            <>
+                                <Save size={14} className="mr-2"/> Save Template
+                            </>
+                        )}
                     </button>
                 </div>
 

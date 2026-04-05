@@ -2,12 +2,12 @@
 import { FinancialLedgerEntry, EventProfitLoss } from '../types/finance';
 import { DataService } from './dataService';
 import { TribeService } from './tribeService';
-import { PaymentService } from './paymentService'; 
-import { EVENTS_DATA } from '../constants';
+import { PaymentService } from './paymentService';
 import { PaymentTransaction } from '../types/index';
 import { APP_CONFIG } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
+import { apiRequest } from '../repositories/api/apiClient';
 
 export const FinanceService = {
   /**
@@ -83,40 +83,60 @@ export const FinanceService = {
   settleLedgerEntry: async (entryId: string, referenceId: string, category: 'AR' | 'AP'): Promise<void> => {
       console.log(`[FINANCE] Settling ${entryId} (Ref: ${referenceId})`);
       
-      if (entryId.startsWith('AP-PO-') || entryId.startsWith('AP-EXP-')) {
+      // Manual vendor / expense lines use id `AP-${tx.id}` (commissions use `COMM-...`)
+      if (entryId.startsWith('AP-')) {
           await DataService.updateTransactionStatus(referenceId, 'Paid');
       } else if (entryId.startsWith('COMM-')) {
-          const db = await import('../utils/devDatabase').then(m => m.DevDatabase);
-          const payouts = await db.getAll<any>('payout_transactions');
-          const payout = payouts.find(p => p.id === referenceId);
-          if (payout) {
-              payout.status = 'PAID';
-              payout.paidAt = new Date().toISOString();
-              await db.add('payout_transactions', payout);
+          if (APP_CONFIG.DOMAINS.TRANSACTIONS === 'API') {
+              await apiRequest(
+                  `/store/payout-transactions/${encodeURIComponent(referenceId)}/status`,
+                  {
+                      method: 'PATCH',
+                      body: JSON.stringify({ status: 'PAID' }),
+                  },
+              );
+          } else {
+              const db = await import('../utils/devDatabase').then((m) => m.DevDatabase);
+              const payouts = await db.getAll<{ id: string; status: string; paidAt?: string }>(
+                  'payout_transactions',
+              );
+              const payout = payouts.find((p) => p.id === referenceId);
+              if (payout) {
+                  payout.status = 'PAID';
+                  payout.paidAt = new Date().toISOString();
+                  await db.add('payout_transactions', payout as never);
+              }
           }
       } else if (entryId.startsWith('AR-')) {
-          const db = await import('../utils/devDatabase').then(m => m.DevDatabase);
-          const payments = await db.getAll<any>('payment_transactions');
-          const payment = payments.find(p => p.id === referenceId);
-          if (payment) {
-              payment.status = 'PAID';
-              // If simple settlement, assume full payment
-              payment.paidAmount = payment.totalAmount;
-              payment.balanceDue = 0;
-              await db.add('payment_transactions', payment);
+          if (APP_CONFIG.DOMAINS.PAYMENTS === 'API') {
+              await apiRequest(
+                  `/store/payment-transactions/${encodeURIComponent(referenceId)}/settle`,
+                  { method: 'PATCH' },
+              );
+          } else {
+              const db = await import('../utils/devDatabase').then((m) => m.DevDatabase);
+              const payments = await db.getAll<any>('payment_transactions');
+              const payment = payments.find((p: { id: string }) => p.id === referenceId);
+              if (payment) {
+                  payment.status = 'PAID';
+                  payment.paidAmount = payment.totalAmount;
+                  payment.balanceDue = 0;
+                  await db.add('payment_transactions', payment);
+              }
           }
       }
   },
 
   calculateEventPnL: async (): Promise<EventProfitLoss[]> => {
     const ledger = await FinanceService.getRawLedger();
+    const events = await DataService.getEvents();
     const pnlMap: Record<string, EventProfitLoss> = {};
 
     ledger.forEach(entry => {
       if (!entry.eventId) return; 
       
       if (!pnlMap[entry.eventId]) {
-        const eventName = EVENTS_DATA.find(e => e.id === entry.eventId)?.name || entry.eventId;
+        const eventName = events.find((e) => e.id === entry.eventId)?.name || entry.eventId;
         pnlMap[entry.eventId] = { eventId: entry.eventId, eventName, revenue: 0, expenses: 0, grossMargin: 0, marginPercentage: 0 };
       }
 
@@ -143,43 +163,45 @@ export const FinanceService = {
   },
 
   processRefund: async (transactionId: string, amount: number, reason: string): Promise<void> => {
-      // 1. Get Transaction
-      const db = await import('../utils/devDatabase').then(m => m.DevDatabase);
-      const payments = await db.getAll<PaymentTransaction>('payment_transactions');
-      const payment = payments.find(p => p.id === transactionId);
-      
-      if (!payment) throw new Error("Transaction not found");
+      if (APP_CONFIG.DOMAINS.PAYMENTS === 'API') {
+          await apiRequest(
+              `/store/payment-transactions/${encodeURIComponent(transactionId)}/refund`,
+              {
+                  method: 'POST',
+                  body: JSON.stringify({ amount, reason }),
+              },
+          );
+          return;
+      }
 
-      // 2. Add Refund Record
+      const db = await import('../utils/devDatabase').then((m) => m.DevDatabase);
+      const payments = await db.getAll<PaymentTransaction>('payment_transactions');
+      const payment = payments.find((p) => p.id === transactionId);
+
+      if (!payment) throw new Error('Transaction not found');
+
       if (!payment.refunds) payment.refunds = [];
       payment.refunds.push({
           id: `REF-${Date.now()}`,
           amount,
           reason,
           processedAt: new Date().toISOString(),
-          status: 'PROCESSED'
+          status: 'PROCESSED',
       });
 
-      // 3. Update Status
-      // Adjust balance logic: Refund reduces the 'paidAmount' technically held, but accounting wise it's a separate ledger entry.
-      // For simplicity in this model, we just tag it.
       if (payment.status === 'OVERPAID') {
-          // If we refund the excess, it might become PAID or PARTIAL depending on math
           const overage = payment.paidAmount - payment.totalAmount;
           if (amount >= overage) {
-               payment.status = 'PAID'; // Resolved
+              payment.status = 'PAID';
           }
       } else {
-          payment.status = 'REFUNDED'; // Full refund scenario usually
+          payment.status = 'REFUNDED';
       }
 
-      // 4. Save
       if (APP_CONFIG.USE_MOCK) {
           await db.add('payment_transactions', payment);
       } else if (supabase) {
           await supabase.from('payment_transactions').upsert(payment);
       }
-
-      console.log(`[FINANCE] Refund processed: ${amount} for ${transactionId}`);
   }
 };

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CommunicationService } from '../services/communicationService';
 import { EmailCampaign, EmailLog } from '../types/index';
 import { useToast } from '../context/ToastContext';
@@ -63,7 +63,12 @@ const CommunicationHub: React.FC = () => {
                     </div>
                     
                     {activeTab === 'CAMPAIGNS' && (
-                        <button onClick={() => setIsWizardOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 flex items-center shadow-lg whitespace-nowrap">
+                        <button
+                            type="button"
+                            onClick={() => setIsWizardOpen(true)}
+                            disabled={isWizardOpen}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 flex items-center shadow-lg whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none"
+                        >
                             <Plus size={18} className="mr-2"/> New Email
                         </button>
                     )}
@@ -99,25 +104,48 @@ const CommunicationHub: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {campaigns.map(c => (
-                                    <tr key={c.id} className="hover:bg-slate-50">
-                                        <td className="p-4 font-medium text-slate-900">{c.name}<div className="text-xs text-slate-400 font-normal">{c.subject}</div></td>
-                                        <td className="p-4"><span className="bg-slate-100 px-2 py-1 rounded text-xs font-mono">{c.triggerType}</span></td>
-                                        <td className="p-4">
-                                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${c.status === 'SENT' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                {c.status}
-                                            </span>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex gap-4 text-xs">
-                                                <span className="text-slate-600"><b>{c.stats.sent}</b> Sent</span>
-                                                <span className="text-blue-600"><b>{c.stats.opened}</b> Open</span>
-                                                <span className="text-green-600"><b>{c.stats.clicked}</b> Click</span>
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-16 text-center text-slate-500">
+                                            <div className="flex flex-col items-center gap-2">
+                                                <Zap className="text-blue-400 animate-pulse" size={28} />
+                                                <span className="text-sm font-medium">Memuat campaign…</span>
                                             </div>
                                         </td>
-                                        <td className="p-4 text-slate-500 text-xs">{new Date(c.createdAt).toLocaleDateString()}</td>
                                     </tr>
-                                ))}
+                                ) : campaigns.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-16 text-center">
+                                            <div className="max-w-md mx-auto flex flex-col items-center gap-3 text-slate-600">
+                                                <FileText className="text-slate-300" size={40} />
+                                                <p className="text-sm font-semibold text-slate-800">Belum ada campaign email</p>
+                                                <p className="text-sm text-slate-500 leading-relaxed">
+                                                    Data di database kosong (0 campaign). Klik <span className="font-bold text-blue-600">New Email</span> di atas untuk membuat campaign pertama.
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    campaigns.map(c => (
+                                        <tr key={c.id} className="hover:bg-slate-50">
+                                            <td className="p-4 font-medium text-slate-900">{c.name}<div className="text-xs text-slate-400 font-normal">{c.subject}</div></td>
+                                            <td className="p-4"><span className="bg-slate-100 px-2 py-1 rounded text-xs font-mono">{c.triggerType}</span></td>
+                                            <td className="p-4">
+                                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${c.status === 'SENT' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    {c.status}
+                                                </span>
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="flex gap-4 text-xs">
+                                                    <span className="text-slate-600"><b>{c.stats.sent}</b> Sent</span>
+                                                    <span className="text-blue-600"><b>{c.stats.opened}</b> Open</span>
+                                                    <span className="text-green-600"><b>{c.stats.clicked}</b> Click</span>
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-slate-500 text-xs">{new Date(c.createdAt).toLocaleDateString()}</td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -137,22 +165,45 @@ const CommunicationHub: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {logs.map(l => (
-                                    <tr key={l.id} className="hover:bg-slate-50">
-                                        <td className="p-4 text-xs font-mono text-slate-500 whitespace-nowrap">{new Date(l.sentAt).toLocaleString()}</td>
-                                        <td className="p-4 font-medium text-slate-900">{l.recipientEmail}</td>
-                                        <td className="p-4 text-slate-600">{l.subject}</td>
-                                        <td className="p-4">
-                                            <span className={`flex items-center text-xs font-bold ${l.status === 'SUCCESS' ? 'text-green-600' : 'text-red-600'}`}>
-                                                {l.status === 'SUCCESS' ? <CheckCircle size={14} className="mr-1"/> : <AlertCircle size={14} className="mr-1"/>}
-                                                {l.status}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-xs text-slate-400">
-                                            {l.campaignId ? 'Campaign' : 'Transactional'}
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-16 text-center text-slate-500">
+                                            <div className="flex flex-col items-center gap-2">
+                                                <Zap className="text-blue-400 animate-pulse" size={28} />
+                                                <span className="text-sm font-medium">Memuat log pengiriman…</span>
+                                            </div>
                                         </td>
                                     </tr>
-                                ))}
+                                ) : logs.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-16 text-center">
+                                            <div className="max-w-md mx-auto flex flex-col items-center gap-3 text-slate-600">
+                                                <Mail className="text-slate-300" size={40} />
+                                                <p className="text-sm font-semibold text-slate-800">Belum ada log email</p>
+                                                <p className="text-sm text-slate-500 leading-relaxed">
+                                                    Di database belum ada riwayat pengiriman (0 log). Log akan muncul setelah campaign terkirim atau email transaksi dikirim.
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    logs.map(l => (
+                                        <tr key={l.id} className="hover:bg-slate-50">
+                                            <td className="p-4 text-xs font-mono text-slate-500 whitespace-nowrap">{new Date(l.sentAt).toLocaleString()}</td>
+                                            <td className="p-4 font-medium text-slate-900">{l.recipientEmail}</td>
+                                            <td className="p-4 text-slate-600">{l.subject}</td>
+                                            <td className="p-4">
+                                                <span className={`flex items-center text-xs font-bold ${l.status === 'SUCCESS' ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {l.status === 'SUCCESS' ? <CheckCircle size={14} className="mr-1"/> : <AlertCircle size={14} className="mr-1"/>}
+                                                    {l.status}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-xs text-slate-400">
+                                                {l.campaignId ? 'Campaign' : 'Transactional'}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                      </div>

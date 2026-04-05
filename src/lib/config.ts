@@ -76,8 +76,13 @@ const hasSupabaseKeys = !!(supabaseUrl && supabaseAnonKey);
 
 export type BackendMode = 'MOCK' | 'SUPABASE' | 'API';
 
+/**
+ * Per-domain data source. Override with `NEXT_PUBLIC_<NAME>_BACKEND=API|SUPABASE|MOCK`.
+ * When unset: **`API`** — one door via `NEXT_PUBLIC_API_BASE_URL` (Nest `/fe` + path per feature).
+ * Use explicit `SUPABASE` / `MOCK` only for hybrid (e.g. members still on Supabase).
+ */
 function resolveDomainMode(preferred: string | undefined): BackendMode {
-  const normalized = preferred?.toUpperCase();
+  const normalized = preferred?.trim().toUpperCase();
 
   if (normalized === 'API') {
     return 'API';
@@ -91,7 +96,7 @@ function resolveDomainMode(preferred: string | undefined): BackendMode {
     return 'MOCK';
   }
 
-  return hasSupabaseKeys ? 'SUPABASE' : 'MOCK';
+  return 'API';
 }
 
 export const APP_CONFIG = {
@@ -103,25 +108,30 @@ export const APP_CONFIG = {
   SUPABASE_ANON_KEY: supabaseAnonKey,
   API_BASE_URL: apiBaseUrl,
 
-  // DOMAIN ROUTING CONFIGURATION
-  // Determines the data source for each specific business domain.
-  // If keys are missing, these automatically fallback to 'MOCK'.
+  // DOMAIN ROUTING — unset → `API` (Nest at API_BASE_URL). Override per domain with NEXT_PUBLIC_*_BACKEND.
   DOMAINS: {
     AUTH:           (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode,
     MEMBERS:        resolveDomainMode(process.env.NEXT_PUBLIC_MEMBERS_BACKEND),
     PRODUCTS:       resolveDomainMode(process.env.NEXT_PUBLIC_PRODUCTS_BACKEND),
-    TRANSACTIONS:   (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // Finance Ledger
-    PAYMENTS:       (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // Payment Gateway
+    TRANSACTIONS:   resolveDomainMode(process.env.NEXT_PUBLIC_TRANSACTIONS_BACKEND), // manual PO/expense + ledger paths → Nest when API
+    /** Gateway logs, AR settle, refunds → `ApiPaymentRepository` / Nest `/fe/store/payment-transactions/*` when API */
+    PAYMENTS:       resolveDomainMode(process.env.NEXT_PUBLIC_PAYMENTS_BACKEND),
     EVENTS:         resolveDomainMode(process.env.NEXT_PUBLIC_EVENTS_BACKEND),
     OPS:            resolveDomainMode(process.env.NEXT_PUBLIC_OPS_BACKEND),
-    GAMIFICATION:   (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode,
-    COMMUNICATION:  (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // Email & WA
+    /** Badges, rules, profiles → Nest `/fe/gamification/*` when API */
+    GAMIFICATION:   resolveDomainMode(process.env.NEXT_PUBLIC_GAMIFICATION_BACKEND),
+    /** Email, WA, PDF templates → Nest `/fe/communication/*` when API */
+    COMMUNICATION:  resolveDomainMode(process.env.NEXT_PUBLIC_COMMUNICATION_BACKEND),
     CONTENT:        (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // CMS
     COMMERCE:       resolveDomainMode(process.env.NEXT_PUBLIC_COMMERCE_BACKEND),
     SYSTEM:         (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // Logs, Settings, Queue
     INVITATIONS:    resolveDomainMode(process.env.NEXT_PUBLIC_INVITATIONS_BACKEND),
     ENTITLEMENTS:   resolveDomainMode(process.env.NEXT_PUBLIC_ENTITLEMENTS_BACKEND),
-    ATTENDANCE:     resolveDomainMode(process.env.NEXT_PUBLIC_ATTENDANCE_BACKEND)
+    ATTENDANCE:     resolveDomainMode(process.env.NEXT_PUBLIC_ATTENDANCE_BACKEND),
+    /** Contract Center: clause library, templates, instances → Nest `/fe/contracts/*` when API */
+    CONTRACTS:      resolveDomainMode(process.env.NEXT_PUBLIC_CONTRACTS_BACKEND),
+    /** Youth Impact dashboard → Nest `/fe/youth-impact/metrics` when API */
+    YOUTH:          resolveDomainMode(process.env.NEXT_PUBLIC_YOUTH_BACKEND),
   },
 
   // FEATURE FLAGS

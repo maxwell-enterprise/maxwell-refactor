@@ -5,6 +5,7 @@ import { DISCOUNT_DATA } from '../constants';
 import { APP_CONFIG } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
+import { apiRequest } from '../repositories/api/apiClient';
 import { PricingEngine } from './pricingEngine'; // Use Engine for ABAC
 import { EntitlementService } from './entitlementService'; // To fetch user context
 
@@ -24,6 +25,9 @@ const SEED_LOGS: DiscountRedemptionLog[] = [
 export const DiscountService = {
   
   getDiscounts: async (): Promise<Discount[]> => {
+      if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
+          return apiRequest<Discount[]>('/store/discounts');
+      }
       if (APP_CONFIG.USE_MOCK) {
           try {
               if (await DevDatabase.isEmpty('discounts')) {
@@ -39,6 +43,13 @@ export const DiscountService = {
   },
 
   createDiscount: async (discount: Discount): Promise<void> => {
+      if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
+          await apiRequest(`/store/discounts/${encodeURIComponent(discount.id)}`, {
+              method: 'PUT',
+              body: JSON.stringify(discount),
+          });
+          return;
+      }
       if (APP_CONFIG.USE_MOCK) {
           await DevDatabase.add('discounts', discount);
           return;
@@ -49,6 +60,13 @@ export const DiscountService = {
 
   // NEW: Support updating discount
   upsertDiscount: async (discount: Discount): Promise<void> => {
+      if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
+          await apiRequest(`/store/discounts/${encodeURIComponent(discount.id)}`, {
+              method: 'PUT',
+              body: JSON.stringify(discount),
+          });
+          return;
+      }
       if (APP_CONFIG.USE_MOCK) {
           await DevDatabase.add('discounts', discount);
           return;

@@ -11,15 +11,30 @@ const CommissionPayoutPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    TribeService.getMyCommissions('admin-1').then(data => {
-      setPayouts(data);
-      setLoading(false);
-    });
+    void (async () => {
+      try {
+        const data = await TribeService.getMyCommissions('admin-1');
+        setPayouts(data);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  const handleApprove = (id: string) => {
-    setPayouts(prev => prev.map(p => p.id === id ? { ...p, status: 'PAID' } : p));
-    showToast('Payout status updated to SETTLED', 'success');
+  const handleApprove = async (id: string) => {
+    try {
+      await TribeService.markPayoutPaid(id);
+      setPayouts((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: 'PAID' as const, paidAt: new Date().toISOString() }
+            : p,
+        ),
+      );
+      showToast('Payout marked as paid.', 'success');
+    } catch {
+      showToast('Failed to update payout.', 'error');
+    }
   };
 
   const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);

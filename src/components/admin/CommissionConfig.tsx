@@ -4,7 +4,7 @@ import { CommissionService } from '../../services/commissionService';
 import { CommissionRule, BeneficiaryBasis } from '../../types/commission';
 import { STORE_PRODUCTS } from '../../constants';
 import { useToast } from '../../context/ToastContext';
-import { Plus, Trash2, Edit3, Save, X, DollarSign, Percent, Settings, ShieldCheck, Box, UserCheck } from 'lucide-react';
+import { Plus, Trash2, Edit3, X, DollarSign, Percent, Settings, ShieldCheck, Box, UserCheck, Scale } from 'lucide-react';
 
 const CommissionConfig: React.FC = () => {
     const { showToast } = useToast();
@@ -21,9 +21,14 @@ const CommissionConfig: React.FC = () => {
 
     const loadRules = async () => {
         setLoading(true);
-        const data = await CommissionService.getRules();
-        setRules(data);
-        setLoading(false);
+        try {
+            const data = await CommissionService.getRules();
+            setRules(data);
+        } catch {
+            setRules([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleNew = () => {
@@ -50,16 +55,26 @@ const CommissionConfig: React.FC = () => {
             showToast('Please check required fields', 'error');
             return;
         }
-        await CommissionService.saveRule(editRule as CommissionRule);
-        showToast('Commission Rule saved successfully', 'success');
-        setIsEditing(false);
-        loadRules();
+        try {
+            await CommissionService.saveRule(editRule as CommissionRule);
+            showToast('Commission Rule saved successfully', 'success');
+            setIsEditing(false);
+            loadRules();
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to save rule';
+            showToast(msg, 'error');
+        }
     };
 
     const handleDelete = async (id: string) => {
         if(!window.confirm('Delete this rule?')) return;
-        await CommissionService.deleteRule(id);
-        loadRules();
+        try {
+            await CommissionService.deleteRule(id);
+            loadRules();
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to delete rule';
+            showToast(msg, 'error');
+        }
     };
 
     const getBasisLabel = (basis: BeneficiaryBasis) => {
@@ -179,6 +194,23 @@ const CommissionConfig: React.FC = () => {
             </div>
             
             <div className="flex-1 overflow-auto p-6">
+                {!loading && rules.length === 0 ? (
+                    <div className="flex min-h-[260px] flex-col items-center justify-center px-6 py-10 text-center">
+                        <div
+                            className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600 shadow-sm ring-1 ring-blue-100/80"
+                            aria-hidden
+                        >
+                            <Scale className="h-8 w-8" strokeWidth={1.6} />
+                        </div>
+                        <h3 className="text-lg font-semibold tracking-tight text-slate-800">
+                            No commission rules yet
+                        </h3>
+                        <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-500">
+                            Define who earns commission, how beneficiaries are determined (sponsor, mentor, sales), and the percentage or fixed amount. Use{' '}
+                            <span className="font-medium text-slate-600">New Rule</span> in the top-right to get started.
+                        </p>
+                    </div>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {rules.map(rule => (
                         <div key={rule.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
@@ -215,6 +247,7 @@ const CommissionConfig: React.FC = () => {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
         </div>
     );

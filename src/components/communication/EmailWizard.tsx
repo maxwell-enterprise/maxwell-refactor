@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { EmailCampaign, EmailAttachment } from '../../types/index';
 import { MEMBER_DATA } from '../../constants';
 import { TRIGGER_CATALOG } from '../../constants/triggerCatalog';
@@ -9,7 +9,7 @@ import { PDFService } from '../../services/pdfService';
 import { useToast } from '../../context/ToastContext';
 import { 
     X, Clock, Users, Zap, Calendar, Sparkles, Paperclip, 
-    ChevronRight, CheckCircle, File, FileText, ArrowRight 
+    ChevronRight, CheckCircle, File, FileText, ArrowRight, Loader2
 } from 'lucide-react';
 import RichTextEditor from './RichTextEditor';
 import TriggerSelector from '../automation/TriggerSelector';
@@ -39,6 +39,8 @@ const EmailWizard: React.FC<EmailWizardProps> = ({ onClose, onComplete }) => {
     // AI State
     const [aiPrompt, setAiPrompt] = useState('');
     const [isAiGenerating, setIsAiGenerating] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const submitLockRef = useRef(false);
 
     // Attachment State
     const [pdfTemplates, setPdfTemplates] = useState<any[]>([]);
@@ -109,12 +111,25 @@ const EmailWizard: React.FC<EmailWizardProps> = ({ onClose, onComplete }) => {
     };
 
     const handleSubmit = async () => {
+        if (submitLockRef.current || isSubmitting) return;
         if (!campaign.subject || !campaign.body || !campaign.name) {
             showToast('Please complete all required fields.', 'error');
             return;
         }
-        await CommunicationService.createCampaign(campaign);
-        onComplete();
+        submitLockRef.current = true;
+        setIsSubmitting(true);
+        try {
+            await CommunicationService.createCampaign(campaign);
+            onComplete();
+        } catch (e) {
+            showToast(
+                e instanceof Error ? e.message : 'Gagal menyimpan campaign. Coba lagi.',
+                'error',
+            );
+        } finally {
+            submitLockRef.current = false;
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -133,7 +148,14 @@ const EmailWizard: React.FC<EmailWizardProps> = ({ onClose, onComplete }) => {
                             <span className={`px-2 py-1 rounded ${step >= 3 ? 'bg-blue-100 text-blue-700' : ''}`}>3. Content</span>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={24}/></button>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className="text-slate-400 hover:text-slate-700 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                        <X size={24}/>
+                    </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-8 bg-slate-50/30">
@@ -389,25 +411,38 @@ const EmailWizard: React.FC<EmailWizardProps> = ({ onClose, onComplete }) => {
                 {/* Footer */}
                 <div className="px-8 py-5 border-t border-slate-100 bg-white flex justify-between z-20">
                     <button 
+                        type="button"
                         onClick={() => setStep(prev => Math.max(1, prev - 1) as any)}
-                        disabled={step === 1}
+                        disabled={step === 1 || isSubmitting}
                         className="px-6 py-2.5 text-slate-500 font-bold hover:bg-slate-100 rounded-xl disabled:opacity-30 transition-colors"
                     >
                         Back
                     </button>
                     {step < 3 ? (
                         <button 
+                            type="button"
                             onClick={() => setStep(prev => prev + 1 as any)}
-                            className="px-8 py-2.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 shadow-lg flex items-center transition-all"
+                            disabled={isSubmitting}
+                            className="px-8 py-2.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 shadow-lg flex items-center transition-all disabled:opacity-50 disabled:pointer-events-none"
                         >
                             Next Step <ChevronRight size={16} className="ml-2"/>
                         </button>
                     ) : (
                         <button 
+                            type="button"
                             onClick={handleSubmit}
-                            className="px-8 py-2.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg flex items-center shadow-green-200 transition-all hover:scale-105"
+                            disabled={isSubmitting}
+                            className="px-8 py-2.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg flex items-center shadow-green-200 transition-all disabled:opacity-70 disabled:pointer-events-none disabled:hover:scale-100"
                         >
-                            <CheckCircle size={18} className="mr-2"/> Finish & Launch
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 size={18} className="mr-2 animate-spin" /> Menyimpan…
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle size={18} className="mr-2"/> Finish & Launch
+                                </>
+                            )}
                         </button>
                     )}
                 </div>

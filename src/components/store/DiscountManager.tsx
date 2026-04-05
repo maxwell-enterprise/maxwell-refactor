@@ -7,13 +7,15 @@ import { ExcelHelper } from '../../utils/excelHelper';
 import { useToast } from '../../context/ToastContext';
 import { useAccess } from '../../context/SecurityContext';
 import { useDialog } from '../../context/DialogContext'; // NEW
-import DiscountModal from './DiscountModal'; 
+import DiscountModal from './DiscountModal';
+import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 
 const DiscountManager: React.FC = () => {
     const { can } = useAccess('mkt_discounts');
     const { showToast } = useToast();
     const { confirm } = useDialog(); // HOOK
     const [discounts, setDiscounts] = useState<Discount[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -26,8 +28,13 @@ const DiscountManager: React.FC = () => {
     }, []);
 
     const loadData = async () => {
-        const data = await DiscountService.getDiscounts();
-        setDiscounts(data);
+        setLoading(true);
+        try {
+            const data = await DiscountService.getDiscounts();
+            setDiscounts(Array.isArray(data) ? data : []);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleCreate = () => {
@@ -157,6 +164,21 @@ const DiscountManager: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-auto p-4">
+                {loading ? (
+                    <div className="flex min-h-[200px] items-center justify-center text-sm text-slate-400">
+                        Loading…
+                    </div>
+                ) : filteredDiscounts.length === 0 ? (
+                    <EmptyStatePlaceholder
+                        icon={Ticket}
+                        message={
+                            discounts.length === 0
+                                ? 'No vouchers yet. Create one with New Voucher.'
+                                : 'No vouchers match your search.'
+                        }
+                        minHeightClass="min-h-[200px]"
+                    />
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredDiscounts.map(discount => (
                         <div key={discount.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -213,6 +235,7 @@ const DiscountManager: React.FC = () => {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
 
             <DiscountModal 

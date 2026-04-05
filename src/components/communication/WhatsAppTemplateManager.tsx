@@ -7,7 +7,7 @@ import { TRIGGER_CATALOG } from '../../constants/triggerCatalog';
 import { CONTEXT_VARIABLE_RULES, VARIABLE_CATALOG } from '../../constants/variableCatalog';
 import { 
     MessageSquare, Edit3, Save, RotateCcw, Plus, 
-    Zap, Check, Layout, AlertTriangle
+    Zap, Check, Layout, AlertTriangle, FileCode, Loader2
 } from 'lucide-react';
 import VariableInserter from '../common/VariableInserter'; 
 
@@ -21,6 +21,10 @@ const WhatsAppTemplateManager: React.FC = () => {
     // Editor State
     const [editForm, setEditForm] = useState<WhatsAppTemplate | null>(null);
     const [errors, setErrors] = useState<string[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
+    const saveLockRef = useRef(false);
+    const resetLockRef = useRef(false);
     
     // Textarea Ref for cursor tracking
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -121,32 +125,54 @@ const WhatsAppTemplateManager: React.FC = () => {
     };
 
     const handleSave = async () => {
-        if (!editForm || !editForm.message) return;
+        if (!editForm || !editForm.message || saveLockRef.current || isSaving) return;
         if (errors.length > 0) {
             if(!window.confirm("There are validation errors. Variables may fail to render. Save anyway?")) return;
         }
         
-        // Auto detect variables from the message body
         const regex = /{{(.*?)}}/g;
         const matches = editForm.message.match(regex);
         const vars = matches ? matches.map(m => m.replace(/{{|}}/g, '')) : [];
         
         const finalForm = { ...editForm, variables: vars };
 
-        await WhatsAppService.saveTemplate(finalForm);
-        showToast('Template saved & rules updated.', 'success');
-        
-        await loadTemplates();
-        setIsEditing(false);
-        setSelectedTemplate(finalForm);
+        saveLockRef.current = true;
+        setIsSaving(true);
+        try {
+            await WhatsAppService.saveTemplate(finalForm);
+            showToast('Template saved & rules updated.', 'success');
+            await loadTemplates();
+            setIsEditing(false);
+            setSelectedTemplate(finalForm);
+        } catch (e) {
+            showToast(
+                e instanceof Error ? e.message : 'Gagal menyimpan template',
+                'error',
+            );
+        } finally {
+            saveLockRef.current = false;
+            setIsSaving(false);
+        }
     };
 
     const handleReset = async () => {
-        if (window.confirm("Are you sure? This will delete all custom changes and restore original templates.")) {
+        if (resetLockRef.current || isResetting) return;
+        if (!window.confirm("Are you sure? This will delete all custom changes and restore original templates.")) return;
+        resetLockRef.current = true;
+        setIsResetting(true);
+        try {
             await WhatsAppService.resetTemplatesToDefault();
             showToast('Reset to defaults.', 'info');
-            loadTemplates();
+            await loadTemplates();
             setIsEditing(false);
+        } catch (e) {
+            showToast(
+                e instanceof Error ? e.message : 'Gagal reset template',
+                'error',
+            );
+        } finally {
+            resetLockRef.current = false;
+            setIsResetting(false);
         }
     };
 
@@ -225,20 +251,48 @@ const WhatsAppTemplateManager: React.FC = () => {
                 <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                     <h3 className="font-bold text-slate-800 text-sm">Message Library</h3>
                     <div className="flex gap-2">
-                         <button onClick={handleReset} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Reset Defaults">
-                            <RotateCcw size={14}/>
+                         <button
+                            type="button"
+                            onClick={() => handleReset()}
+                            disabled={isSaving || isResetting || loading}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                            title="Reset Defaults"
+                        >
+                            {isResetting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14}/>}
                         </button>
-                        <button onClick={handleCreate} className="p-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded transition-colors" title="New Template">
+                        <button
+                            type="button"
+                            onClick={handleCreate}
+                            disabled={isSaving || isResetting || loading}
+                            className="p-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                            title="New Template"
+                        >
                             <Plus size={14}/>
                         </button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                    {templates.map(tpl => (
+                    {loading ? (
+                        <div className="flex flex-col items-center justify-center py-14 text-slate-500 gap-2 px-2">
+                            <MessageSquare className="text-green-400 animate-pulse" size={28} />
+                            <span className="text-xs font-medium text-center">Memuat template dari database…</span>
+                        </div>
+                    ) : templates.length === 0 ? (
+                        <div className="flex flex-col items-center text-center py-12 px-3 text-slate-600">
+                            <FileCode className="text-slate-200 mb-2" size={36} />
+                            <p className="text-xs font-bold text-slate-800">Belum ada template</p>
+                            <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                                Database mengembalikan 0 template. Klik <span className="font-semibold text-green-700">+</span> untuk buat baru, atau ikon reset untuk memuat template default.
+                            </p>
+                        </div>
+                    ) : (
+                    templates.map(tpl => (
                         <button
+                            type="button"
                             key={tpl.id}
                             onClick={() => handleSelect(tpl)}
-                            className={`w-full text-left p-3 rounded-lg border transition-all group ${
+                            disabled={isSaving || isResetting}
+                            className={`w-full text-left p-3 rounded-lg border transition-all group disabled:opacity-50 disabled:pointer-events-none ${
                                 (isEditing ? editForm?.id : selectedTemplate?.id) === tpl.id 
                                 ? 'bg-green-50 border-green-200 ring-1 ring-green-200' 
                                 : 'bg-white border-transparent hover:bg-slate-50 hover:border-slate-200'
@@ -262,7 +316,8 @@ const WhatsAppTemplateManager: React.FC = () => {
                             </div>
                             <p className="text-xs text-slate-500 line-clamp-2">{tpl.message}</p>
                         </button>
-                    ))}
+                    ))
+                    )}
                 </div>
             </div>
 
@@ -279,9 +334,29 @@ const WhatsAppTemplateManager: React.FC = () => {
                                 placeholder="Template Name"
                             />
                             <div className="flex gap-2">
-                                <button onClick={() => { setIsEditing(false); setEditForm(null); setErrors([]); }} className="px-3 py-1.5 text-slate-500 text-xs font-bold hover:bg-slate-100 rounded">Cancel</button>
-                                <button onClick={handleSave} className="px-4 py-1.5 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 flex items-center">
-                                    <Save size={14} className="mr-1.5"/> Save Changes
+                                <button
+                                    type="button"
+                                    onClick={() => { setIsEditing(false); setEditForm(null); setErrors([]); }}
+                                    disabled={isSaving}
+                                    className="px-3 py-1.5 text-slate-500 text-xs font-bold hover:bg-slate-100 rounded disabled:opacity-40"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSave()}
+                                    disabled={isSaving}
+                                    className="px-4 py-1.5 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 flex items-center disabled:opacity-60 disabled:pointer-events-none"
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 size={14} className="mr-1.5 animate-spin" /> Menyimpan…
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save size={14} className="mr-1.5"/> Save Changes
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -440,7 +515,13 @@ const WhatsAppTemplateManager: React.FC = () => {
                          </button>
                     </div>
                 ) : (
-                    <div className="flex items-center justify-center h-full text-slate-400">Select a template to view details</div>
+                    <div className="flex flex-col items-center justify-center h-full text-center px-8 text-slate-500">
+                        <MessageSquare className="text-slate-200 mb-3" size={40} />
+                        <p className="text-sm font-semibold text-slate-700">Pilih template di panel kiri</p>
+                        <p className="text-xs text-slate-400 mt-2 max-w-sm">
+                            Jika daftar kosong, tambah template baru atau reset default dari ikon di atas daftar.
+                        </p>
+                    </div>
                 )}
             </div>
         </div>

@@ -4,6 +4,7 @@ import { PricingEngine } from '../../services/pricingEngine';
 import { PricingRule } from '../../types/pricing';
 import { useToast } from '../../context/ToastContext';
 import { Plus, Trash2, Edit3, Save, X, Settings, Calendar, DollarSign, Users, ShieldCheck, Tag, PieChart } from 'lucide-react';
+import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 
 const PricingRulesManager: React.FC = () => {
     const { showToast } = useToast();
@@ -214,6 +215,17 @@ const PricingRulesManager: React.FC = () => {
             </div>
             
             <div className="flex-1 overflow-auto p-4">
+                {loading ? (
+                    <div className="flex min-h-[200px] items-center justify-center text-sm text-slate-400">
+                        Loading…
+                    </div>
+                ) : rules.length === 0 ? (
+                    <EmptyStatePlaceholder
+                        icon={Settings}
+                        message="No pricing rules yet."
+                        minHeightClass="min-h-[200px]"
+                    />
+                ) : (
                 <div className="grid grid-cols-1 gap-4">
                     {rules.map(rule => (
                         <div key={rule.id} className={`bg-white p-4 rounded-xl border shadow-sm flex justify-between items-center ${!rule.isActive ? 'opacity-60 border-slate-200' : 'border-slate-300'}`}>
@@ -239,6 +251,7 @@ const PricingRulesManager: React.FC = () => {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
         </div>
     );

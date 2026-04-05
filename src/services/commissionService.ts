@@ -5,76 +5,49 @@ import { DataService } from './dataService';
 import { TribeService } from './tribeService';
 import { EntitlementService } from './entitlementService';
 import { APP_CONFIG } from '../lib/config';
-import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
+import { apiRequest } from '../repositories/api/apiClient';
 
-const SEED_RULES: CommissionRule[] = [
-    { 
-        id: 'COM-001', 
-        name: 'Standard Referral Bonus', 
-        targetProductId: 'ALL', 
-        beneficiaryRole: 'ALL', 
-        beneficiaryBasis: 'DIRECT_REFERRER',
-        type: 'PERCENTAGE_ON_SALES', 
-        value: 10, 
-        isActive: true 
-    },
-    { 
-        id: 'COM-002', 
-        name: 'Mentor Override', 
-        targetProductId: 'ALL', 
-        beneficiaryRole: 'FACILITATOR', 
-        beneficiaryBasis: 'ASSIGNED_MENTOR',
-        type: 'PERCENTAGE_ON_SALES', 
-        value: 5, 
-        isActive: true 
-    },
-    { 
-        id: 'COM-003', 
-        name: 'Certification Sales Bounty', 
-        targetProductId: 'PKG-MLCT-2026', 
-        beneficiaryRole: 'SALES', 
-        beneficiaryBasis: 'SALES_AGENT',
-        type: 'FIXED_AMOUNT', 
-        value: 5000000, 
-        isActive: true 
-    }
-];
+/** Master commission rules: only persisted via Nest (`/fe/commission-rules` → Postgres). No IndexedDB / no direct Supabase from FE. */
+function commissionRulesUseNestApi(): boolean {
+    return (
+        !APP_CONFIG.USE_MOCK_GLOBAL &&
+        APP_CONFIG.DOMAINS.COMMERCE === 'API'
+    );
+}
+
+const COMMISSION_RULES_API_REQUIRED_MSG =
+    'Commission rules require the Maxwell API: set `NEXT_PUBLIC_API_BASE_URL` to your Nest `/fe` base and run migration `020_commission_rules_fe.sql` on the server database.';
 
 export const CommissionService = {
     
     // --- RULES MANAGEMENT ---
     getRules: async (): Promise<CommissionRule[]> => {
-        if (APP_CONFIG.USE_MOCK) {
-            try {
-                if (await DevDatabase.isEmpty('commission_rules')) {
-                    await DevDatabase.bulkAdd('commission_rules', SEED_RULES);
-                    return SEED_RULES;
-                }
-                return await DevDatabase.getAll<CommissionRule>('commission_rules');
-            } catch(e) { return SEED_RULES; }
+        if (commissionRulesUseNestApi()) {
+            return apiRequest<CommissionRule[]>('/commission-rules');
         }
-        if (!supabase) return [];
-        const { data } = await supabase.from('commission_rules').select('*');
-        return data || [];
+        return [];
     },
 
     saveRule: async (rule: CommissionRule): Promise<void> => {
-        if (APP_CONFIG.USE_MOCK) {
-            await DevDatabase.add('commission_rules', rule);
+        if (commissionRulesUseNestApi()) {
+            await apiRequest(`/commission-rules/${encodeURIComponent(rule.id)}`, {
+                method: 'PUT',
+                body: JSON.stringify(rule),
+            });
             return;
         }
-        if (!supabase) return;
-        await supabase.from('commission_rules').upsert(rule);
+        throw new Error(COMMISSION_RULES_API_REQUIRED_MSG);
     },
 
     deleteRule: async (id: string): Promise<void> => {
-        if (APP_CONFIG.USE_MOCK) {
-            await DevDatabase.delete('commission_rules', id);
+        if (commissionRulesUseNestApi()) {
+            await apiRequest(`/commission-rules/${encodeURIComponent(id)}`, {
+                method: 'DELETE',
+            });
             return;
         }
-        if (!supabase) return;
-        await supabase.from('commission_rules').delete().eq('id', id);
+        throw new Error(COMMISSION_RULES_API_REQUIRED_MSG);
     },
 
     // --- CANDIDATE FINDING ---
@@ -169,10 +142,12 @@ export const CommissionService = {
             createdAt: new Date().toISOString()
         };
 
-        if (APP_CONFIG.USE_MOCK) {
-            await DevDatabase.add('payout_transactions', payout);
-        } else if (supabase) {
+        if (supabase) {
             await supabase.from('payout_transactions').insert(payout);
+            return;
         }
+        console.warn(
+            '[CommissionService] assignCommission: no Supabase client; payout not recorded.',
+        );
     }
 };

@@ -2,7 +2,6 @@
 import { IWorkflowRepository } from '../contracts';
 import { OpsTemplate, OpsChecklist } from '../../types/ops';
 import { UserRole } from '../../types/index';
-import { DevDatabase } from '../../utils/devDatabase';
 
 // Initial Seed for Templates
 const SEED_TEMPLATES: OpsTemplate[] = [
@@ -40,47 +39,49 @@ const SEED_CHECKLISTS: OpsChecklist[] = [
     }
 ];
 
+let memoryTemplates: OpsTemplate[] | null = null;
+let memoryChecklists: OpsChecklist[] | null = null;
+
+function cloneTemplates(): OpsTemplate[] {
+    return JSON.parse(JSON.stringify(SEED_TEMPLATES)) as OpsTemplate[];
+}
+
+function cloneChecklists(): OpsChecklist[] {
+    return JSON.parse(JSON.stringify(SEED_CHECKLISTS)) as OpsChecklist[];
+}
+
 export class MockWorkflowRepository implements IWorkflowRepository {
-    // --- TEMPLATES ---
     async getTemplates(): Promise<OpsTemplate[]> {
-        try {
-            if (await DevDatabase.isEmpty('ops_templates')) {
-                await DevDatabase.bulkAdd('ops_templates', SEED_TEMPLATES);
-                return SEED_TEMPLATES;
-            }
-            return await DevDatabase.getAll<OpsTemplate>('ops_templates');
-        } catch (e) {
-            return SEED_TEMPLATES;
-        }
+        if (!memoryTemplates) memoryTemplates = cloneTemplates();
+        return memoryTemplates;
     }
 
     async saveTemplate(template: OpsTemplate): Promise<void> {
-        await DevDatabase.add('ops_templates', template);
+        if (!memoryTemplates) memoryTemplates = cloneTemplates();
+        const i = memoryTemplates.findIndex((t) => t.id === template.id);
+        if (i >= 0) memoryTemplates[i] = template;
+        else memoryTemplates.push(template);
     }
 
     async deleteTemplate(id: string): Promise<void> {
-        await DevDatabase.delete('ops_templates', id);
+        if (!memoryTemplates) memoryTemplates = cloneTemplates();
+        memoryTemplates = memoryTemplates.filter((t) => t.id !== id);
     }
 
-    // --- CHECKLISTS ---
     async getChecklists(): Promise<OpsChecklist[]> {
-        try {
-            if (await DevDatabase.isEmpty('ops_checklists')) {
-                await DevDatabase.bulkAdd('ops_checklists', SEED_CHECKLISTS);
-                return SEED_CHECKLISTS;
-            }
-            return await DevDatabase.getAll<OpsChecklist>('ops_checklists');
-        } catch (e) {
-            return SEED_CHECKLISTS;
-        }
+        if (!memoryChecklists) memoryChecklists = cloneChecklists();
+        return memoryChecklists;
     }
 
     async getChecklistById(id: string): Promise<OpsChecklist | undefined> {
         const all = await this.getChecklists();
-        return all.find(c => c.id === id);
+        return all.find((c) => c.id === id);
     }
 
     async saveChecklist(checklist: OpsChecklist): Promise<void> {
-        await DevDatabase.add('ops_checklists', checklist);
+        if (!memoryChecklists) memoryChecklists = cloneChecklists();
+        const i = memoryChecklists.findIndex((c) => c.id === checklist.id);
+        if (i >= 0) memoryChecklists[i] = checklist;
+        else memoryChecklists.push(checklist);
     }
 }

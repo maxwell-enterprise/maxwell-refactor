@@ -10,10 +10,16 @@ const YouthDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        SpecificBusinessService.getYouthMetrics().then(data => {
-            setMetrics(data);
-            setLoading(false);
-        });
+        SpecificBusinessService.getYouthMetrics()
+            .then((data) => {
+                setMetrics(data);
+            })
+            .catch(() => {
+                setMetrics([]);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
     }, []);
 
     const totalStudents = metrics.reduce((acc, m) => acc + m.studentsImpacted, 0);

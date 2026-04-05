@@ -5,6 +5,7 @@ import { PricingRule, PriceCalculationResult, DiscountFinancialLog, AbacConditio
 import { APP_CONFIG } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
+import { apiRequest } from '../repositories/api/apiClient';
 
 // INITIAL SEED
 const SEED_RULES: PricingRule[] = [
@@ -52,6 +53,9 @@ export const PricingEngine = {
     
     // --- CRUD ---
     getRules: async (): Promise<PricingRule[]> => {
+        if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
+            return apiRequest<PricingRule[]>('/store/pricing-rules');
+        }
         if (APP_CONFIG.USE_MOCK) {
             try {
                 if (await DevDatabase.isEmpty('pricing_rules')) {
@@ -67,6 +71,13 @@ export const PricingEngine = {
     },
 
     saveRule: async (rule: PricingRule): Promise<void> => {
+        if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
+            await apiRequest(`/store/pricing-rules/${encodeURIComponent(rule.id)}`, {
+                method: 'PUT',
+                body: JSON.stringify(rule),
+            });
+            return;
+        }
         if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('pricing_rules', rule);
             return;
@@ -76,6 +87,13 @@ export const PricingEngine = {
     },
 
     deleteRule: async (id: string): Promise<void> => {
+        if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
+            await apiRequest(
+                `/store/pricing-rules/${encodeURIComponent(id)}`,
+                { method: 'DELETE' },
+            );
+            return;
+        }
         if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.delete('pricing_rules', id);
             return;

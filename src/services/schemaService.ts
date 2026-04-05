@@ -28,6 +28,8 @@ import { TribeService } from './tribeService';
 import { AIUsageService } from './aiUsageService'; // Added
 import { ResearchPersistenceService } from './researchPersistenceService'; // Added
 import { CreditTagService } from './creditTagService'; // Added
+import { CommissionService } from './commissionService';
+import { SpecificBusinessService } from './specificBusinessService';
 import { DevDatabase } from '../utils/devDatabase'; // Added for direct access
 import { AUTH_TEST_MEMBER, AUTH_TEST_WALLET_ITEMS } from '../seeds/auth_test_user'; // NEW
 
@@ -161,9 +163,9 @@ export const SchemaService = {
             { name: 'round_table_sessions', fetch: async () => DevDatabase.getAll('round_table_sessions') },
             { name: 'tax_invoices', fetch: async () => DevDatabase.getAll('tax_invoices') },
             { name: 'royalty_splits', fetch: async () => DevDatabase.getAll('royalty_splits') },
-            { name: 'youth_metrics', fetch: async () => DevDatabase.getAll('youth_metrics') },
+            { name: 'youth_metrics', fetch: SpecificBusinessService.getYouthMetrics },
             { name: 'pricing_rules', fetch: async () => DevDatabase.getAll('pricing_rules') },
-            { name: 'commission_rules', fetch: async () => DevDatabase.getAll('commission_rules') },
+            { name: 'commission_rules', fetch: () => CommissionService.getRules() },
             { name: 'ref_master_tiers', fetch: async () => DevDatabase.getAll('ref_master_tiers') },
             { name: 'certification_rules', fetch: async () => DevDatabase.getAll('certification_rules') },
             { name: 'master_done_tags', fetch: async () => DevDatabase.getAll('master_done_tags') },

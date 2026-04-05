@@ -7,6 +7,7 @@ import { DataService } from './dataService'; // Import DataService
 import { APP_CONFIG } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
+import { apiRequest } from '../repositories/api/apiClient';
 
 const SEED_SESSIONS: TribeMentoringSession[] = [
     { id: 'SES-001', facilitatorId: 'fac-1', title: 'March Review', description: 'Laws of Growth', date: '2025-03-15', time: '19:00 WIB', meetingLink: 'https://zoom.us/j/123', attendeeIds: ['M002', 'M003'], status: 'SCHEDULED' }
@@ -56,6 +57,11 @@ export const TribeService = {
     getReferralLink: (facilitatorId: string): string => `${window.location.origin}/register?ref=${facilitatorId}`,
 
     getMyCommissions: async (facilitatorId: string): Promise<PayoutTransaction[]> => {
+        if (APP_CONFIG.DOMAINS.TRANSACTIONS === 'API') {
+            const all = await apiRequest<PayoutTransaction[]>('/store/payout-transactions');
+            if (facilitatorId === 'admin-1') return all;
+            return all.filter((p) => p.beneficiaryId === facilitatorId);
+        }
         if (APP_CONFIG.USE_MOCK) {
             try {
                 if(await DevDatabase.isEmpty('payout_transactions')) await DevDatabase.bulkAdd('payout_transactions', SEED_PAYOUTS);
@@ -71,6 +77,9 @@ export const TribeService = {
     },
 
     getAllPayouts: async (): Promise<PayoutTransaction[]> => {
+        if (APP_CONFIG.DOMAINS.TRANSACTIONS === 'API') {
+            return apiRequest<PayoutTransaction[]>('/store/payout-transactions');
+        }
         if (APP_CONFIG.USE_MOCK) {
             if(await DevDatabase.isEmpty('payout_transactions')) await DevDatabase.bulkAdd('payout_transactions', SEED_PAYOUTS);
             return await DevDatabase.getAll<PayoutTransaction>('payout_transactions');
@@ -78,6 +87,31 @@ export const TribeService = {
         if (!supabase) return [];
         const { data } = await supabase.from('payout_transactions').select('*');
         return data || [];
+    },
+
+    markPayoutPaid: async (id: string): Promise<void> => {
+        if (APP_CONFIG.DOMAINS.TRANSACTIONS === 'API') {
+            await apiRequest(`/store/payout-transactions/${encodeURIComponent(id)}/status`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: 'PAID' }),
+            });
+            return;
+        }
+        if (APP_CONFIG.USE_MOCK) {
+            const all = await DevDatabase.getAll<PayoutTransaction>('payout_transactions');
+            const p = all.find((x) => x.id === id);
+            if (p) {
+                p.status = 'PAID';
+                p.paidAt = new Date().toISOString();
+                await DevDatabase.add('payout_transactions', p);
+            }
+            return;
+        }
+        if (!supabase) return;
+        await supabase
+            .from('payout_transactions')
+            .update({ status: 'PAID', paidAt: new Date().toISOString() })
+            .eq('id', id);
     },
 
     getMentoringSessions: async (facilitatorId: string): Promise<TribeMentoringSession[]> => {

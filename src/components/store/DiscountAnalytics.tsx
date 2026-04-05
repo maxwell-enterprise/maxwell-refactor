@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { DiscountAnalyticsService, RulePerformance } from '../../services/discountAnalyticsService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { TrendingUp, DollarSign, PieChart as PieChartIcon } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
+import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 
 const DiscountAnalytics: React.FC = () => {
     const [data, setData] = useState<RulePerformance[]>([]);
@@ -22,7 +23,25 @@ const DiscountAnalytics: React.FC = () => {
     const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-    if (loading) return <div className="p-8 text-center text-slate-400">Loading Financial Data...</div>;
+    if (loading) {
+        return (
+            <div className="flex min-h-[200px] items-center justify-center p-8 text-sm text-slate-400">
+                Loading…
+            </div>
+        );
+    }
+
+    if (data.length === 0) {
+        return (
+            <div className="bg-slate-50 p-4">
+                <EmptyStatePlaceholder
+                    icon={BarChart3}
+                    message="No voucher statistics yet."
+                    minHeightClass="min-h-[240px]"
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="p-6 space-y-6 bg-slate-50 h-full overflow-y-auto">
