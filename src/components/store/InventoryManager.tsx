@@ -127,7 +127,7 @@ const InventoryManager: React.FC = () => {
         }
     };
 
-    // --- EXCEL ACTIONS ---
+    // --- EXCEL ACTIONS -
     const handleDownloadTemplate = () => {
         const template = [{
             SKU: 'NEW-ITEM-001',
