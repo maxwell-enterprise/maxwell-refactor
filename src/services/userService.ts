@@ -27,7 +27,40 @@ const SEED_USERS: UserProfile[] = [
 
 export const UserService = {
     getAllUsers: async (): Promise<UserProfile[]> => {
-        assertExternalApiMode('Internal users', APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
+        const internalUsersMode = APP_CONFIG.EXTERNAL_API_ONLY
+            ? 'API'
+            : (APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
+
+        assertExternalApiMode('Internal users', internalUsersMode);
+
+        if (APP_CONFIG.EXTERNAL_API_ONLY) {
+            try {
+                // In API-only mode, internal users are frontend seeds,
+                // while member journey users come from external API.
+                const crmMembers = await DataService.getMembers();
+
+                const memberUsers: UserProfile[] = crmMembers.map(m => {
+                    let role = UserRole.MEMBER;
+                    if (m.lifecycleStage === 'FACILITATOR') role = UserRole.FACILITATOR;
+
+                    return {
+                        id: m.id,
+                        fullName: m.name,
+                        email: m.email,
+                        role,
+                        avatarUrl: `https://ui-avatars.com/api/?name=${m.name.replace(' ','+')}&background=random`,
+                        provider: 'email'
+                    };
+                });
+
+                const uniqueMembers = memberUsers.filter(m => !SEED_USERS.some(s => s.email === m.email));
+                return [...SEED_USERS, ...uniqueMembers];
+            } catch (e) {
+                console.error('UserService API-only fallback error', e);
+                return SEED_USERS;
+            }
+        }
+
         if (APP_CONFIG.USE_MOCK) {
             try {
                 // 1. Get Internal Staff from DB (or Seed)

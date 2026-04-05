@@ -100,27 +100,32 @@ const Marketing: React.FC = () => {
           return;
       }
 
-      if (editingId) {
-          await CampaignService.updateCampaign(editingId, {
-              name: formData.name,
-              category: formData.category,
-              targetProductId: formData.productId,
-              linkedDiscountCode: formData.discountCode
-          });
-          showToast('Campaign updated successfully', 'success');
-      } else {
-          await CampaignService.createCampaign({
-              name: formData.name,
-              sourceCode: formData.sourceCode.replace(/\s+/g, '_').toLowerCase(),
-              category: formData.category,
-              targetProductId: formData.productId,
-              linkedDiscountCode: formData.discountCode
-          });
-          showToast('Campaign link generated successfully', 'success');
-      }
+      try {
+          if (editingId) {
+              await CampaignService.updateCampaign(editingId, {
+                  name: formData.name,
+                  category: formData.category,
+                  targetProductId: formData.productId,
+                  linkedDiscountCode: formData.discountCode
+              });
+              showToast('Campaign updated successfully', 'success');
+          } else {
+              await CampaignService.createCampaign({
+                  name: formData.name,
+                  sourceCode: formData.sourceCode.replace(/\s+/g, '_').toLowerCase(),
+                  category: formData.category,
+                  targetProductId: formData.productId,
+                  linkedDiscountCode: formData.discountCode
+              });
+              showToast('Campaign link generated successfully', 'success');
+          }
 
-      handleCancelEdit();
-      loadCampaigns();
+          handleCancelEdit();
+          loadCampaigns();
+      } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to save campaign';
+          showToast(message, 'error');
+      }
   };
 
   // --- EXCEL ACTIONS ---
@@ -154,23 +159,21 @@ const Marketing: React.FC = () => {
       if(!file) return;
       try {
           const raw = await ExcelHelper.importFromExcel<any>(file);
-          let count = 0;
-          for(const r of raw) {
-              if(r.Name && r.SourceCode) {
-                  await CampaignService.createCampaign({
-                      name: r.Name,
-                      sourceCode: r.SourceCode,
-                      category: r.Category || 'OTHER',
-                      targetProductId: r['Target Product ID'],
-                      linkedDiscountCode: r['Voucher Code']
-                  });
-                  count++;
-              }
-          }
+          const items = raw
+              .filter(r => r.Name && r.SourceCode)
+              .map(r => ({
+                  name: r.Name,
+                  sourceCode: r.SourceCode,
+                  category: r.Category || 'OTHER',
+                  targetProductId: r['Target Product ID'],
+                  linkedDiscountCode: r['Voucher Code']
+              }));
+          const result = await CampaignService.bulkUpsertCampaigns(items);
           loadCampaigns();
-          showToast(`Imported ${count} campaigns.`, 'success');
+          showToast(`Imported ${result.total} campaigns.`, 'success');
       } catch (err) {
-          showToast('Import failed.', 'error');
+          const message = err instanceof Error ? err.message : 'Import failed.';
+          showToast(message, 'error');
       }
       if(fileInputRef.current) fileInputRef.current.value = '';
   };
