@@ -73,7 +73,7 @@ export const APP_CONFIG = {
     EVENTS:         resolveDomainMode(process.env.NEXT_PUBLIC_EVENTS_BACKEND),
     OPS:            resolveDomainMode(process.env.NEXT_PUBLIC_OPS_BACKEND),
     GAMIFICATION:   (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode,
-    COMMUNICATION:  (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // Email & WA
+    COMMUNICATION:  resolveDomainMode(process.env.NEXT_PUBLIC_COMMUNICATION_BACKEND), // Email & WA
     CONTENT:        (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // CMS
     COMMERCE:       resolveDomainMode(process.env.NEXT_PUBLIC_COMMERCE_BACKEND),
     SYSTEM:         (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // Logs, Settings, Queue

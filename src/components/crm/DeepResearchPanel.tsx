@@ -105,13 +105,15 @@ const DeepResearchPanel: React.FC<DeepResearchPanelProps> = ({ context, onClose 
           newTags = Array.from(mergedTags);
       }
 
+      const summaryNotes = `[AI Research] Strategy: ${result.triage?.salesStrategy}\nManual Note: ${userOpinion}`;
+
       // 4. Update
       await DataService.updateMember(context.targetMemberId, {
         socialProfile: aiSocialProfile,
         company: result.personProfile?.currentRole?.includes(' at ') ? result.personProfile.currentRole.split(' at ')[1] : context.company,
         jobTitle: result.personProfile?.currentRole?.split(' at ')[0],
         tags: newTags,
-        notes: `[AI Research] Strategy: ${result.triage?.salesStrategy}\nManual Note: ${userOpinion}`
+        notes: ResearchPersistenceService.mergeNotesWithResult(summaryNotes, result)
       });
 
       showToast('Profile enriched with AI Data!', 'success');

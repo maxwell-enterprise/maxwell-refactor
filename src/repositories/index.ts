@@ -37,6 +37,7 @@ import { MockCommunicationRepository } from './mock/mockCommunicationRepository'
 import { SupabaseCommunicationRepository } from './supabase/supabaseCommunicationRepository';
 import { MockWhatsappRepository } from './mock/mockWhatsappRepository';
 import { SupabaseWhatsappRepository } from './supabase/supabaseWhatsappRepository';
+import { ApiWhatsappRepository } from './api/apiWhatsappRepository';
 import { MockEventRepository } from './mock/mockEventRepository';
 import { SupabaseEventRepository } from './supabase/supabaseEventRepository';
 import { ApiEventRepository } from './api/apiEventRepository';
@@ -203,8 +204,13 @@ export const RepositoryFactory = {
     getWhatsappRepository: (): IWhatsappRepository => {
         if (!waRepo) {
             const mode = getDomainMode('WhatsApp', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMUNICATION);
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
-            waRepo = useRealDb ? new SupabaseWhatsappRepository() : new MockWhatsappRepository();
+            if (mode === 'API') {
+                waRepo = new ApiWhatsappRepository();
+            } else if (mode === 'SUPABASE') {
+                waRepo = new SupabaseWhatsappRepository();
+            } else {
+                waRepo = new MockWhatsappRepository();
+            }
         }
         return waRepo;
     },
