@@ -63,10 +63,8 @@ const DiscountManager: React.FC = () => {
         });
 
         if (isConfirmed) {
-            // Mock delete (since service might not have delete method exposed in this context, assuming logic exists)
-            // In a real app: await DiscountService.delete(discount.id);
-            showToast('Voucher deleted (Simulated)', 'info');
-            // Optimistic update
+            await DiscountService.deleteDiscount(discount.id);
+            showToast('Voucher deleted.', 'info');
             setDiscounts(prev => prev.filter(d => d.id !== discount.id));
         }
     };
