@@ -29,6 +29,7 @@ import { MockInventoryRepository } from './mock/mockInventoryRepository';
 import { SupabaseInventoryRepository } from './supabase/supabaseInventoryRepository';
 import { MockWorkflowRepository } from './mock/mockWorkflowRepository';
 import { SupabaseWorkflowRepository } from './supabase/supabaseWorkflowRepository';
+import { ApiWorkflowRepository } from './api/apiWorkflowRepository';
 import { MockGamificationRepository } from './mock/mockGamificationRepository';
 import { SupabaseGamificationRepository } from './supabase/supabaseGamificationRepository';
 import { MockContentRepository } from './mock/mockContentRepository';
@@ -168,8 +169,13 @@ export const RepositoryFactory = {
     getWorkflowRepository: (): IWorkflowRepository => {
         if (!workflowRepo) {
             const mode = getDomainMode('Workflows', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS);
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
-            workflowRepo = useRealDb ? new SupabaseWorkflowRepository() : new MockWorkflowRepository();
+            if (mode === 'API') {
+                workflowRepo = new ApiWorkflowRepository();
+            } else if (mode === 'SUPABASE') {
+                workflowRepo = new SupabaseWorkflowRepository();
+            } else {
+                workflowRepo = new MockWorkflowRepository();
+            }
         }
         return workflowRepo;
     },

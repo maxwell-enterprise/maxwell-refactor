@@ -1,30 +1,51 @@
 import { SupportTicket, UserRole } from '../types/index';
-import { MOCK_TICKETS } from '../constants';
-import { DevDatabase } from '../utils/devDatabase';
 import { APP_CONFIG } from '../lib/config';
-import { supabase } from '../lib/supabaseClient';
+import { MockSupportTicketRepository } from '../repositories/support/mockSupportTicketRepository';
+import { SupabaseSupportTicketRepository } from '../repositories/support/supabaseSupportTicketRepository';
+import { ApiSupportTicketRepository } from '../repositories/support/apiSupportTicketRepository';
+import { NoopSupportTicketRepository } from '../repositories/support/noopSupportTicketRepository';
+import { ISupportTicketRepository } from '../repositories/support/types';
+
+type SupportBackendMode = 'MOCK' | 'SUPABASE' | 'API' | 'NONE';
+
+let supportRepo: ISupportTicketRepository | null = null;
+
+function getSupportBackendMode(): SupportBackendMode {
+    const preferred = process.env.NEXT_PUBLIC_SUPPORT_BACKEND?.toUpperCase();
+
+    if (preferred === 'API') return 'API';
+    if (preferred === 'SUPABASE') return 'SUPABASE';
+    if (preferred === 'MOCK') return 'MOCK';
+    if (APP_CONFIG.USE_MOCK) return 'MOCK';
+    if (APP_CONFIG.SUPABASE_URL && APP_CONFIG.SUPABASE_ANON_KEY && !APP_CONFIG.EXTERNAL_API_ONLY) {
+        return 'SUPABASE';
+    }
+
+    return 'NONE';
+}
+
+function getSupportRepository(): ISupportTicketRepository {
+    if (supportRepo) return supportRepo;
+
+    const mode = getSupportBackendMode();
+
+    if (mode === 'API') {
+        supportRepo = new ApiSupportTicketRepository();
+    } else if (mode === 'SUPABASE') {
+        supportRepo = new SupabaseSupportTicketRepository();
+    } else if (mode === 'MOCK') {
+        supportRepo = new MockSupportTicketRepository();
+    } else {
+        supportRepo = new NoopSupportTicketRepository();
+    }
+
+    return supportRepo;
+}
 
 export const SupportService = {
     
     getTickets: async (): Promise<SupportTicket[]> => {
-        if (APP_CONFIG.USE_MOCK) {
-            try {
-                const isEmpty = await DevDatabase.isEmpty('support_tickets');
-                if (isEmpty) {
-                    await DevDatabase.bulkAdd('support_tickets', MOCK_TICKETS);
-                    return MOCK_TICKETS;
-                }
-                const tickets = await DevDatabase.getAll<SupportTicket>('support_tickets');
-                return tickets.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-            } catch (e) {
-                return MOCK_TICKETS;
-            }
-        }
-
-        if (!supabase) return [];
-        const { data, error } = await supabase.from('support_tickets').select('*').order('updatedAt', { ascending: false });
-        if (error) throw error;
-        return data || [];
+        return await getSupportRepository().getAll();
     },
 
     createTicket: async (ticket: Partial<SupportTicket>): Promise<SupportTicket> => {
@@ -41,32 +62,14 @@ export const SupportService = {
             updatedAt: new Date().toISOString()
         };
 
-        if (APP_CONFIG.USE_MOCK) {
-            await DevDatabase.add('support_tickets', newTicket);
-            return newTicket;
-        }
-
-        if (!supabase) throw new Error("No DB");
-        const { data, error } = await supabase.from('support_tickets').insert(newTicket).select().single();
-        if (error) throw error;
-        return data;
+        return await getSupportRepository().create(newTicket);
     },
 
     updateTicket: async (id: string, updates: Partial<SupportTicket>): Promise<void> => {
-        updates.updatedAt = new Date().toISOString();
-        
-        if (APP_CONFIG.USE_MOCK) {
-            const tickets = await SupportService.getTickets();
-            const existing = tickets.find(t => t.id === id);
-            if (existing) {
-                const updated = { ...existing, ...updates };
-                await DevDatabase.add('support_tickets', updated);
-            }
-            return;
-        }
-
-        if (!supabase) return;
-        await supabase.from('support_tickets').update(updates).eq('id', id);
+        await getSupportRepository().update(id, {
+            ...updates,
+            updatedAt: new Date().toISOString()
+        });
     },
 
     resolveTicket: async (id: string, resolution: string): Promise<void> => {
