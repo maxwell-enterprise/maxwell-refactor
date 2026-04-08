@@ -1,5 +1,5 @@
 
-import { APP_CONFIG } from '../lib/config';
+import { APP_CONFIG, assertExternalApiMode, BackendMode } from '../lib/config';
 import {
     IMemberRepository,
     IProductRepository,
@@ -29,6 +29,7 @@ import { MockInventoryRepository } from './mock/mockInventoryRepository';
 import { SupabaseInventoryRepository } from './supabase/supabaseInventoryRepository';
 import { MockWorkflowRepository } from './mock/mockWorkflowRepository';
 import { SupabaseWorkflowRepository } from './supabase/supabaseWorkflowRepository';
+import { ApiWorkflowRepository } from './api/apiWorkflowRepository';
 import { MockGamificationRepository } from './mock/mockGamificationRepository';
 import { SupabaseGamificationRepository } from './supabase/supabaseGamificationRepository';
 import { MockContentRepository } from './mock/mockContentRepository';
@@ -37,6 +38,7 @@ import { MockCommunicationRepository } from './mock/mockCommunicationRepository'
 import { SupabaseCommunicationRepository } from './supabase/supabaseCommunicationRepository';
 import { MockWhatsappRepository } from './mock/mockWhatsappRepository';
 import { SupabaseWhatsappRepository } from './supabase/supabaseWhatsappRepository';
+import { ApiWhatsappRepository } from './api/apiWhatsappRepository';
 import { MockEventRepository } from './mock/mockEventRepository';
 import { SupabaseEventRepository } from './supabase/supabaseEventRepository';
 import { ApiEventRepository } from './api/apiEventRepository';
@@ -82,10 +84,15 @@ let creditTagRepo: ICreditTagRepository;
 let cartRepo: ICartRepository;
 let invitationRepo: IInvitationRepository;
 
+function getDomainMode(feature: string, mode: BackendMode): BackendMode {
+    assertExternalApiMode(feature, mode);
+    return mode;
+}
+
 export const RepositoryFactory = {
     getMemberRepository: (): IMemberRepository => {
         if (!memberRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.MEMBERS;
+            const mode = getDomainMode('Members', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.MEMBERS);
             if (mode === 'API') {
                 memberRepo = new ApiMemberRepository();
             } else if (mode === 'SUPABASE') {
@@ -99,7 +106,7 @@ export const RepositoryFactory = {
 
     getProductRepository: (): IProductRepository => {
         if (!productRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.PRODUCTS;
+            const mode = getDomainMode('Products', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.PRODUCTS);
             if (mode === 'API') {
                 productRepo = new ApiProductRepository();
             } else if (mode === 'SUPABASE') {
@@ -113,7 +120,7 @@ export const RepositoryFactory = {
 
     getEventRepository: (): IEventRepository => {
         if (!eventRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.EVENTS;
+            const mode = getDomainMode('Events', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.EVENTS);
             if (mode === 'API') {
                 eventRepo = new ApiEventRepository();
             } else if (mode === 'SUPABASE') {
@@ -127,7 +134,7 @@ export const RepositoryFactory = {
 
     getInvitationRepository: (): IInvitationRepository => {
         if (!invitationRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.INVITATIONS;
+            const mode = getDomainMode('Invitations', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.INVITATIONS);
             if (mode === 'API') {
                 invitationRepo = new ApiInvitationRepository();
             } else if (mode === 'SUPABASE') {
@@ -141,56 +148,37 @@ export const RepositoryFactory = {
 
     getTransactionRepository: (): ITransactionRepository => {
         if (!transactionRepo) {
-            if (APP_CONFIG.USE_MOCK_GLOBAL) {
-                transactionRepo = new MockTransactionRepository();
-            } else if (APP_CONFIG.DOMAINS.TRANSACTIONS === 'API') {
-                transactionRepo = new ApiTransactionRepository();
-            } else if (APP_CONFIG.DOMAINS.TRANSACTIONS === 'SUPABASE') {
-                transactionRepo = new SupabaseTransactionRepository();
-            } else {
-                transactionRepo = new MockTransactionRepository();
-            }
+            const mode = getDomainMode('Transactions', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.TRANSACTIONS);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
+            transactionRepo = useRealDb ? new SupabaseTransactionRepository() : new MockTransactionRepository();
         }
         return transactionRepo;
     },
 
     getPaymentRepository: (): IPaymentRepository => {
         if (!paymentRepo) {
-            if (APP_CONFIG.USE_MOCK_GLOBAL) {
-                paymentRepo = new MockPaymentRepository();
-            } else if (APP_CONFIG.DOMAINS.PAYMENTS === 'API') {
-                paymentRepo = new ApiPaymentRepository();
-            } else if (APP_CONFIG.DOMAINS.PAYMENTS === 'SUPABASE') {
-                paymentRepo = new SupabasePaymentRepository();
-            } else {
-                paymentRepo = new MockPaymentRepository();
-            }
+            const mode = getDomainMode('Payments', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.PAYMENTS);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
+            paymentRepo = useRealDb ? new SupabasePaymentRepository() : new MockPaymentRepository();
         }
         return paymentRepo;
     },
 
     getInventoryRepository: (): IInventoryRepository => {
         if (!inventoryRepo) {
-            if (APP_CONFIG.USE_MOCK_GLOBAL) {
-                inventoryRepo = new MockInventoryRepository();
-            } else if (APP_CONFIG.DOMAINS.OPS === 'API') {
-                inventoryRepo = new ApiInventoryRepository();
-            } else if (APP_CONFIG.DOMAINS.OPS === 'SUPABASE') {
-                inventoryRepo = new SupabaseInventoryRepository();
-            } else {
-                inventoryRepo = new MockInventoryRepository();
-            }
+            const mode = getDomainMode('Inventory', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
+            inventoryRepo = useRealDb ? new SupabaseInventoryRepository() : new MockInventoryRepository();
         }
         return inventoryRepo;
     },
 
     getWorkflowRepository: (): IWorkflowRepository => {
         if (!workflowRepo) {
-            if (APP_CONFIG.USE_MOCK_GLOBAL) {
-                workflowRepo = new MockWorkflowRepository();
-            } else if (APP_CONFIG.DOMAINS.OPS === 'API') {
+            const mode = getDomainMode('Workflows', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS);
+            if (mode === 'API') {
                 workflowRepo = new ApiWorkflowRepository();
-            } else if (APP_CONFIG.DOMAINS.OPS === 'SUPABASE') {
+            } else if (mode === 'SUPABASE') {
                 workflowRepo = new SupabaseWorkflowRepository();
             } else {
                 workflowRepo = new MockWorkflowRepository();
@@ -201,22 +189,17 @@ export const RepositoryFactory = {
 
     getGamificationRepository: (): IGamificationRepository => {
         if (!gamificationRepo) {
-            if (APP_CONFIG.USE_MOCK_GLOBAL) {
-                gamificationRepo = new MockGamificationRepository();
-            } else if (APP_CONFIG.DOMAINS.GAMIFICATION === 'API') {
-                gamificationRepo = new ApiGamificationRepository();
-            } else if (APP_CONFIG.DOMAINS.GAMIFICATION === 'SUPABASE') {
-                gamificationRepo = new SupabaseGamificationRepository();
-            } else {
-                gamificationRepo = new MockGamificationRepository();
-            }
+            const mode = getDomainMode('Gamification', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.GAMIFICATION);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
+            gamificationRepo = useRealDb ? new SupabaseGamificationRepository() : new MockGamificationRepository();
         }
         return gamificationRepo;
     },
 
     getContentRepository: (): IContentRepository => {
         if (!contentRepo) {
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.CONTENT === 'SUPABASE';
+            const mode = getDomainMode('Content', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.CONTENT);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
             contentRepo = useRealDb ? new SupabaseContentRepository() : new MockContentRepository();
         }
         return contentRepo;
@@ -224,26 +207,19 @@ export const RepositoryFactory = {
 
     getCommunicationRepository: (): ICommunicationRepository => {
         if (!commsRepo) {
-            if (APP_CONFIG.USE_MOCK_GLOBAL) {
-                commsRepo = new MockCommunicationRepository();
-            } else if (APP_CONFIG.DOMAINS.COMMUNICATION === 'API') {
-                commsRepo = new ApiCommunicationRepository();
-            } else if (APP_CONFIG.DOMAINS.COMMUNICATION === 'SUPABASE') {
-                commsRepo = new SupabaseCommunicationRepository();
-            } else {
-                commsRepo = new MockCommunicationRepository();
-            }
+            const mode = getDomainMode('Communication', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMUNICATION);
+            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
+            commsRepo = useRealDb ? new SupabaseCommunicationRepository() : new MockCommunicationRepository();
         }
         return commsRepo;
     },
 
     getWhatsappRepository: (): IWhatsappRepository => {
         if (!waRepo) {
-            if (APP_CONFIG.USE_MOCK_GLOBAL) {
-                waRepo = new MockWhatsappRepository();
-            } else if (APP_CONFIG.DOMAINS.COMMUNICATION === 'API') {
+            const mode = getDomainMode('WhatsApp', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMUNICATION);
+            if (mode === 'API') {
                 waRepo = new ApiWhatsappRepository();
-            } else if (APP_CONFIG.DOMAINS.COMMUNICATION === 'SUPABASE') {
+            } else if (mode === 'SUPABASE') {
                 waRepo = new SupabaseWhatsappRepository();
             } else {
                 waRepo = new MockWhatsappRepository();
@@ -254,7 +230,7 @@ export const RepositoryFactory = {
 
     getEntitlementRepository: (): IEntitlementRepository => {
         if (!entitlementRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.ENTITLEMENTS;
+            const mode = getDomainMode('Entitlements', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.ENTITLEMENTS);
             if (mode === 'API') {
                 entitlementRepo = new ApiEntitlementRepository();
             } else if (mode === 'SUPABASE') {
@@ -268,7 +244,7 @@ export const RepositoryFactory = {
 
     getCreditTagRepository: (): ICreditTagRepository => {
         if (!creditTagRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS;
+            const mode = getDomainMode('Credit tags', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS);
             if (mode === 'API') {
                 creditTagRepo = new ApiCreditTagRepository();
             } else if (mode === 'SUPABASE') {
@@ -282,7 +258,7 @@ export const RepositoryFactory = {
 
     getCartRepository: (): ICartRepository => {
         if (!cartRepo) {
-            const mode = APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMERCE;
+            const mode = getDomainMode('Commerce cart', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.COMMERCE);
             if (mode === 'API') {
                 cartRepo = new ApiCartRepository();
             } else if (mode === 'SUPABASE') {

@@ -1,6 +1,6 @@
 
 import { UserProfile, UserRole } from '../types/index';
-import { APP_CONFIG } from '../lib/config';
+import { APP_CONFIG, assertExternalApiMode } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { DataService } from './dataService'; 
@@ -27,6 +27,40 @@ const SEED_USERS: UserProfile[] = [
 
 export const UserService = {
     getAllUsers: async (): Promise<UserProfile[]> => {
+        const internalUsersMode = APP_CONFIG.EXTERNAL_API_ONLY
+            ? 'API'
+            : (APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
+
+        assertExternalApiMode('Internal users', internalUsersMode);
+
+        if (APP_CONFIG.EXTERNAL_API_ONLY) {
+            try {
+                // In API-only mode, internal users are frontend seeds,
+                // while member journey users come from external API.
+                const crmMembers = await DataService.getMembers();
+
+                const memberUsers: UserProfile[] = crmMembers.map(m => {
+                    let role = UserRole.MEMBER;
+                    if (m.lifecycleStage === 'FACILITATOR') role = UserRole.FACILITATOR;
+
+                    return {
+                        id: m.id,
+                        fullName: m.name,
+                        email: m.email,
+                        role,
+                        avatarUrl: `https://ui-avatars.com/api/?name=${m.name.replace(' ','+')}&background=random`,
+                        provider: 'email'
+                    };
+                });
+
+                const uniqueMembers = memberUsers.filter(m => !SEED_USERS.some(s => s.email === m.email));
+                return [...SEED_USERS, ...uniqueMembers];
+            } catch (e) {
+                console.error('UserService API-only fallback error', e);
+                return SEED_USERS;
+            }
+        }
+
         if (APP_CONFIG.USE_MOCK) {
             try {
                 // 1. Get Internal Staff from DB (or Seed)
@@ -74,6 +108,7 @@ export const UserService = {
     },
 
     updateUserRole: async (userId: string, newRole: UserRole): Promise<void> => {
+        assertExternalApiMode('Internal users', APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
         if (APP_CONFIG.USE_MOCK) {
             const users = await DevDatabase.getAll<UserProfile>('sys_internal_users');
             const user = users.find(u => u.id === userId);
@@ -90,6 +125,7 @@ export const UserService = {
     },
 
     updateUserProfile: async (userId: string, updates: Partial<UserProfile>): Promise<void> => {
+        assertExternalApiMode('Internal users', APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
         if (APP_CONFIG.USE_MOCK) {
             const users = await UserService.getAllUsers(); 
             const user = users.find(u => u.id === userId);
@@ -113,6 +149,7 @@ export const UserService = {
     },
 
     addUser: async (user: UserProfile): Promise<void> => {
+        assertExternalApiMode('Internal users', APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
         if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('sys_internal_users', user);
             return;

@@ -47,13 +47,14 @@ const TagManagement: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
+            // Load Tags, Events, Wallets, and Members concurrently
             const [tagsData, eventsData, dTags, cTags, wItems, membersData] = await Promise.all([
                 CreditTagService.getAllTags(),
                 DataService.getEvents(),
                 CertificationService.getMasterTags(),
                 CreditTagService.getTagOptions(),
-                EntitlementService.getAllWalletItems(),
-                DataService.getMembers(),
+                EntitlementService.getAllWalletItems(), // NEW: For Holders View
+                DataService.getMembers() // NEW: For Name Resolution
             ]);
             setTags(tagsData);
             setEvents(eventsData);
@@ -61,15 +62,9 @@ const TagManagement: React.FC = () => {
             setAvailableCreditTags(cTags);
             setWalletItems(wItems);
             setMembers(membersData);
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Failed to load tag data';
-            showToast(msg, 'error');
-            setTags([]);
-            setEvents([]);
-            setMasterDoneTags([]);
-            setAvailableCreditTags([]);
-            setWalletItems([]);
-            setMembers([]);
+        } catch (error) {
+            console.error('Failed to load tag management data', error);
+            showToast(error instanceof Error ? error.message : 'Failed to load Credit Tag data.', 'error');
         } finally {
             setLoading(false);
         }

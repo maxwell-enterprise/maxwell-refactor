@@ -37,9 +37,7 @@ const GateConfigModal: React.FC<GateConfigModalProps> = ({ event, onClose, onSav
                 // Adapt EventTierDefinition to MasterTier shape for consistency
                 setAvailableTiers(event.tiers.map(t => ({
                     id: t.id,
-                    name: t.name,
-                    category: 'PAID', // Default assumption
-                    defaultColor: 'bg-slate-100 text-slate-600'
+                    name: t.name
                 })));
             } else {
                 const masters = await ReferenceService.getMasterTiers();

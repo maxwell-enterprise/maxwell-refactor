@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Campaign, Product, Discount, CampaignCategory } from '../types/index';
-import { STORE_PRODUCTS, DISCOUNT_DATA } from '../constants';
 import { CampaignService } from '../services/campaignService';
 import { AIService, MarketingInsight } from '../services/aiService';
+import { DataService } from '../services/dataService';
+import { DiscountService } from '../services/discountService';
 import { useToast } from '../context/ToastContext';
 import { useAccess } from '../context/SecurityContext'; 
 import { 
@@ -21,7 +22,8 @@ const Marketing: React.FC = () => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'create' | 'analytics'>('create');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [discounts, setDiscounts] = useState<Discount[]>(DISCOUNT_DATA);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(false);
   const [aiInsights, setAiInsights] = useState<MarketingInsight[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -43,14 +45,26 @@ const Marketing: React.FC = () => {
   });
 
   useEffect(() => {
-      loadCampaigns();
+      loadCampaignContext();
   }, []);
 
-  const loadCampaigns = async () => {
+  const loadCampaignContext = async () => {
       setLoading(true);
-      const data = await CampaignService.getCampaigns();
-      setCampaigns(data);
-      setLoading(false);
+      try {
+          const [campaignData, productData, discountData] = await Promise.all([
+              CampaignService.getCampaigns(),
+              DataService.getProducts(),
+              DiscountService.getDiscounts()
+          ]);
+          setCampaigns(campaignData);
+          setProducts(productData);
+          setDiscounts(discountData);
+      } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to load campaign data';
+          showToast(message, 'error');
+      } finally {
+          setLoading(false);
+      }
   };
 
   const runAnalysis = async () => {
@@ -100,27 +114,32 @@ const Marketing: React.FC = () => {
           return;
       }
 
-      if (editingId) {
-          await CampaignService.updateCampaign(editingId, {
-              name: formData.name,
-              category: formData.category,
-              targetProductId: formData.productId,
-              linkedDiscountCode: formData.discountCode
-          });
-          showToast('Campaign updated successfully', 'success');
-      } else {
-          await CampaignService.createCampaign({
-              name: formData.name,
-              sourceCode: formData.sourceCode.replace(/\s+/g, '_').toLowerCase(),
-              category: formData.category,
-              targetProductId: formData.productId,
-              linkedDiscountCode: formData.discountCode
-          });
-          showToast('Campaign link generated successfully', 'success');
-      }
+      try {
+          if (editingId) {
+              await CampaignService.updateCampaign(editingId, {
+                  name: formData.name,
+                  category: formData.category,
+                  targetProductId: formData.productId,
+                  linkedDiscountCode: formData.discountCode
+              });
+              showToast('Campaign updated successfully', 'success');
+          } else {
+              await CampaignService.createCampaign({
+                  name: formData.name,
+                  sourceCode: formData.sourceCode.replace(/\s+/g, '_').toLowerCase(),
+                  category: formData.category,
+                  targetProductId: formData.productId,
+                  linkedDiscountCode: formData.discountCode
+              });
+              showToast('Campaign link generated successfully', 'success');
+          }
 
-      handleCancelEdit();
-      loadCampaigns();
+          handleCancelEdit();
+          loadCampaignContext();
+      } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to save campaign';
+          showToast(message, 'error');
+      }
   };
 
   // --- EXCEL ACTIONS ---
@@ -154,23 +173,21 @@ const Marketing: React.FC = () => {
       if(!file) return;
       try {
           const raw = await ExcelHelper.importFromExcel<any>(file);
-          let count = 0;
-          for(const r of raw) {
-              if(r.Name && r.SourceCode) {
-                  await CampaignService.createCampaign({
-                      name: r.Name,
-                      sourceCode: r.SourceCode,
-                      category: r.Category || 'OTHER',
-                      targetProductId: r['Target Product ID'],
-                      linkedDiscountCode: r['Voucher Code']
-                  });
-                  count++;
-              }
-          }
-          loadCampaigns();
-          showToast(`Imported ${count} campaigns.`, 'success');
+          const items = raw
+              .filter(r => r.Name && r.SourceCode)
+              .map(r => ({
+                  name: r.Name,
+                  sourceCode: r.SourceCode,
+                  category: r.Category || 'OTHER',
+                  targetProductId: r['Target Product ID'],
+                  linkedDiscountCode: r['Voucher Code']
+              }));
+          const result = await CampaignService.bulkUpsertCampaigns(items);
+          await loadCampaignContext();
+          showToast(`Imported ${result.total} campaigns.`, 'success');
       } catch (err) {
-          showToast('Import failed.', 'error');
+          const message = err instanceof Error ? err.message : 'Import failed.';
+          showToast(message, 'error');
       }
       if(fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -305,7 +322,7 @@ const Marketing: React.FC = () => {
                             onChange={e => setFormData({...formData, productId: e.target.value})}
                         >
                             <option value="">-- Redirect to Store Home --</option>
-                            {STORE_PRODUCTS.map(p => (
+                            {products.map(p => (
                                 <option key={p.id} value={p.id}>{p.title}</option>
                             ))}
                         </select>
@@ -319,7 +336,7 @@ const Marketing: React.FC = () => {
                             onChange={e => setFormData({...formData, discountCode: e.target.value})}
                         >
                             <option value="">-- No Discount --</option>
-                            {DISCOUNT_DATA.map(d => (
+                            {discounts.map(d => (
                                 <option key={d.id} value={d.code}>{d.code} ({d.value}{d.type === 'PERCENTAGE' ? '%' : ''} Off)</option>
                             ))}
                         </select>

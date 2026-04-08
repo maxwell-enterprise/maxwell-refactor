@@ -2,7 +2,7 @@
 import { Discount, Product, UserRole } from '../types/index';
 import { UserEntitlements } from '../types/access';
 import { DISCOUNT_DATA } from '../constants';
-import { APP_CONFIG } from '../lib/config';
+import { APP_CONFIG, assertExternalApiMode, BackendMode } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { apiRequest } from '../repositories/api/apiClient';
@@ -22,12 +22,20 @@ const SEED_LOGS: DiscountRedemptionLog[] = [
     { id: 'RED-1', discountCode: 'WELCOME20', orderAmount: 30000000, discountAmount: 6000000, userId: 'M002', timestamp: '2024-03-01T10:00:00Z' }
 ];
 
+const shouldUseApi = () =>
+    !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.OPS === 'API';
+
+const getDiscountMode = (): BackendMode =>
+    shouldUseApi() ? 'API' : APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE';
+
 export const DiscountService = {
   
   getDiscounts: async (): Promise<Discount[]> => {
-      if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
-          return apiRequest<Discount[]>('/store/discounts');
+      assertExternalApiMode('Discount vouchers', getDiscountMode());
+      if (shouldUseApi()) {
+          return await apiRequest<Discount[]>('/store/discounts');
       }
+
       if (APP_CONFIG.USE_MOCK) {
           try {
               if (await DevDatabase.isEmpty('discounts')) {
@@ -43,13 +51,15 @@ export const DiscountService = {
   },
 
   createDiscount: async (discount: Discount): Promise<void> => {
-      if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
-          await apiRequest(`/store/discounts/${encodeURIComponent(discount.id)}`, {
+      assertExternalApiMode('Discount vouchers', getDiscountMode());
+      if (shouldUseApi()) {
+          await apiRequest<void>(`/store/discounts/${encodeURIComponent(discount.id)}`, {
               method: 'PUT',
-              body: JSON.stringify(discount),
+              body: JSON.stringify(discount)
           });
           return;
       }
+
       if (APP_CONFIG.USE_MOCK) {
           await DevDatabase.add('discounts', discount);
           return;
@@ -60,19 +70,39 @@ export const DiscountService = {
 
   // NEW: Support updating discount
   upsertDiscount: async (discount: Discount): Promise<void> => {
-      if (!APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.COMMERCE === 'API') {
-          await apiRequest(`/store/discounts/${encodeURIComponent(discount.id)}`, {
+      assertExternalApiMode('Discount vouchers', getDiscountMode());
+      if (shouldUseApi()) {
+          await apiRequest<void>(`/store/discounts/${encodeURIComponent(discount.id)}`, {
               method: 'PUT',
-              body: JSON.stringify(discount),
+              body: JSON.stringify(discount)
           });
           return;
       }
+
       if (APP_CONFIG.USE_MOCK) {
           await DevDatabase.add('discounts', discount);
           return;
       }
       if (!supabase) return;
       await supabase.from('discounts').upsert(discount);
+  },
+
+  deleteDiscount: async (id: string): Promise<void> => {
+      assertExternalApiMode('Discount vouchers', getDiscountMode());
+      if (shouldUseApi()) {
+          await apiRequest<void>(`/store/discounts/${encodeURIComponent(id)}`, {
+              method: 'DELETE'
+          });
+          return;
+      }
+
+      if (APP_CONFIG.USE_MOCK) {
+          await DevDatabase.delete('discounts', id);
+          return;
+      }
+
+      if (!supabase) return;
+      await supabase.from('discounts').delete().eq('id', id);
   },
 
   findByCode: async (code: string): Promise<Discount | undefined> => {
@@ -137,6 +167,8 @@ export const DiscountService = {
           timestamp: new Date().toISOString()
       };
 
+      assertExternalApiMode('Discount vouchers', getDiscountMode());
+
       if (APP_CONFIG.USE_MOCK) {
           await DevDatabase.add('discount_redemption_logs', log);
           
@@ -161,6 +193,7 @@ export const DiscountService = {
   },
 
   getLogs: async (): Promise<DiscountRedemptionLog[]> => {
+      assertExternalApiMode('Discount vouchers', getDiscountMode());
       if (APP_CONFIG.USE_MOCK) {
           try {
               if (await DevDatabase.isEmpty('discount_redemption_logs')) await DevDatabase.bulkAdd('discount_redemption_logs', SEED_LOGS);

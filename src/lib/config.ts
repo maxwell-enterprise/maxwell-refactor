@@ -71,6 +71,7 @@ function resolveApiBaseUrl(): string {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const apiBaseUrl = resolveApiBaseUrl();
+const externalApiOnly = process.env.NEXT_PUBLIC_EXTERNAL_API_ONLY === 'true';
 
 const hasSupabaseKeys = !!(supabaseUrl && supabaseAnonKey);
 
@@ -102,6 +103,7 @@ function resolveDomainMode(preferred: string | undefined): BackendMode {
 export const APP_CONFIG = {
   // GLOBAL FORCE MOCK (Overrides everything else if true)
   USE_MOCK_GLOBAL: false, 
+  EXTERNAL_API_ONLY: externalApiOnly,
   
   // Supabase Credentials
   SUPABASE_URL: supabaseUrl,
@@ -118,10 +120,8 @@ export const APP_CONFIG = {
     PAYMENTS:       resolveDomainMode(process.env.NEXT_PUBLIC_PAYMENTS_BACKEND),
     EVENTS:         resolveDomainMode(process.env.NEXT_PUBLIC_EVENTS_BACKEND),
     OPS:            resolveDomainMode(process.env.NEXT_PUBLIC_OPS_BACKEND),
-    /** Badges, rules, profiles → Nest `/fe/gamification/*` when API */
-    GAMIFICATION:   resolveDomainMode(process.env.NEXT_PUBLIC_GAMIFICATION_BACKEND),
-    /** Email, WA, PDF templates → Nest `/fe/communication/*` when API */
-    COMMUNICATION:  resolveDomainMode(process.env.NEXT_PUBLIC_COMMUNICATION_BACKEND),
+    GAMIFICATION:   (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode,
+    COMMUNICATION:  resolveDomainMode(process.env.NEXT_PUBLIC_COMMUNICATION_BACKEND), // Email & WA
     CONTENT:        (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // CMS
     COMMERCE:       resolveDomainMode(process.env.NEXT_PUBLIC_COMMERCE_BACKEND),
     /** Automations, security logs, AI usage, DB meta — Nest `/fe/system/*` when `API` */
@@ -137,11 +137,20 @@ export const APP_CONFIG = {
 
   // FEATURE FLAGS
   FEATURES: {
-    AUTH: hasSupabaseKeys
+    AUTH: hasSupabaseKeys && !externalApiOnly,
   },
 
   // Legacy compatibility getter
   get USE_MOCK() {
+    if (this.EXTERNAL_API_ONLY) return false;
     return this.USE_MOCK_GLOBAL || !hasSupabaseKeys;
   }
 };
+
+export function assertExternalApiMode(feature: string, mode: BackendMode): void {
+  if (externalApiOnly && mode !== 'API') {
+    throw new Error(
+      `[External API Only] ${feature} is not allowed to use ${mode}. Configure an API backend before testing this feature.`,
+    );
+  }
+}

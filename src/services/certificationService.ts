@@ -4,7 +4,7 @@ import { CertificationRule, MasterDoneTag, MemberAchievement } from '../types/ce
 import { CERTIFICATION_RULES_SEED } from '../seeds/certification_rules';
 import { SEED_MASTER_DONE_TAGS } from '../seeds/master_done_tags';
 import { DevDatabase } from '../utils/devDatabase';
-import { APP_CONFIG } from '../lib/config';
+import { APP_CONFIG, assertExternalApiMode, BackendMode } from '../lib/config';
 import { supabase } from '../lib/supabaseClient';
 import { EventBus } from './eventBus';
 import { AuditService } from './auditService'; // Import Audit
@@ -15,9 +15,8 @@ const shouldUseApi = () =>
     !APP_CONFIG.USE_MOCK_GLOBAL &&
     (APP_CONFIG.DOMAINS.OPS === 'API' || APP_CONFIG.DOMAINS.EVENTS === 'API');
 
-/** Persist members to Nest when the members domain is on API (not IndexedDB/Supabase client). */
-const membersViaApi = () =>
-    !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.MEMBERS === 'API';
+const getMasterTagMode = (): BackendMode =>
+    shouldUseApi() ? 'API' : APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE';
 
 interface ApiMasterDoneTag {
     id: string;
@@ -124,6 +123,7 @@ export const CertificationService = {
 
     // --- NEW: MASTER TAG MANAGEMENT ---
     getMasterTags: async (): Promise<MasterDoneTag[]> => {
+        assertExternalApiMode('Master done tags', getMasterTagMode());
         if (shouldUseApi()) {
             const data = await apiRequest<ApiMasterDoneTag[]>('/master-done-tags');
             return data.map(mapApiMasterDoneTag);
@@ -144,6 +144,7 @@ export const CertificationService = {
     },
 
     saveMasterTag: async (tag: MasterDoneTag): Promise<void> => {
+        assertExternalApiMode('Master done tags', getMasterTagMode());
         if (shouldUseApi()) {
             const payload = JSON.stringify({
                 code: tag.code,

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { MasterTier } from '../../../types/reference';
 import { ReferenceService } from '../../../services/referenceService';
 import { useToast } from '../../../context/ToastContext';
-import { Save, Trash2, Plus, Edit3, X, Layers, Tag } from 'lucide-react';
+import { Trash2, Plus, Edit3, X, Layers } from 'lucide-react';
 
 const MasterTierConfig: React.FC = () => {
     const { showToast } = useToast();
@@ -27,8 +27,8 @@ const MasterTierConfig: React.FC = () => {
         setEditForm({
             id: '',
             name: '',
-            category: 'PAID',
-            defaultColor: 'bg-slate-100 text-slate-600'
+            description: '',
+            basePriceIdr: undefined
         });
         setIsEditing(true);
     };
@@ -38,9 +38,9 @@ const MasterTierConfig: React.FC = () => {
         setIsEditing(true);
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (tier: MasterTier) => {
         if (confirm("Delete this Master Tier? This will not affect existing events, but will remove it from the selection list.")) {
-            await ReferenceService.deleteMasterTier(id);
+            await ReferenceService.deleteMasterTier(tier);
             showToast('Tier deleted', 'info');
             loadTiers();
         }
@@ -77,19 +77,26 @@ const MasterTierConfig: React.FC = () => {
                     {tiers.map(tier => (
                         <div key={tier.id} className="p-4 border border-slate-200 rounded-xl hover:shadow-md transition-shadow relative group">
                             <div className="flex justify-between items-start mb-2">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase border ${tier.category === 'PAID' ? 'bg-green-50 border-green-200 text-green-700' : tier.category === 'STAFF' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                                    {tier.category}
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase border bg-slate-50 border-slate-200 text-slate-500">
+                                    Master Tier
                                 </span>
                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => handleEdit(tier)} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 rounded"><Edit3 size={14}/></button>
-                                    <button onClick={() => handleDelete(tier.id)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded"><Trash2 size={14}/></button>
+                                    <button onClick={() => handleDelete(tier)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded"><Trash2 size={14}/></button>
                                 </div>
                             </div>
                             <h4 className="font-bold text-slate-900">{tier.name}</h4>
                             <div className="flex items-center mt-2">
                                 <span className="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 rounded">{tier.id}</span>
                             </div>
-                            <div className={`mt-3 h-2 rounded-full w-full ${tier.defaultColor?.split(' ')[0] || 'bg-slate-200'}`}></div>
+                            {tier.description && (
+                                <p className="mt-3 text-xs text-slate-500 line-clamp-2">{tier.description}</p>
+                            )}
+                            {tier.basePriceIdr !== undefined && (
+                                <div className="mt-3 text-xs font-semibold text-slate-700">
+                                    Base price: Rp {tier.basePriceIdr.toLocaleString('id-ID')}
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -105,7 +112,7 @@ const MasterTierConfig: React.FC = () => {
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Unique Code (ID)</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Unique Code</label>
                                 <input 
                                     type="text" className="w-full p-2 border border-slate-300 rounded text-sm uppercase font-mono"
                                     value={editForm.id} onChange={e => setEditForm({...editForm, id: e.target.value.toUpperCase().replace(/\s/g, '_')})}
@@ -121,15 +128,27 @@ const MasterTierConfig: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Category</label>
-                                <select 
-                                    className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
-                                    value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value as any})}
-                                >
-                                    <option value="PAID">Paid Ticket</option>
-                                    <option value="COMPLIMENTARY">Complimentary / Guest</option>
-                                    <option value="STAFF">Staff / Crew</option>
-                                </select>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
+                                <textarea
+                                    className="w-full p-2 border border-slate-300 rounded text-sm min-h-24 resize-none"
+                                    value={editForm.description || ''}
+                                    onChange={e => setEditForm({...editForm, description: e.target.value})}
+                                    placeholder="Optional description"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Base Price (IDR)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    className="w-full p-2 border border-slate-300 rounded text-sm"
+                                    value={editForm.basePriceIdr ?? ''}
+                                    onChange={e => setEditForm({
+                                        ...editForm,
+                                        basePriceIdr: e.target.value === '' ? undefined : Number(e.target.value),
+                                    })}
+                                    placeholder="Optional"
+                                />
                             </div>
                             
                             <button onClick={handleSave} className="w-full py-2.5 bg-indigo-600 text-white rounded-lg font-bold shadow-md hover:bg-indigo-700 mt-2">

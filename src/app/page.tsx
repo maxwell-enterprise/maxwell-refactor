@@ -1,6 +1,13 @@
-"use client";
+ "use client";
 
-import { HomeRoutePage } from "../features/auth";
+import dynamic from "next/dynamic";
+
+const HomeRoutePage = dynamic(
+  () => import("../features/auth").then((mod) => mod.HomeRoutePage),
+  {
+    ssr: false,
+  },
+);
 
 export default function Home() {
   return <HomeRoutePage />;
