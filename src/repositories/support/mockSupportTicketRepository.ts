@@ -33,4 +33,12 @@ export class MockSupportTicketRepository implements ISupportTicketRepository {
 
     await DevDatabase.add('support_tickets', { ...existing, ...updates });
   }
+
+  async resolve(id: string, resolution: string): Promise<void> {
+    await this.update(id, {
+      status: 'RESOLVED',
+      updatedAt: new Date().toISOString(),
+      description: resolution ? `${resolution}` : undefined,
+    });
+  }
 }

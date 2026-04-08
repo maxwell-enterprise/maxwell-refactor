@@ -2,6 +2,7 @@
 import { OpsService } from './opsService';
 import { SupportService } from './supportService';
 import { UserRole } from '../types/index';
+import { OpsChecklist } from '../types/ops';
 
 export interface UnifiedTask {
     id: string;
@@ -29,7 +30,12 @@ export const TaskService = {
         const tasks: UnifiedTask[] = [];
 
         // 1. Fetch Ops Tasks
-        const checklists = await OpsService.getChecklists();
+        let checklists: OpsChecklist[] = [];
+        try {
+            checklists = await OpsService.getChecklists();
+        } catch (error) {
+            console.warn('[TaskService] Failed to fetch OPS checklists:', error);
+        }
         
         checklists.forEach(checklist => {
             if (checklist.status === 'COMPLETED') return; 

@@ -16,4 +16,8 @@ export class NoopSupportTicketRepository implements ISupportTicketRepository {
   async update(): Promise<void> {
     throw new Error(SUPPORT_BACKEND_ERROR);
   }
+
+  async resolve(): Promise<void> {
+    throw new Error(SUPPORT_BACKEND_ERROR);
+  }
 }

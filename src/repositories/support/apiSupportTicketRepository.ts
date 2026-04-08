@@ -2,9 +2,7 @@ import { SupportTicket } from '../../types/index';
 import { apiRequest } from '../api/apiClient';
 import { ISupportTicketRepository } from './types';
 
-// Placeholder path for the future BE contract.
-// When the backend endpoint is finalized, adjust SUPPORT_TICKETS_PATH only.
-const SUPPORT_TICKETS_PATH = '/support/tickets';
+const SUPPORT_TICKETS_PATH = '/store/support-tickets';
 
 export class ApiSupportTicketRepository implements ISupportTicketRepository {
   async getAll(): Promise<SupportTicket[]> {
@@ -23,5 +21,15 @@ export class ApiSupportTicketRepository implements ISupportTicketRepository {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
+  }
+
+  async resolve(id: string, resolution: string): Promise<void> {
+    await apiRequest<void>(
+      `${SUPPORT_TICKETS_PATH}/${encodeURIComponent(id)}/resolve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ resolution }),
+      },
+    );
   }
 }

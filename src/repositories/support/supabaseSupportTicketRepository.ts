@@ -44,4 +44,12 @@ export class SupabaseSupportTicketRepository implements ISupportTicketRepository
       throw error;
     }
   }
+
+  async resolve(id: string, resolution: string): Promise<void> {
+    await this.update(id, {
+      status: 'RESOLVED',
+      updatedAt: new Date().toISOString(),
+      ...(resolution ? { description: resolution } : {}),
+    });
+  }
 }

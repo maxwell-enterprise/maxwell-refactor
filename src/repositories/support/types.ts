@@ -4,4 +4,5 @@ export interface ISupportTicketRepository {
   getAll(): Promise<SupportTicket[]>;
   create(ticket: SupportTicket): Promise<SupportTicket>;
   update(id: string, updates: Partial<SupportTicket>): Promise<void>;
+  resolve(id: string, resolution: string): Promise<void>;
 }

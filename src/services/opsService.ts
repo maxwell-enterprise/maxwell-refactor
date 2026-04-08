@@ -2,8 +2,8 @@
 import { OpsChecklist, OpsTemplate, OpsTaskStatus, SystemTriggerType, OpsTask } from '../types/ops';
 import { UserRole, InventoryMovementType, InventoryItem, InventoryTransaction } from '../types/index';
 import { RepositoryFactory } from './repositories/index';
-import { WhatsAppService } from './whatsappService';
 import { AuditService } from './auditService'; 
+import { apiRequest } from '../repositories/api/apiClient';
 
 export const OpsService = {
     
@@ -65,61 +65,18 @@ export const OpsService = {
     },
 
     updateTaskStatus: async (checklistId: string, taskId: string, status: OpsTaskStatus, actorRole: UserRole, note: string): Promise<OpsChecklist | null> => {
-        const repo = RepositoryFactory.getWorkflowRepository();
-        const checklists = await repo.getChecklists();
-        const checklist = checklists.find(c => c.id === checklistId);
-        if (!checklist) return null;
-
-        const task = checklist.tasks.find(t => t.id === taskId);
-        if (!task) return null;
-
-        // Update Task
-        task.status = status;
-        if (status === 'COMPLETED') {
-            task.completedAt = new Date().toISOString();
-            task.completedBy = actorRole;
-
-            // HOOK: SHIPPING UPDATE (Business Logic kept in Service)
-            if ((task.title.includes('AWB') || task.title.includes('Tracking')) && note) {
-                WhatsAppService.processSystemTrigger('SHIPPING_UPDATED',
-                    { name: checklist.memberName, phone: '62812345678' }, 
-                    {
-                        tracking_number: note, 
-                        courier: 'JNE / Partner',
-                        items: checklist.productName
-                    }
-                );
+        const updatedChecklist = await apiRequest<OpsChecklist>(
+            `/store/ops-checklists/${encodeURIComponent(checklistId)}/tasks/${encodeURIComponent(taskId)}/status`,
+            {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    status,
+                    actorRole,
+                    note
+                })
             }
-            
-            // LOG TO MEMBER JOURNEY
-            await AuditService.logRealtimeEvent({
-                userId: checklist.memberId,
-                category: 'SYSTEM',
-                title: `Task Completed: ${task.title}`,
-                description: `Ops team completed task. Note: ${note}`,
-                metadata: { checklistId, taskId, actorRole }
-            });
-        }
-        
-        // Add Log
-        task.logs.push({
-            timestamp: new Date().toISOString(),
-            actor: actorRole,
-            action: 'STATUS_CHANGE',
-            note: `Changed status to ${status}. Note: ${note}`
-        });
-
-        // Recalculate Progress
-        const total = checklist.tasks.length;
-        const done = checklist.tasks.filter(t => t.status === 'COMPLETED' || t.status === 'SKIPPED').length;
-        checklist.progress = Math.round((done / total) * 100);
-        if (checklist.progress === 100) checklist.status = 'COMPLETED';
-        checklist.updatedAt = new Date().toISOString();
-
-        // Persist via Repo
-        await repo.saveChecklist(checklist);
-
-        return checklist;
+        );
+        return updatedChecklist ?? null;
     },
 
     // --- TEMPLATES (MIGRATED TO REPO) ---

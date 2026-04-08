@@ -2,34 +2,38 @@
 import React, { useEffect, useState } from 'react';
 import { TaskService, UnifiedTask } from '../services/taskService';
 import { OpsService } from '../services/opsService';
+import { SupportService } from '../services/supportService';
 import { OpsTask, OpsTaskStatus } from '../types/ops';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
-    ClipboardList, LifeBuoy, Clock, CheckCircle2, AlertCircle, 
-    ArrowRight, RefreshCw, Zap, Search, Filter, Calendar, User, 
-    LayoutGrid, List as ListIcon, ChevronRight
+    ClipboardList, LifeBuoy, CheckCircle2, 
+    RefreshCw, Search, ChevronRight
 } from 'lucide-react';
 import TaskActionModal from './ops/TaskActionModal';
 import TicketResolutionModal from './support/TicketResolutionModal';
 
 const MyTasks: React.FC = () => {
   const { userRole } = useAuth();
-  // Fix: changed showToast() call to useToast() hook
   const { showToast } = useToast();
   const [tasks, setTasks] = useState<UnifiedTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // --- MODAL STATE ---
   const [selectedOpsTask, setSelectedOpsTask] = useState<OpsTask | null>(null);
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<UnifiedTask | null>(null);
 
   const loadTasks = async () => {
       setLoading(true);
-      const data = await TaskService.getMyTasks(userRole);
-      setTasks(data);
+      try {
+          const data = await TaskService.getMyTasks(userRole);
+          setTasks(data);
+      } catch (error) {
+          console.error('[MyTasks] Failed to load tasks:', error);
+          showToast('Failed to load Action Center data', 'error');
+          setTasks([]);
+      }
       setLoading(false);
   };
 
@@ -61,11 +65,11 @@ const MyTasks: React.FC = () => {
       }
   };
 
-  const handleTicketResolve = (taskId: string, resolution: string) => {
-      // In real app: await TicketService.resolve(taskId, resolution)
+  const handleTicketResolve = async (taskId: string, resolution: string) => {
+      await SupportService.resolveTicket(taskId, resolution);
       showToast("Ticket resolved and member notified", "success");
-      setTasks(prev => prev.filter(t => t.id !== taskId));
       setSelectedTicket(null);
+      loadTasks();
   };
 
   const filteredTasks = tasks.filter(t => 
@@ -83,7 +87,6 @@ const MyTasks: React.FC = () => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6 animate-fade-in pb-24">
-        {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -110,7 +113,6 @@ const MyTasks: React.FC = () => {
             </div>
         </div>
 
-        {/* Task Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {loading ? (
                 Array.from({length: 4}).map((_, i) => <div key={i} className="h-40 bg-slate-100 rounded-2xl animate-pulse"></div>)
@@ -127,7 +129,6 @@ const MyTasks: React.FC = () => {
                         onClick={() => handleTaskClick(task)}
                         className="group bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-400 hover:shadow-xl hover:shadow-blue-500/5 transition-all cursor-pointer relative overflow-hidden flex flex-col"
                     >
-                        {/* Source Badge & Priority */}
                         <div className="flex justify-between items-start mb-4">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border ${getSourceStyle(task.source)}`}>
                                 {task.source === 'OPS' ? <ClipboardList size={12} className="mr-1"/> : <LifeBuoy size={12} className="mr-1"/>}
@@ -138,7 +139,6 @@ const MyTasks: React.FC = () => {
                             </span>
                         </div>
 
-                        {/* Title & Description */}
                         <div className="mb-4 flex-1">
                             <h3 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
                                 {task.title.replace('Ticket: ', '')}
@@ -148,7 +148,6 @@ const MyTasks: React.FC = () => {
                             </p>
                         </div>
 
-                        {/* Footer Context */}
                         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 border border-slate-200">
@@ -163,14 +162,12 @@ const MyTasks: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Bottom Status Bar */}
                         <div className={`absolute bottom-0 left-0 h-1 bg-blue-600 transition-all duration-300 ${task.status === 'IN_PROGRESS' ? 'w-1/2' : 'w-0 group-hover:w-full'}`}></div>
                     </div>
                 ))
             )}
         </div>
 
-        {/* MODALS */}
         {selectedOpsTask && (
             <TaskActionModal 
                 task={selectedOpsTask} 

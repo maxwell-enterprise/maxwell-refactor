@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { OpsTemplate, OpsTemplateItem, SystemTriggerType, OpsTaskType } from '../../../types/ops';
-import { UserRole } from '../../../types/index';
-import { AUTOMATION_CATALOG } from '../../../constants/opsCatalog';
-import { STORE_PRODUCTS } from '../../../constants';
+import { OpsTemplate, OpsTemplateItem } from '../../../types/ops';
+import { Product, UserRole } from '../../../types/index';
+import { DataService } from '../../../services/dataService';
+import { apiRequest } from '../../../repositories/api/apiClient';
 import { Save, Plus, Trash2, ArrowDown, Settings, Zap, Briefcase, Clock, GripVertical, CheckCircle2 } from 'lucide-react';
 
 interface WorkflowEditorProps {
@@ -12,9 +12,53 @@ interface WorkflowEditorProps {
     onCancel: () => void;
 }
 
+interface OpsSystemTriggerOption {
+    id: string;
+    label: string;
+    category: 'FINANCE' | 'EVENT' | 'SYSTEM' | 'LOGISTICS' | string;
+    description: string;
+}
+
 const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ template, onSave, onCancel }) => {
     // Deep copy to prevent mutation issues
     const [formData, setFormData] = useState<OpsTemplate>(JSON.parse(JSON.stringify(template)));
+    const [products, setProducts] = useState<Product[]>([]);
+    const [productsLoading, setProductsLoading] = useState(false);
+    const [systemTriggers, setSystemTriggers] = useState<OpsSystemTriggerOption[]>([]);
+    const [systemTriggersLoading, setSystemTriggersLoading] = useState(false);
+
+    useEffect(() => {
+        const loadProducts = async () => {
+            setProductsLoading(true);
+            try {
+                const data = await DataService.getProducts();
+                const activeProducts = data.filter(p => p.isActive !== false);
+                setProducts(activeProducts);
+            } catch (error) {
+                console.error('[WorkflowEditor] Failed to fetch products:', error);
+                setProducts([]);
+            } finally {
+                setProductsLoading(false);
+            }
+        };
+        loadProducts();
+    }, []);
+
+    useEffect(() => {
+        const loadSystemTriggers = async () => {
+            setSystemTriggersLoading(true);
+            try {
+                const data = await apiRequest<OpsSystemTriggerOption[]>('/store/ops-system-triggers');
+                setSystemTriggers(data);
+            } catch (error) {
+                console.error('[WorkflowEditor] Failed to fetch system triggers:', error);
+                setSystemTriggers([]);
+            } finally {
+                setSystemTriggersLoading(false);
+            }
+        };
+        loadSystemTriggers();
+    }, []);
 
     // FIX: Use functional update pattern to ensure array reliability
     const handleAddItem = () => {
@@ -116,7 +160,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ template, onSave, onCan
                                     onChange={e => setFormData({...formData, triggerProductId: e.target.value})}
                                 >
                                     <option value="ALL">Any Product</option>
-                                    {STORE_PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                                    {products.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
                                 </select>
                             ) : (
                                 <select 
@@ -125,12 +169,18 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ template, onSave, onCan
                                     onChange={e => setFormData({...formData, triggerEventId: e.target.value as any})}
                                 >
                                     <option value="">-- Select Event --</option>
-                                    {AUTOMATION_CATALOG.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                    {systemTriggers.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                                 </select>
                             )}
                             <p className="text-[10px] text-slate-400 mt-2 leading-snug">
                                 This workflow will automatically generate a checklist in "Ops Center" when this event occurs.
                             </p>
+                            {formData.triggerType === 'PRODUCT_PURCHASE' && productsLoading && (
+                                <p className="text-[10px] text-slate-400 mt-1">Loading products from API...</p>
+                            )}
+                            {formData.triggerType === 'SYSTEM_EVENT' && systemTriggersLoading && (
+                                <p className="text-[10px] text-slate-400 mt-1">Loading system events from API...</p>
+                            )}
                         </div>
 
                         <div>
@@ -252,7 +302,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ template, onSave, onCan
                                                             onChange={e => updateItem(idx, 'systemTrigger', e.target.value)}
                                                         >
                                                             <option value="">-- When should this auto-complete? --</option>
-                                                            {AUTOMATION_CATALOG.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                                            {systemTriggers.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                                                         </select>
                                                         <div className="text-[10px] text-purple-600 mt-1 flex items-center">
                                                             <CheckCircle2 size={10} className="mr-1"/> 

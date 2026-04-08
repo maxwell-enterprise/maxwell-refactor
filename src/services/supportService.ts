@@ -45,7 +45,13 @@ function getSupportRepository(): ISupportTicketRepository {
 export const SupportService = {
     
     getTickets: async (): Promise<SupportTicket[]> => {
-        return await getSupportRepository().getAll();
+        try {
+            return await getSupportRepository().getAll();
+        } catch (error) {
+            // Keep Action Center operational even when support endpoint is not ready.
+            console.warn('[SupportService] Failed to fetch tickets:', error);
+            return [];
+        }
     },
 
     createTicket: async (ticket: Partial<SupportTicket>): Promise<SupportTicket> => {
@@ -73,7 +79,6 @@ export const SupportService = {
     },
 
     resolveTicket: async (id: string, resolution: string): Promise<void> => {
-        // In future, log resolution text to a separate table or notes field
-        await SupportService.updateTicket(id, { status: 'RESOLVED' });
+        await getSupportRepository().resolve(id, resolution);
     }
 };

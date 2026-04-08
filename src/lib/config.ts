@@ -84,7 +84,7 @@ export const APP_CONFIG = {
 
   // FEATURE FLAGS
   FEATURES: {
-    AUTH: hasSupabaseKeys && !externalApiOnly
+    AUTH: hasSupabaseKeys && !externalApiOnly,
   },
 
   // Legacy compatibility getter
