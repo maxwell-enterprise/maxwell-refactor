@@ -25,26 +25,50 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-        setLoading(true);
-        Promise.all([
-            EntitlementService.getMyWallet(user.id),
-            EntitlementService.getUserEntitlements(user.id),
-            ContractService.getMyContracts(user.id) 
-        ]).then(([walletItems, userEntitlements, contracts]) => {
-            setWallet(walletItems);
-            // Logic: Find next ACTIVE ticket sorted by date
-            const tickets = walletItems
-                .filter(i => i.type === 'TICKET' && i.status === 'ACTIVE' && i.expiryDate)
-                .sort((a,b) => new Date(a.expiryDate!).getTime() - new Date(b.expiryDate!).getTime());
-            
-            setNextEvent(tickets.length > 0 ? tickets[0] : null);
-            setEntitlements(userEntitlements);
-            const unsigned = contracts.find(c => c.status === 'PUBLISHED');
-            if (unsigned) setPendingContract(unsigned);
-            setLoading(false);
-        });
-    }
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [walletItems, userEntitlements, contracts] = await Promise.all([
+          EntitlementService.getMyWallet(user.id),
+          EntitlementService.getUserEntitlements(user.id),
+          ContractService.getMyContracts(user.id),
+        ]);
+        if (cancelled) return;
+        setWallet(walletItems);
+        const tickets = walletItems
+          .filter(
+            (i) =>
+              i.type === 'TICKET' &&
+              i.status === 'ACTIVE' &&
+              i.expiryDate,
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.expiryDate!).getTime() -
+              new Date(b.expiryDate!).getTime(),
+          );
+        setNextEvent(tickets.length > 0 ? tickets[0] : null);
+        setEntitlements(userEntitlements);
+        const unsigned = contracts.find((c) => c.status === 'PUBLISHED');
+        if (unsigned) setPendingContract(unsigned);
+        else setPendingContract(null);
+      } catch (e) {
+        console.error('[MemberDashboard] load failed', e);
+        if (!cancelled) {
+          setWallet([]);
+          setNextEvent(null);
+          setEntitlements(null);
+          setPendingContract(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const STAGES: { id: LifecycleStage, label: string }[] = [
@@ -56,8 +80,23 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
       { id: 'FACILITATOR', label: 'Facilitator' },
   ];
 
-  const currentStage = entitlements?.attributes.lifecycle || 'GUEST';
-  const currentStageIdx = STAGES.findIndex(s => s.id === currentStage);
+  const currentStage = entitlements?.attributes?.lifecycle ?? 'GUEST';
+  const currentStageIdx = Math.max(
+    0,
+    STAGES.findIndex((s) => s.id === currentStage),
+  );
+
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-fade-in pb-24">
+        <div className="h-10 w-64 bg-slate-200 rounded-xl animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 h-64 bg-slate-100 rounded-[2rem] animate-pulse" />
+          <div className="h-72 bg-slate-100 rounded-2xl animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8 animate-fade-in pb-24">

@@ -1,15 +1,46 @@
 
-import React, { useState, useMemo } from 'react';
-import { TRIGGER_CATALOG } from '../../constants/triggerCatalog';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TriggerDefinition, TriggerCategory } from '../../types/automation';
-import { 
-    CreditCard, UserPlus, Ticket, Truck, Gift, Clock, QrCode, 
-    Zap, Search, CheckCircle2, ChevronRight 
+import { loadTriggerDefinitions } from '../../services/triggerDefinitions';
+import {
+    CreditCard,
+    UserPlus,
+    Ticket,
+    Truck,
+    Gift,
+    Clock,
+    QrCode,
+    Zap,
+    Search,
+    CheckCircle2,
+    FileText,
+    DollarSign,
+    Crown,
+    Flame,
+    Calendar,
+    PackageCheck,
+    FileSignature,
+    CheckCircle,
+    Mail,
 } from 'lucide-react';
 
-// Icon Mapper
-const IconMap: Record<string, any> = {
-    CreditCard, UserPlus, Ticket, Truck, Gift, Clock, QrCode
+const IconMap: Record<string, React.ComponentType<{ size?: number }>> = {
+    CreditCard,
+    UserPlus,
+    Ticket,
+    Truck,
+    Gift,
+    Clock,
+    QrCode,
+    FileText,
+    DollarSign,
+    Crown,
+    Flame,
+    Calendar,
+    PackageCheck,
+    FileSignature,
+    CheckCircle,
+    Mail,
 };
 
 interface TriggerSelectorProps {
@@ -21,17 +52,28 @@ interface TriggerSelectorProps {
 const TriggerSelector: React.FC<TriggerSelectorProps> = ({ selectedTriggerId, onSelect, className }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<TriggerCategory | 'ALL'>('ALL');
+    const [triggers, setTriggers] = useState<TriggerDefinition[]>([]);
 
-    const categories: (TriggerCategory | 'ALL')[] = ['ALL', 'FINANCE', 'CRM', 'EVENT', 'LOGISTICS'];
+    useEffect(() => {
+        let cancelled = false;
+        loadTriggerDefinitions().then((list) => {
+            if (!cancelled) setTriggers(list);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const categories: (TriggerCategory | 'ALL')[] = ['ALL', 'FINANCE', 'CRM', 'EVENT', 'LOGISTICS', 'SYSTEM'];
 
     const filteredTriggers = useMemo(() => {
-        return TRIGGER_CATALOG.filter(t => {
+        return triggers.filter(t => {
             const matchesSearch = t.label.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                   t.description.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesCat = selectedCategory === 'ALL' || t.category === selectedCategory;
             return matchesSearch && matchesCat;
         });
-    }, [searchTerm, selectedCategory]);
+    }, [searchTerm, selectedCategory, triggers]);
 
     const getIcon = (iconName: string) => {
         const Icon = IconMap[iconName] || Zap;
@@ -44,6 +86,7 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ selectedTriggerId, on
             case 'CRM': return 'bg-blue-100 text-blue-600';
             case 'EVENT': return 'bg-purple-100 text-purple-600';
             case 'LOGISTICS': return 'bg-amber-100 text-amber-600';
+            case 'SYSTEM': return 'bg-slate-200 text-slate-700';
             default: return 'bg-slate-100 text-slate-600';
         }
     };
@@ -73,6 +116,11 @@ const TriggerSelector: React.FC<TriggerSelectorProps> = ({ selectedTriggerId, on
 
             {/* Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 overflow-y-auto max-h-[400px] pr-2">
+                {triggers.length === 0 && (
+                    <div className="col-span-full text-center text-sm text-slate-400 py-8">
+                        Loading triggers…
+                    </div>
+                )}
                 {filteredTriggers.map(trigger => {
                     const isSelected = selectedTriggerId === trigger.id;
                     return (

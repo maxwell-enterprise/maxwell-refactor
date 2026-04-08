@@ -1,6 +1,7 @@
 
 import { AutomationQueueItem } from '../types/automation';
 import { APP_CONFIG } from '../lib/config';
+import { isSystemApiMode, systemApi } from '../lib/systemApi';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { WhatsAppService } from './whatsappService';
@@ -40,7 +41,9 @@ export const AutomationQueueService = {
             description
         };
 
-        if (APP_CONFIG.USE_MOCK) {
+        if (isSystemApiMode()) {
+            await systemApi.putAutomationQueueItem(item.id, item);
+        } else if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('system_background_jobs', item); 
         } else if (supabase) {
             await supabase.from('automation_queue').insert(item);
@@ -51,7 +54,9 @@ export const AutomationQueueService = {
     // 2. GET PENDING ITEMS (For Admin UI)
     getPendingItems: async (): Promise<AutomationQueueItem[]> => {
         let items: AutomationQueueItem[] = [];
-        if (APP_CONFIG.USE_MOCK) {
+        if (isSystemApiMode()) {
+            items = await systemApi.getAutomationQueue();
+        } else if (APP_CONFIG.USE_MOCK) {
             try {
                 if(await DevDatabase.isEmpty('system_background_jobs')) {
                     await DevDatabase.bulkAdd('system_background_jobs', SEED_QUEUE);
@@ -108,7 +113,9 @@ export const AutomationQueueService = {
                 processedAt: new Date().toISOString() 
             };
             
-            if (APP_CONFIG.USE_MOCK) {
+            if (isSystemApiMode()) {
+                await systemApi.putAutomationQueueItem(updated.id, updated);
+            } else if (APP_CONFIG.USE_MOCK) {
                 await DevDatabase.add('system_background_jobs', updated);
             } else if (supabase) {
                 await supabase.from('automation_queue').upsert(updated);
@@ -126,7 +133,9 @@ export const AutomationQueueService = {
                 errorLog: error.message 
             };
             
-            if (APP_CONFIG.USE_MOCK) {
+            if (isSystemApiMode()) {
+                await systemApi.putAutomationQueueItem(failed.id, failed);
+            } else if (APP_CONFIG.USE_MOCK) {
                 await DevDatabase.add('system_background_jobs', failed);
             } else if (supabase) {
                 await supabase.from('automation_queue').upsert(failed);
@@ -162,7 +171,9 @@ export const AutomationQueueService = {
         // In Mock/Local, this prevents the same browser loop from picking it twice if async takes time
         const lockedTask: AutomationQueueItem = { ...task, status: 'PROCESSING' };
         
-        if (APP_CONFIG.USE_MOCK) {
+        if (isSystemApiMode()) {
+            await systemApi.putAutomationQueueItem(lockedTask.id, lockedTask);
+        } else if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('system_background_jobs', lockedTask);
         } else if (supabase) {
              await supabase.from('automation_queue').upsert(lockedTask);

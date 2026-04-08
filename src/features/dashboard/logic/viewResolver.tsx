@@ -75,7 +75,7 @@ export function resolveView(
     case ViewState.AUTOMATION_CENTER: return <AutomationCenter />;
     case ViewState.ATTENDANCE_CONSOLE: return <AttendanceConsole />;
     case ViewState.MY_TASKS: return <MyTasks />;
-    case ViewState.WALLET: return <Wallet />;
+    case ViewState.WALLET: return <Wallet onNavigate={onNavigate} />;
     case ViewState.STORE_CATALOG: return <Storefront />;
     case ViewState.EVENT_MARKETPLACE: return <EventMarketplace />;
     case ViewState.ENABLEMENT: return <Enablement />;

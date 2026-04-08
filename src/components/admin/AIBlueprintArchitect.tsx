@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SchemaService, TableDefinition } from '../../services/schemaService';
 import { AIOptimizerService } from '../../services/aiOptimizerService';
 import { OptimizationResult, OptimizationHistoryItem } from '../../types/schemaOptimizer';
@@ -14,6 +14,7 @@ import UserStoriesViewer from './schema/UserStoriesViewer';
 import AISchemaArchitect from './AISchemaArchitect';
 import ModifiedSchemaViewer from './schema/ModifiedSchemaViewer';
 import SchemaGapAnalyzer from './schema/SchemaGapAnalyzer'; // New Import
+import { isSystemApiMode, systemApi } from '../../lib/systemApi';
 
 type Tab = 'AUDIT' | 'BASELINE' | 'MODIFIED' | 'GAP_ANALYSIS' | 'STORIES' | 'ARCHITECT' | 'PROPOSED' | 'BLUEPRINT';
 
@@ -22,9 +23,31 @@ const AIBlueprintArchitect: React.FC = () => {
     const [activeTab, setActiveTab] = useState<Tab>('AUDIT');
     const [tables, setTables] = useState<TableDefinition[]>([]);
     
-    // Audit State
+    // Audit State (browser IndexedDB)
     const [actualStores, setActualStores] = useState<string[]>([]);
     const [auditLoading, setAuditLoading] = useState(false);
+
+    // Postgres via Nest (when SYSTEM → API)
+    const [backendTables, setBackendTables] = useState<
+        { name: string; rowEstimate: number }[]
+    >([]);
+    const [backendActivity, setBackendActivity] = useState<{
+        items: Array<{
+            pid: number;
+            state: string | null;
+            secondsRunning: number | null;
+            querySnippet: string;
+            applicationName: string | null;
+        }>;
+        note?: string;
+    } | null>(null);
+    const [backendErr, setBackendErr] = useState<string | null>(null);
+    const [backendLoadedAt, setBackendLoadedAt] = useState<string | null>(null);
+    /** Nest meta + pg_activity — default on in API mode (~4s poll, pauses when tab hidden). */
+    const [autoRefreshBackend, setAutoRefreshBackend] = useState(() =>
+        isSystemApiMode(),
+    );
+    const [tabVisible, setTabVisible] = useState(true);
 
     // Architect State
     const [loading, setLoading] = useState(false);
@@ -40,6 +63,31 @@ const AIBlueprintArchitect: React.FC = () => {
         loadData();
     }, []);
 
+    useEffect(() => {
+        const onVis = () => setTabVisible(!document.hidden);
+        onVis();
+        document.addEventListener('visibilitychange', onVis);
+        return () => document.removeEventListener('visibilitychange', onVis);
+    }, []);
+
+    const loadBackendMeta = useCallback(async () => {
+        if (!isSystemApiMode()) return;
+        try {
+            const [meta, act] = await Promise.all([
+                systemApi.getPublicTablesMeta(),
+                systemApi.getPgActivity(),
+            ]);
+            setBackendTables(
+                [...meta].sort((a, b) => b.rowEstimate - a.rowEstimate),
+            );
+            setBackendActivity(act);
+            setBackendErr(null);
+            setBackendLoadedAt(new Date().toISOString());
+        } catch (e) {
+            setBackendErr(e instanceof Error ? e.message : String(e));
+        }
+    }, []);
+
     const loadData = async () => {
         setAuditLoading(true);
         try {
@@ -47,10 +95,16 @@ const AIBlueprintArchitect: React.FC = () => {
             const regTables = await SchemaService.getTables();
             setTables(regTables);
 
-            // Load Actual DB
-            const realStores = await SchemaService.getRealDBStructure();
-            setActualStores(realStores.sort());
-            
+            // IndexedDB only when not on Nest system API (legacy dev / hybrid)
+            if (!isSystemApiMode()) {
+                const realStores = await SchemaService.getRealDBStructure();
+                setActualStores(realStores.sort());
+            } else {
+                setActualStores([]);
+            }
+
+            await loadBackendMeta();
+
             // Load History
             const hist = await AIOptimizerService.getHistory();
             setHistory(hist);
@@ -64,6 +118,22 @@ const AIBlueprintArchitect: React.FC = () => {
             setTimeout(() => setAuditLoading(false), 500);
         }
     };
+
+    useEffect(() => {
+        if (
+            activeTab !== 'AUDIT' ||
+            !isSystemApiMode() ||
+            !autoRefreshBackend ||
+            !tabVisible
+        ) {
+            return;
+        }
+        const POLL_MS = 4000;
+        const t = setInterval(() => {
+            void loadBackendMeta();
+        }, POLL_MS);
+        return () => clearInterval(t);
+    }, [activeTab, autoRefreshBackend, tabVisible, loadBackendMeta]);
 
     const handleRunOptimizer = async () => {
         setLoading(true);
@@ -114,10 +184,43 @@ const AIBlueprintArchitect: React.FC = () => {
         { id: 'BLUEPRINT', label: '7. Blueprint', icon: Code },
     ];
 
-    // Audit Calculations
-    const registeredNames = tables.map(t => t.tableName);
-    const missingInRegistry = actualStores.filter(s => !registeredNames.includes(s));
-    const missingInDB = registeredNames.filter(s => !actualStores.includes(s) && s !== 'ops_tasks');
+    const usePostgresAudit = isSystemApiMode();
+
+    const registeredNames = useMemo(
+        () => tables.map((t) => t.tableName),
+        [tables],
+    );
+
+    /** Source of truth for “live” side: Postgres (Nest) or IndexedDB. */
+    const liveDbNames = useMemo(() => {
+        if (usePostgresAudit) {
+            return backendTables.map((t) => t.name);
+        }
+        return actualStores;
+    }, [usePostgresAudit, backendTables, actualStores]);
+
+    const missingInRegistry = useMemo(
+        () => liveDbNames.filter((s) => !registeredNames.includes(s)),
+        [liveDbNames, registeredNames],
+    );
+
+    const missingInDB = useMemo(
+        () =>
+            registeredNames.filter(
+                (s) => !liveDbNames.includes(s) && s !== 'ops_tasks',
+            ),
+        [registeredNames, liveDbNames],
+    );
+
+    /** API: both directions must match. Legacy IDB: only “in DB but not in code” blocked 100%. */
+    const auditHealthy = useMemo(() => {
+        if (usePostgresAudit) {
+            return (
+                missingInRegistry.length === 0 && missingInDB.length === 0
+            );
+        }
+        return missingInRegistry.length === 0;
+    }, [usePostgresAudit, missingInRegistry, missingInDB]);
 
     return (
         <div className="flex flex-col h-full bg-slate-50">
@@ -179,7 +282,22 @@ const AIBlueprintArchitect: React.FC = () => {
                     <div className="p-8 max-w-5xl mx-auto h-full overflow-y-auto">
                         <div className="mb-8 text-center">
                             <h2 className="text-2xl font-bold text-slate-900 mb-2">Schema Integrity Audit</h2>
-                            <p className="text-slate-500">Verifying alignment between Application Code Registry and actual IndexedDB Storage.</p>
+                            {usePostgresAudit ? (
+                                <p className="text-slate-500 max-w-2xl mx-auto">
+                                    Membandingkan <strong>registry di kode</strong> (
+                                    <code className="text-xs">SchemaService</code>) dengan{' '}
+                                    <strong>tabel public</strong> di PostgreSQL lewat{' '}
+                                    <strong>Nest</strong>. Tanpa IndexedDB. Daftar tabel +{' '}
+                                    <code className="text-xs">pg_stat_activity</code> di-refresh otomatis ~4
+                                    detik (bisa dimatikan).
+                                </p>
+                            ) : (
+                                <p className="text-slate-500 max-w-2xl mx-auto">
+                                    Membandingkan registry di kode dengan{' '}
+                                    <strong>IndexedDB</strong> (mode dev lokal). Untuk audit terhadap
+                                    Supabase, set <code className="text-xs">NEXT_PUBLIC_SYSTEM_BACKEND=API</code>.
+                                </p>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -192,29 +310,158 @@ const AIBlueprintArchitect: React.FC = () => {
                                 <p className="text-xs text-slate-500">Tables defined in SchemaService code.</p>
                             </div>
 
-                            {/* Card 2: Actual DB */}
+                            {/* Card 2: Live side */}
                             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
                                 <h3 className="font-bold text-slate-700 flex items-center mb-3">
                                     <ShieldCheck size={18} className="mr-2 text-green-500"/> Live Database
                                 </h3>
-                                <div className="text-3xl font-bold text-slate-900 mb-1">{actualStores.length}</div>
-                                <p className="text-xs text-slate-500">Object Stores found in IndexedDB.</p>
+                                <div className="text-3xl font-bold text-slate-900 mb-1">{liveDbNames.length}</div>
+                                <p className="text-xs text-slate-500">
+                                    {usePostgresAudit
+                                        ? 'Public tables on Postgres (via Nest /fe/system/database/tables).'
+                                        : 'Object stores in browser IndexedDB.'}
+                                </p>
                             </div>
 
                             {/* Card 3: Health Status */}
-                            <div className={`bg-white border rounded-xl p-5 shadow-sm ${missingInRegistry.length === 0 ? 'border-green-200 bg-green-50/50' : 'border-amber-200 bg-amber-50/50'}`}>
-                                <h3 className={`font-bold flex items-center mb-3 ${missingInRegistry.length === 0 ? 'text-green-700' : 'text-amber-700'}`}>
-                                    {missingInRegistry.length === 0 ? <CheckCircle2 size={18} className="mr-2"/> : <AlertOctagon size={18} className="mr-2"/>}
+                            <div className={`bg-white border rounded-xl p-5 shadow-sm ${auditHealthy ? 'border-green-200 bg-green-50/50' : 'border-amber-200 bg-amber-50/50'}`}>
+                                <h3 className={`font-bold flex items-center mb-3 ${auditHealthy ? 'text-green-700' : 'text-amber-700'}`}>
+                                    {auditHealthy ? <CheckCircle2 size={18} className="mr-2"/> : <AlertOctagon size={18} className="mr-2"/>}
                                     System Health
                                 </h3>
-                                <div className={`text-3xl font-bold mb-1 ${missingInRegistry.length === 0 ? 'text-green-700' : 'text-amber-700'}`}>
-                                    {missingInRegistry.length === 0 ? '100%' : 'Needs Sync'}
+                                <div className={`text-3xl font-bold mb-1 ${auditHealthy ? 'text-green-700' : 'text-amber-700'}`}>
+                                    {auditHealthy ? '100%' : 'Needs Sync'}
                                 </div>
                                 <p className="text-xs opacity-80">
-                                    {missingInRegistry.length === 0 ? 'Registry matches Database perfectly.' : `${missingInRegistry.length} tables found in DB but missing in App code.`}
+                                    {auditHealthy
+                                        ? 'Registry matches live database.'
+                                        : usePostgresAudit
+                                          ? `${missingInRegistry.length} in DB not in code; ${missingInDB.length} in code not in DB.`
+                                          : `${missingInRegistry.length} store(s) in IndexedDB missing from registry.`}
                                 </p>
                             </div>
                         </div>
+
+                        {isSystemApiMode() && (
+                            <div className="mt-10 border border-indigo-200 bg-indigo-50/40 rounded-xl p-6">
+                                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                                    <div>
+                                        <h3 className="font-bold text-indigo-900 flex items-center gap-2">
+                                            <Database size={20} />
+                                            Detail & query aktif
+                                        </h3>
+                                        <p className="text-xs text-indigo-800/80 mt-1">
+                                            Sama dengan sumber kartu &quot;Live Database&quot; di atas. Ukuran
+                                            baris ≈ <code className="text-[10px]">reltuples</code>; jalankan{' '}
+                                            <code className="text-[10px]">ANALYZE</code> bila perlu.
+                                            {backendLoadedAt && (
+                                                <span className="ml-2">
+                                                    Terakhir:{' '}
+                                                    {new Date(backendLoadedAt).toLocaleString()}
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <label className="flex items-center gap-2 text-xs text-indigo-900 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={autoRefreshBackend}
+                                                onChange={(e) =>
+                                                    setAutoRefreshBackend(e.target.checked)
+                                                }
+                                                className="rounded border-indigo-300"
+                                            />
+                                            Live poll ~4s
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => void loadBackendMeta()}
+                                            disabled={auditLoading}
+                                            className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            <RefreshCw size={12} /> Refresh backend
+                                        </button>
+                                    </div>
+                                </div>
+                                {backendErr && (
+                                    <p className="text-sm text-red-600 mb-3">{backendErr}</p>
+                                )}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div>
+                                        <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wide mb-2">
+                                            Tabel public ({backendTables.length})
+                                        </h4>
+                                        <div className="max-h-56 overflow-y-auto rounded-lg border border-indigo-100 bg-white text-xs font-mono">
+                                            {backendTables.slice(0, 40).map((t) => (
+                                                <div
+                                                    key={t.name}
+                                                    className="flex justify-between px-3 py-1 border-b border-slate-50 last:border-0"
+                                                >
+                                                    <span>{t.name}</span>
+                                                    <span className="text-slate-500">
+                                                        ~{t.rowEstimate.toLocaleString()} rows
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {backendTables.length > 40 && (
+                                            <p className="text-[10px] text-indigo-700 mt-1">
+                                                Menampilkan 40 pertama (urut estimasi baris).
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wide mb-2">
+                                            Sesi / query aktif (ringkas)
+                                        </h4>
+                                        {backendActivity?.note && (
+                                            <p className="text-xs text-amber-800 mb-2">
+                                                {backendActivity.note}
+                                            </p>
+                                        )}
+                                        <div className="max-h-56 overflow-y-auto rounded-lg border border-indigo-100 bg-white text-[11px]">
+                                            {(backendActivity?.items ?? []).length === 0 &&
+                                            !backendActivity?.note ? (
+                                                <p className="p-3 text-slate-500">
+                                                    Belum ada data atau sedang memuat…
+                                                </p>
+                                            ) : (
+                                                (backendActivity?.items ?? []).map((row) => (
+                                                    <div
+                                                        key={row.pid}
+                                                        className="p-2 border-b border-slate-50 last:border-0"
+                                                    >
+                                                        <div className="flex justify-between text-slate-600">
+                                                            <span>
+                                                                pid {row.pid}{' '}
+                                                                <span className="text-slate-400">
+                                                                    {row.state ?? '—'}
+                                                                </span>
+                                                            </span>
+                                                            {row.secondsRunning != null && (
+                                                                <span>{row.secondsRunning}s</span>
+                                                            )}
+                                                        </div>
+                                                        <pre className="whitespace-pre-wrap break-all text-slate-700 mt-1">
+                                                            {row.querySnippet || '(no query text)'}
+                                                        </pre>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-indigo-700 mt-2">
+                                            Endpoint:{' '}
+                                            <code className="bg-white/80 px-1 rounded">
+                                                GET /fe/system/database/activity
+                                            </code>{' '}
+                                            — untuk analitik mendalam pakai Supabase Dashboard →
+                                            Reports / Query Performance.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Missing Tables Alert */}
                         {missingInRegistry.length > 0 && (
@@ -224,8 +471,9 @@ const AIBlueprintArchitect: React.FC = () => {
                                     Discrepancy Detected: Missing Registrations
                                 </h4>
                                 <p className="text-sm text-amber-700 mb-4">
-                                    The following tables exist in your local database but are not registered in <code>schemaService.ts</code>. 
-                                    They will not appear in the AI Architect analysis until added.
+                                    {usePostgresAudit
+                                        ? 'Tabel berikut ada di PostgreSQL (public) tetapi tidak terdaftar di schemaService — tidak akan masuk AI Architect sampai ditambah.'
+                                        : 'The following tables exist in your local database but are not registered in schemaService.ts. They will not appear in the AI Architect analysis until added.'}
                                 </p>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                     {missingInRegistry.map(t => (
@@ -251,7 +499,9 @@ const AIBlueprintArchitect: React.FC = () => {
                                     <AlertCircle size={20} className="mr-2"/> Ghost Definitions
                                 </h4>
                                 <p className="text-sm text-slate-500 mb-4">
-                                    These tables are defined in code but haven't been created in IndexedDB yet (Empty/Uninitialized).
+                                    {usePostgresAudit
+                                        ? 'Didefinisikan di kode tetapi belum ada tabel yang sama di PostgreSQL (migration / sync belum jalan).'
+                                        : "These tables are defined in code but haven't been created in IndexedDB yet (Empty/Uninitialized)."}
                                 </p>
                                 <div className="flex flex-wrap gap-2">
                                     {missingInDB.map(t => (

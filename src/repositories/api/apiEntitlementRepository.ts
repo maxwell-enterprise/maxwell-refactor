@@ -7,12 +7,19 @@ import {
   WalletTransactionHistory,
 } from '../../types/access';
 import { apiRequest } from './apiClient';
+import {
+  normalizeUserEntitlements,
+  normalizeWalletHistory,
+  normalizeWalletItem,
+  normalizeWalletItems,
+} from './walletAdapters';
 
 export class ApiEntitlementRepository implements IEntitlementRepository {
   async getUserEntitlements(userId: string): Promise<UserEntitlements | null> {
-    return apiRequest<UserEntitlements | null>(
+    const raw = await apiRequest<Record<string, unknown> | null>(
       `/wallet/entitlements/${encodeURIComponent(userId)}`,
     );
+    return normalizeUserEntitlements(raw);
   }
 
   async upsertUserEntitlements(entitlements: UserEntitlements): Promise<void> {
@@ -26,19 +33,23 @@ export class ApiEntitlementRepository implements IEntitlementRepository {
   }
 
   async getWalletItems(userId: string): Promise<WalletItem[]> {
-    return apiRequest<WalletItem[]>(
+    const rows = await apiRequest<unknown>(
       `/wallet/items?userId=${encodeURIComponent(userId)}`,
     );
+    return normalizeWalletItems(rows);
   }
 
   async getAllWalletItems(): Promise<WalletItem[]> {
-    return apiRequest<WalletItem[]>('/wallet/items');
+    const rows = await apiRequest<unknown>('/wallet/items');
+    return normalizeWalletItems(rows);
   }
 
   async getWalletItemById(id: string): Promise<WalletItem | null> {
-    return apiRequest<WalletItem | null>(
+    const raw = await apiRequest<Record<string, unknown> | null>(
       `/wallet/items/${encodeURIComponent(id)}`,
     );
+    if (!raw) return null;
+    return normalizeWalletItem(raw);
   }
 
   async upsertWalletItem(item: WalletItem): Promise<void> {
@@ -56,9 +67,10 @@ export class ApiEntitlementRepository implements IEntitlementRepository {
   }
 
   async getWalletHistory(userId: string): Promise<WalletTransactionHistory[]> {
-    return apiRequest<WalletTransactionHistory[]>(
+    const rows = await apiRequest<unknown>(
       `/wallet/history/list?userId=${encodeURIComponent(userId)}`,
     );
+    return normalizeWalletHistory(rows);
   }
 
   async logWalletTransaction(tx: WalletTransactionHistory): Promise<void> {

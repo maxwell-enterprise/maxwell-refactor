@@ -2,6 +2,7 @@
 import { Role, Permission, SodRule, SecurityAuditLog } from '../types/security';
 import { SOD_RULES, PERMISSIONS, DEFAULT_ROLES } from '../constants/securityDefs';
 import { APP_CONFIG } from '../lib/config';
+import { isSystemApiMode, systemApi } from '../lib/systemApi';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { BROWSE_DATA_TEST_SEED } from '../seeds/browse_data_test';
@@ -31,6 +32,10 @@ export const PermissionService = {
   },
 
   logEvent: async (actor: string, action: string, details: string) => {
+      if (isSystemApiMode()) {
+        return systemApi.postSecurityLog({ actor, action, details });
+      }
+
       const log: SecurityAuditLog = {
           id: `LOG-${Date.now()}`,
           timestamp: new Date().toISOString(),
@@ -51,6 +56,9 @@ export const PermissionService = {
   },
 
   getLogs: async (): Promise<SecurityAuditLog[]> => {
+      if (isSystemApiMode()) {
+          return systemApi.getSecurityLogs();
+      }
       if (APP_CONFIG.USE_MOCK) {
           try {
               // Fallback to BROWSE_DATA_TEST_SEED if empty to ensure Browse Data tab has content

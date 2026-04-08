@@ -31,6 +31,7 @@ import { CreditTagService } from './creditTagService'; // Added
 import { CommissionService } from './commissionService';
 import { SpecificBusinessService } from './specificBusinessService';
 import { DevDatabase } from '../utils/devDatabase'; // Added for direct access
+import { isSystemApiMode, systemApi } from '../lib/systemApi';
 import { AUTH_TEST_MEMBER, AUTH_TEST_WALLET_ITEMS } from '../seeds/auth_test_user'; // NEW
 
 export interface TableColumn {
@@ -170,7 +171,13 @@ export const SchemaService = {
             { name: 'certification_rules', fetch: async () => DevDatabase.getAll('certification_rules') },
             { name: 'master_done_tags', fetch: async () => DevDatabase.getAll('master_done_tags') },
             { name: 'tribe_mentoring_sessions', fetch: async () => DevDatabase.getAll('tribe_mentoring_sessions') },
-            { name: 'schema_optimizations', fetch: async () => DevDatabase.getAll('schema_optimizations') },
+            {
+                name: 'schema_optimizations',
+                fetch: async () =>
+                    isSystemApiMode()
+                        ? systemApi.getSchemaOptimizations()
+                        : DevDatabase.getAll('schema_optimizations'),
+            },
         ];
 
         const dynamicTables = await Promise.all(dynamicDataPromises.map(async (item) => {

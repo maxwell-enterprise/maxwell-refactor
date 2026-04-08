@@ -48,22 +48,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   setUser(profile);
               }
 
-              const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-                  if (event === 'SIGNED_IN' && session) {
-                      const sbUser = session.user;
-                      const profile: UserProfile = {
-                          id: sbUser.id,
-                          email: sbUser.email!,
-                          fullName: sbUser.user_metadata?.full_name || sbUser.email!,
-                          role: (sbUser.user_metadata?.role as UserRole) || UserRole.MEMBER,
-                          provider: 'email'
-                      };
-                      setUser(profile);
-                  } else if (event === 'SIGNED_OUT') {
-                      setUser(null);
-                  }
-                  setIsLoading(false);
-              });
+              const { data: listener } = supabase.auth.onAuthStateChange(
+                  async (event, session) => {
+                      if (event === 'SIGNED_IN' && session) {
+                          const sbUser = session.user;
+                          const profile: UserProfile = {
+                              id: sbUser.id,
+                              email: sbUser.email!,
+                              fullName: sbUser.user_metadata?.full_name || sbUser.email!,
+                              role: (sbUser.user_metadata?.role as UserRole) || UserRole.MEMBER,
+                              provider: 'email'
+                          };
+                          setUser(profile);
+                      } else if (event === 'SIGNED_OUT') {
+                          setUser(null);
+                      }
+                  },
+              );
+
+              setIsLoading(false);
 
               return () => listener.subscription.unsubscribe();
           }

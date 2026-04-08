@@ -168,8 +168,13 @@ export const ContractService = {
     },
 
     getMyContracts: async (userId: string): Promise<ContractInstance[]> => {
+        if (contractsUseApi()) {
+            return apiRequest<ContractInstance[]>(
+                `/contracts/instances?memberId=${encodeURIComponent(userId)}`,
+            );
+        }
         const all = await ContractService.getInstances();
-        return all.filter(c => c.memberId === userId);
+        return all.filter((c) => c.memberId === userId);
     },
 
     createInstance: async (productId: string, memberId: string, transactionId: string, amount: number): Promise<ContractInstance | null> => {

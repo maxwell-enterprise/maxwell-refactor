@@ -1,11 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { MASTER_EVENT_REGISTRY, MasterEventDefinition } from '../../constants/masterEventRegistry';
+import { MASTER_EVENT_REGISTRY } from '../../constants/masterEventRegistry';
 import { WhatsAppService } from '../../services/whatsappService';
 import { OpsService } from '../../services/opsService';
 import { GamificationService } from '../../services/gamificationService';
 import { AutomationQueueService } from '../../services/automationQueueService';
+import { loadTriggerDefinitions } from '../../services/triggerDefinitions';
 import { EventBus } from '../../services/eventBus';
+import type { TriggerDefinition } from '../../types/automation';
+import type { SystemTriggerType } from '../../types/ops';
 import { WhatsAppTemplate } from '../../types/index';
 import { AutomationQueueItem } from '../../types/automation';
 import { OpsTemplate } from '../../types/ops';
@@ -96,11 +99,26 @@ const QueueMonitor = () => {
 // --- SUB-COMPONENT: EVENT SIMULATOR ---
 const EventSimulator = () => {
     const { showToast } = useToast();
-    const [selectedEventId, setSelectedEventId] = useState<string>(MASTER_EVENT_REGISTRY[0].id);
+    const [triggerDefs, setTriggerDefs] = useState<TriggerDefinition[]>([]);
+    const [selectedEventId, setSelectedEventId] = useState<string>('');
     const [payload, setPayload] = useState<Record<string, string>>({});
     const [isFiring, setIsFiring] = useState(false);
 
-    const definition = MASTER_EVENT_REGISTRY.find(e => e.id === selectedEventId);
+    useEffect(() => {
+        let cancelled = false;
+        loadTriggerDefinitions().then((list) => {
+            if (cancelled || list.length === 0) return;
+            setTriggerDefs(list);
+            setSelectedEventId((prev) =>
+                prev && list.some((t) => t.id === prev) ? prev : list[0].id,
+            );
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const definition = triggerDefs.find((e) => e.id === selectedEventId);
 
     // Reset payload when event changes
     useEffect(() => {
@@ -114,7 +132,7 @@ const EventSimulator = () => {
             defaults['phone'] = '628123456789';
             setPayload(defaults);
         }
-    }, [selectedEventId]);
+    }, [selectedEventId, definition]);
 
     const handleFire = async () => {
         if (!definition) return;
@@ -125,7 +143,7 @@ const EventSimulator = () => {
         if (finalPayload.amount) finalPayload['amount'] = parseInt(finalPayload.amount.replace(/\D/g, '')) as any;
 
         try {
-            await EventBus.emit(definition.id, finalPayload);
+            await EventBus.emit(definition.id as SystemTriggerType, finalPayload);
             showToast(`Event ${definition.id} fired successfully. Check logs/queue.`, 'success');
         } catch (e) {
             showToast('Failed to fire event.', 'error');
@@ -147,8 +165,9 @@ const EventSimulator = () => {
                         className="w-full p-3 rounded-lg bg-slate-800 border border-slate-700 text-white outline-none focus:border-blue-500"
                         value={selectedEventId}
                         onChange={e => setSelectedEventId(e.target.value)}
+                        disabled={triggerDefs.length === 0}
                     >
-                        {MASTER_EVENT_REGISTRY.map(e => (
+                        {triggerDefs.map(e => (
                             <option key={e.id} value={e.id}>{e.label} ({e.id})</option>
                         ))}
                     </select>

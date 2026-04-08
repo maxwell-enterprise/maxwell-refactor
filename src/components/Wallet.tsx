@@ -2,7 +2,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { EntitlementService } from '../services/entitlementService';
-import { WalletItem } from '../types/access'; 
+import { WalletItem } from '../types/access';
+import { ViewState } from '../types/index';
 import { 
     QrCode, Ticket, Calendar, Zap, 
     X, ShieldCheck, Clock, Search, Share2, Users, Layers
@@ -13,7 +14,12 @@ import WalletHistory from './wallet/WalletHistory';
 import TicketDistributionModal from './wallet/TicketDistributionModal';
 import TicketDetailModal from './wallet/TicketDetailModal'; // Use the full detail modal
 
-const Wallet: React.FC = () => {
+interface WalletProps {
+  /** Opens Event Catalogue so users can redeem program credits (Nest-backed events). */
+  onNavigate?: (view: ViewState) => void;
+}
+
+const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [items, setItems] = useState<WalletItem[]>([]);
@@ -130,7 +136,14 @@ const Wallet: React.FC = () => {
                                     <span className="text-[10px] font-bold uppercase tracking-wider flex items-center">
                                         <Clock size={12} className="mr-1.5"/> Exp: {item.expiryDate || 'Unlimited'}
                                     </span>
-                                    <button className="text-xs font-black bg-white text-indigo-700 px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-50 transition-colors">
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onNavigate?.(ViewState.EVENT_MARKETPLACE);
+                                        }}
+                                        className="text-xs font-black bg-white text-indigo-700 px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-50 transition-colors"
+                                    >
                                         BOOK NOW
                                     </button>
                                 </div>

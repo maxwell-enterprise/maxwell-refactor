@@ -1,5 +1,6 @@
 
 import { APP_CONFIG } from '../lib/config';
+import { isSystemApiMode, systemApi } from '../lib/systemApi';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 
@@ -84,6 +85,16 @@ export const QueueService = {
     },
 
     getJobs: async (): Promise<BackgroundJob[]> => {
+        if (isSystemApiMode()) {
+            const rows = await systemApi.getBackgroundJobs();
+            return rows.map((r) => ({
+                id: r.id,
+                type: r.type as BackgroundJob['type'],
+                payload: r.payload,
+                status: r.status as BackgroundJob['status'],
+                timestamp: r.timestamp,
+            }));
+        }
         if (APP_CONFIG.USE_MOCK) {
             try {
                 if(await DevDatabase.isEmpty('system_background_jobs')) await DevDatabase.bulkAdd('system_background_jobs', SEED_JOBS);

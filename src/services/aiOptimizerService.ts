@@ -5,6 +5,7 @@ import { AIUsageService } from './aiUsageService';
 import { OptimizationResult, UserStory, SchemaChange, OptimizedTable, OptimizationHistoryItem } from '../types/schemaOptimizer';
 import { DevDatabase } from '../utils/devDatabase';
 import { APP_CONFIG } from '../lib/config';
+import { isSystemApiMode, systemApi } from '../lib/systemApi';
 import { SEED_SCHEMA_HISTORY } from '../seeds/schema_history';
 
 // Helper to determine impacted screens based on table name
@@ -25,6 +26,22 @@ export const AIOptimizerService = {
   
   // --- PERSISTENCE METHODS ---
   getHistory: async (): Promise<OptimizationHistoryItem[]> => {
+      if (isSystemApiMode()) {
+          const rows = await systemApi.getSchemaOptimizations();
+          return rows
+              .map((r) => ({
+                  id: r.id,
+                  version: r.version,
+                  timestamp: r.timestamp,
+                  summary: r.summary,
+                  result: r.result as OptimizationResult,
+              }))
+              .sort(
+                  (a, b) =>
+                      new Date(b.timestamp).getTime() -
+                      new Date(a.timestamp).getTime(),
+              );
+      }
       if (APP_CONFIG.USE_MOCK) {
           try {
               if (await DevDatabase.isEmpty('schema_optimizations')) {
@@ -35,7 +52,7 @@ export const AIOptimizerService = {
               return history.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
           } catch(e) { return SEED_SCHEMA_HISTORY; }
       }
-      return []; // Supabase implementation omitted for brevity in this slice
+      return [];
   },
 
   saveHistory: async (result: OptimizationResult): Promise<void> => {
@@ -67,6 +84,16 @@ export const AIOptimizerService = {
           result: sanitizedResult as OptimizationResult // Cast back to satisfy type, knowing getData is missing
       };
 
+      if (isSystemApiMode()) {
+          await systemApi.postSchemaOptimization({
+              id: newItem.id,
+              version: newItem.version,
+              timestamp: newItem.timestamp,
+              summary: newItem.summary,
+              result: newItem.result,
+          });
+          return;
+      }
       if (APP_CONFIG.USE_MOCK) {
           await DevDatabase.add('schema_optimizations', newItem);
       }

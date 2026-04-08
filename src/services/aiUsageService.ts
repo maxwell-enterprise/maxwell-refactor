@@ -1,6 +1,7 @@
 import { AIUsageLog } from '../types/index';
 import { DevDatabase } from '../utils/devDatabase';
 import { APP_CONFIG } from '../lib/config';
+import { isSystemApiMode, systemApi } from '../lib/systemApi';
 import { supabase } from '../lib/supabaseClient';
 
 const USD_TO_IDR_RATE = 16300;
@@ -38,7 +39,20 @@ export const AIUsageService = {
             costIDR
         };
         
-        if (APP_CONFIG.USE_MOCK) {
+        if (isSystemApiMode()) {
+            await systemApi.postAiUsageLog({
+                userId: logEntry.userId,
+                featureName: logEntry.featureName,
+                model: logEntry.model,
+                prompt: logEntry.prompt,
+                response: logEntry.response,
+                promptTokens: logEntry.promptTokens,
+                completionTokens: logEntry.completionTokens,
+                totalTokens: logEntry.totalTokens,
+                costUSD: logEntry.costUSD,
+                costIDR: logEntry.costIDR,
+            });
+        } else if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('ai_usage_logs', logEntry);
         } else if (supabase) {
             await supabase.from('ai_usage_logs').insert(logEntry);
@@ -46,6 +60,10 @@ export const AIUsageService = {
     },
 
     getLogs: async (): Promise<AIUsageLog[]> => {
+        if (isSystemApiMode()) {
+            const logs = await systemApi.getAiUsageLogs();
+            return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        }
         if (APP_CONFIG.USE_MOCK) {
             try {
                 const logs = await DevDatabase.getAll<AIUsageLog>('ai_usage_logs');
