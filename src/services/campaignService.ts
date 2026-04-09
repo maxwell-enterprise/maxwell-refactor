@@ -1,5 +1,5 @@
 import { Campaign } from '../types/index';
-import { APP_CONFIG } from '../lib/config';
+import { apiRequest } from '../repositories/api/apiClient';
 
 const normalizeOptionalString = (value?: string) => {
   if (value == null) return undefined;
@@ -36,33 +36,14 @@ const sanitizeCampaignPayload = (data: Partial<Campaign>) => {
   };
 };
 
-const fetchJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const baseUrl = APP_CONFIG.API_BASE_URL.replace(/\/+$/, '');
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const response = await fetch(`${baseUrl}${normalizedPath}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
-    ...init,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `Request failed with status ${response.status}`);
-  }
-
-  return (await response.json()) as T;
-};
-
 export const CampaignService = {
   getCampaigns: async (): Promise<Campaign[]> => {
-    return await fetchJson<Campaign[]>('/campaigns');
+    return await apiRequest<Campaign[]>('/campaigns');
   },
 
   createCampaign: async (data: Partial<Campaign>): Promise<Campaign> => {
     const payload = sanitizeCampaignPayload(data);
-    return await fetchJson<Campaign>('/campaigns', {
+    return await apiRequest<Campaign>('/campaigns', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -70,28 +51,28 @@ export const CampaignService = {
 
   updateCampaign: async (id: string, data: Partial<Campaign>): Promise<Campaign | null> => {
     const payload = sanitizeCampaignPayload(data);
-    return await fetchJson<Campaign>(`/campaigns/${id}`, {
+    return await apiRequest<Campaign>(`/campaigns/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
   },
 
   trackClick: async (source: string) => {
-      await fetchJson<{ success: boolean }>('/campaigns/track-click', {
+      await apiRequest<{ success: boolean }>('/campaigns/track-click', {
         method: 'POST',
         body: JSON.stringify({ sourceCode: source }),
       });
   },
 
   trackConversion: async (source: string, amount: number) => {
-      await fetchJson<{ success: boolean }>('/campaigns/track-conversion', {
+      await apiRequest<{ success: boolean }>('/campaigns/track-conversion', {
         method: 'POST',
         body: JSON.stringify({ sourceCode: source, amount }),
       });
   },
 
   bulkUpsertCampaigns: async (items: Partial<Campaign>[]): Promise<{ inserted: number; updated: number; total: number }> => {
-      return await fetchJson<{ inserted: number; updated: number; total: number }>('/campaigns/bulk', {
+      return await apiRequest<{ inserted: number; updated: number; total: number }>('/campaigns/bulk', {
         method: 'POST',
         body: JSON.stringify({
           mode: 'upsert',
