@@ -8,6 +8,7 @@ import { APP_CONFIG, assertExternalApiMode, BackendMode } from '../lib/config';
 import { supabase } from '../lib/supabaseClient';
 import { EventBus } from './eventBus';
 import { AuditService } from './auditService'; // Import Audit
+import { PermissionService } from './permissionService';
 import { apiRequest } from '../repositories/api/apiClient';
 import { DataService } from './dataService';
 
@@ -45,6 +46,7 @@ interface ApiCertificationRule {
     logic: CertificationRule['logic'];
     requiredTags: string[];
     minCountValue?: number;
+    tagWeights?: Record<string, number>;
     badgeUrl?: string | null;
     isActive: boolean;
     validityPeriodMonths?: number;
@@ -58,6 +60,7 @@ const mapApiCertificationRule = (r: ApiCertificationRule): CertificationRule => 
     logic: r.logic,
     requiredTags: r.requiredTags ?? [],
     minCountValue: r.minCountValue,
+    tagWeights: r.tagWeights,
     badgeUrl: r.badgeUrl ?? undefined,
     isActive: r.isActive,
     validityPeriodMonths: r.validityPeriodMonths,
@@ -98,6 +101,7 @@ export const CertificationService = {
                 logic: rule.logic,
                 requiredTags: rule.requiredTags,
                 minCountValue: rule.minCountValue,
+                tagWeights: rule.tagWeights,
                 badgeUrl: rule.badgeUrl ?? null,
                 isActive: rule.isActive,
                 validityPeriodMonths: rule.validityPeriodMonths,
@@ -203,9 +207,13 @@ export const CertificationService = {
                 // Must have AT LEAST ONE tag from the list
                 qualifies = rule.requiredTags.some(tag => earnedTags.has(tag));
             } else if (rule.logic === 'MIN_COUNT') {
-                // Must have X amount of tags from the list
-                const matchCount = rule.requiredTags.filter(tag => earnedTags.has(tag)).length;
-                qualifies = matchCount >= (rule.minCountValue || 1);
+                // Must have weighted score above threshold (default weight=1 for backward compatibility)
+                const weightedScore = rule.requiredTags.reduce((sum, tag) => {
+                    if (!earnedTags.has(tag)) return sum;
+                    const w = Number(rule.tagWeights?.[tag] ?? 1);
+                    return sum + (Number.isFinite(w) && w > 0 ? w : 1);
+                }, 0);
+                qualifies = weightedScore >= (rule.minCountValue || 1);
             }
 
             if (qualifies) {
@@ -315,5 +323,12 @@ export const CertificationService = {
                 adminId
             }
         });
+
+        // Mirror into System Security Logs so admin can inspect from Admin Security audit trail.
+        await PermissionService.logEvent(
+            adminId,
+            'MANUAL_CERTIFICATION_OVERRIDE',
+            `Granted tag ${tagCode} to member ${memberId}. Reason: ${reason}`,
+        );
     }
 };

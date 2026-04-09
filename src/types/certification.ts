@@ -20,6 +20,7 @@ export interface CertificationRule {
     logic: CertificationLogic;
     requiredTags: string[]; // List of DoneTags required
     minCountValue?: number; // If logic is MIN_COUNT, how many tags are needed?
+    tagWeights?: Record<string, number>; // Optional weighted score per required tag
     
     // Metadata
     isActive: boolean;

@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../../services/dataService';
 import { CertificationService } from '../../services/certificationService'; // Switch to Cert Service
+import { ExcelHelper } from '../../utils/excelHelper';
 import { Member } from '../../types/index';
 import { CertificationRule, MasterDoneTag } from '../../types/certification';
-import { Calendar, Search, RefreshCw, CheckCircle, Circle, AlertTriangle, Database, Info } from 'lucide-react';
+import { Calendar, Search, RefreshCw, CheckCircle, Circle, AlertTriangle, Database, Info, Download } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { CERT_INTEGRATION_MEMBERS } from '../../seeds/certification_integration_test';
 import CertificationOverrideModal from './CertificationOverrideModal';
@@ -99,7 +100,7 @@ const CertificationGrid: React.FC = () => {
 
     // Calculation Helper
     const getStats = (member: Member) => {
-        if (!selectedRule) return { count: 0, percent: 0, qualified: false };
+        if (!selectedRule) return { count: 0, weightedScore: 0, percent: 0, qualified: false };
         
         const earnedSet = new Set(member.earnedDoneTags || []);
         const reqCount = selectedRule.requiredTags.length;
@@ -110,22 +111,54 @@ const CertificationGrid: React.FC = () => {
         });
 
         let qualified = false;
+        let weightedScore = 0;
         let percent = 0;
 
         if (selectedRule.logic === 'REQUIRE_ALL') {
             percent = Math.round((matchCount / reqCount) * 100);
             qualified = percent === 100;
         } else if (selectedRule.logic === 'MIN_COUNT') {
+            weightedScore = selectedRule.requiredTags.reduce((sum, tag) => {
+                if (!earnedSet.has(tag)) return sum;
+                const weight = Number(selectedRule.tagWeights?.[tag] ?? 1);
+                return sum + (Number.isFinite(weight) && weight > 0 ? weight : 1);
+            }, 0);
             const min = selectedRule.minCountValue || 1;
-            percent = Math.round(Math.min(100, (matchCount / min) * 100));
-            qualified = matchCount >= min;
+            percent = Math.round(Math.min(100, (weightedScore / min) * 100));
+            qualified = weightedScore >= min;
         } else {
             // REQUIRE ANY
             qualified = matchCount > 0;
             percent = qualified ? 100 : 0;
         }
 
-        return { count: matchCount, percent, qualified };
+        return { count: matchCount, weightedScore, percent, qualified };
+    };
+
+    const exportCertificationProgress = () => {
+        if (!selectedRule) {
+            showToast('Select a certification rule first.', 'error');
+            return;
+        }
+        const rows = filteredMembers.map((member) => {
+            const stats = getStats(member);
+            return {
+                memberName: member.name,
+                email: member.email,
+                rule: selectedRule.name,
+                logic: selectedRule.logic,
+                threshold: selectedRule.minCountValue ?? null,
+                weightedScore: selectedRule.logic === 'MIN_COUNT' ? Number(stats.weightedScore.toFixed(2)) : null,
+                matchedTags: stats.count,
+                progressPercent: stats.percent,
+                qualified: stats.qualified ? 'YES' : 'NO',
+            };
+        });
+        ExcelHelper.exportToExcel(
+            rows,
+            `Certification_Progress_${new Date().toISOString().split('T')[0]}`,
+        );
+        showToast('Certification progress exported.', 'success');
     };
 
     const onCellClick = (member: Member, tagCode: string) => {
@@ -173,6 +206,14 @@ const CertificationGrid: React.FC = () => {
                         title="Refresh Grid"
                     >
                         <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+                    </button>
+                    <button
+                        onClick={exportCertificationProgress}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                        title="Export progress to Excel"
+                    >
+                        <Download size={14} />
+                        Export Excel
                     </button>
                 </div>
             </div>
@@ -238,7 +279,7 @@ const CertificationGrid: React.FC = () => {
                                                     {stats.percent}%
                                                 </div>
                                                 {selectedRule?.logic === 'MIN_COUNT' && (
-                                                    <span className="text-[9px] text-slate-400">{stats.count}/{selectedRule.minCountValue}</span>
+                                                    <span className="text-[9px] text-slate-400">{stats.weightedScore.toFixed(1)}/{selectedRule.minCountValue}</span>
                                                 )}
                                             </div>
                                         </td>

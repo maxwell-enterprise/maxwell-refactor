@@ -87,7 +87,11 @@ const CertificationConfig: React.FC = () => {
         if(tagInput && !editRule.requiredTags?.includes(tagInput)) {
             setEditRule(prev => ({
                 ...prev,
-                requiredTags: [...(prev.requiredTags || []), tagInput]
+                requiredTags: [...(prev.requiredTags || []), tagInput],
+                tagWeights: {
+                    ...(prev.tagWeights || {}),
+                    [tagInput]: Number((prev.tagWeights || {})[tagInput] ?? 1),
+                },
             }));
             setTagInput('');
         }
@@ -97,15 +101,33 @@ const CertificationConfig: React.FC = () => {
         if(tagCode && !editRule.requiredTags?.includes(tagCode)) {
             setEditRule(prev => ({
                 ...prev,
-                requiredTags: [...(prev.requiredTags || []), tagCode]
+                requiredTags: [...(prev.requiredTags || []), tagCode],
+                tagWeights: {
+                    ...(prev.tagWeights || {}),
+                    [tagCode]: Number((prev.tagWeights || {})[tagCode] ?? 1),
+                },
             }));
         }
     };
 
     const removeTagFromRule = (tag: string) => {
+        const nextWeights = { ...(editRule.tagWeights || {}) };
+        delete nextWeights[tag];
         setEditRule(prev => ({
             ...prev,
-            requiredTags: prev.requiredTags?.filter(t => t !== tag)
+            requiredTags: prev.requiredTags?.filter(t => t !== tag),
+            tagWeights: nextWeights,
+        }));
+    };
+
+    const updateTagWeight = (tagCode: string, value: number) => {
+        const safe = Number.isFinite(value) && value > 0 ? value : 1;
+        setEditRule((prev) => ({
+            ...prev,
+            tagWeights: {
+                ...(prev.tagWeights || {}),
+                [tagCode]: safe,
+            },
         }));
     };
 
@@ -242,10 +264,21 @@ const CertificationConfig: React.FC = () => {
 
                         <div className="flex flex-wrap gap-2 mt-2">
                             {editRule.requiredTags?.map(tag => (
-                                <span key={tag} className="text-xs bg-white border border-slate-300 px-2 py-1 rounded flex items-center shadow-sm">
-                                    {tag}
-                                    <button onClick={() => removeTagFromRule(tag)} className="ml-2 text-red-500"><X size={12}/></button>
-                                </span>
+                                <div key={tag} className="text-xs bg-white border border-slate-300 px-2 py-1 rounded flex items-center shadow-sm gap-2">
+                                    <span>{tag}</span>
+                                    {editRule.logic === 'MIN_COUNT' && (
+                                        <input
+                                            type="number"
+                                            min={0.1}
+                                            step={0.1}
+                                            className="w-16 rounded border border-slate-300 px-1 py-0.5 text-[11px]"
+                                            value={Number((editRule.tagWeights || {})[tag] ?? 1)}
+                                            onChange={(e) => updateTagWeight(tag, Number(e.target.value))}
+                                            title="Tag weight"
+                                        />
+                                    )}
+                                    <button onClick={() => removeTagFromRule(tag)} className="ml-1 text-red-500"><X size={12}/></button>
+                                </div>
                             ))}
                             {editRule.requiredTags?.length === 0 && <span className="text-xs text-slate-400 italic">No tags added.</span>}
                         </div>
