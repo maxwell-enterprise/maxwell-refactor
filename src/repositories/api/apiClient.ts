@@ -1,5 +1,9 @@
 import { APP_CONFIG } from '../../lib/config';
-import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
+import {
+  getWorkspaceToken,
+  markBackendHealthy,
+  registerBackendFailureAndMaybeLogout,
+} from '../../lib/workspaceAuthToken';
 
 function buildUrl(path: string): string {
   const baseUrl = APP_CONFIG.API_BASE_URL.replace(/\/+$/, '');
@@ -61,7 +65,15 @@ export async function apiRequest<T>(
       },
       cache: 'no-store',
     });
+    if (token && [500, 502, 503, 504].includes(response.status)) {
+      registerBackendFailureAndMaybeLogout();
+    } else {
+      markBackendHealthy();
+    }
   } catch (err) {
+    if (getWorkspaceToken()) {
+      registerBackendFailureAndMaybeLogout();
+    }
     const base = APP_CONFIG.API_BASE_URL;
     const hint =
       typeof err === 'object' &&

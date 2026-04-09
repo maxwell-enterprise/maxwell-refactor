@@ -6,6 +6,7 @@ import { DEFAULT_ROLES } from '../constants/securityDefs';
 import { PermissionService } from '../services/permissionService';
 import { useAuth } from './AuthContext';
 import { UserRole } from '../types/index';
+import { getWorkspaceToken } from '../lib/workspaceAuthToken';
 
 interface SecurityContextType {
   roles: Role[];
@@ -21,20 +22,44 @@ interface SecurityContextType {
 const SecurityContext = createContext<SecurityContextType | undefined>(undefined);
 
 export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { userRole } = useAuth();
+  const { userRole, isAuthenticated, isLoading } = useAuth();
   const [roles, setRoles] = useState<Role[]>([]); // Init empty, load async
   const [auditLogs, setAuditLogs] = useState<SecurityAuditLog[]>([]);
 
   // 1. Load Roles from DB on mount
   useEffect(() => {
+      if (isLoading) return;
+
+      // Fresh local open / logged out state: never call super-admin endpoints.
+      const token = getWorkspaceToken();
+      if (!isAuthenticated || !token) {
+        setRoles(DEFAULT_ROLES);
+        setAuditLogs([]);
+        return;
+      }
+
+      // `/system/security/*` is super-admin only; avoid unauthorized calls for other roles.
+      if (userRole !== UserRole.SUPER_ADMIN) {
+        setRoles(DEFAULT_ROLES);
+        setAuditLogs([]);
+        return;
+      }
+
       const load = async () => {
-          const loadedRoles = await PermissionService.getRoles();
-          setRoles(loadedRoles);
-          const loadedLogs = await PermissionService.getLogs();
-          setAuditLogs(loadedLogs);
+          try {
+            const loadedRoles = await PermissionService.getRoles();
+            setRoles(loadedRoles);
+            const loadedLogs = await PermissionService.getLogs();
+            setAuditLogs(loadedLogs);
+          } catch (error) {
+            // Security endpoints are restricted; avoid crashing non-admin sessions.
+            console.warn('Security context load skipped:', error);
+            setRoles(DEFAULT_ROLES);
+            setAuditLogs([]);
+          }
       };
       load();
-  }, []);
+  }, [isAuthenticated, isLoading, userRole]);
 
   const currentRole = useMemo(() => {
       // Fallback to DEFAULT_ROLES if state is empty (during initial load)

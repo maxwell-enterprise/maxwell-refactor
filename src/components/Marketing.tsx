@@ -48,6 +48,18 @@ const Marketing: React.FC = () => {
       loadCampaignContext();
   }, []);
 
+  useEffect(() => {
+      const interval = window.setInterval(async () => {
+          try {
+              const campaignData = await CampaignService.getCampaigns();
+              setCampaigns(campaignData);
+          } catch {
+              // Silent on background refresh to avoid toast spam.
+          }
+      }, 8000);
+      return () => window.clearInterval(interval);
+  }, []);
+
   const loadCampaignContext = async () => {
       setLoading(true);
       try {

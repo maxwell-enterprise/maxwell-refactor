@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import CommandPalette from '../components/common/CommandPalette'; 
 import { ViewState, UserRole } from '../types/index';
-import { Menu, Bell, Search, UserCircle, ChevronDown, CheckCircle, RefreshCw } from 'lucide-react';
+import { Menu, Search, UserCircle, ChevronDown, CheckCircle, RefreshCw } from 'lucide-react';
+import { BellIcon } from '@/components/ui/bell';
 import { useAuth } from '../context/AuthContext';
 import { TaskService, UnifiedTask } from '../services/taskService';
 import PersonaSwitcherModal from '../components/auth/PersonaSwitcherModal'; // NEW IMPORT
@@ -32,6 +33,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   // Notification State
   const [showNotifications, setShowNotifications] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<UnifiedTask[]>([]);
+  const [isHeaderAvatarBroken, setIsHeaderAvatarBroken] = useState(false);
 
   // Hotkey Listener for Cmd+K / Ctrl+K
   useEffect(() => {
@@ -89,6 +91,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  useEffect(() => {
+    setIsHeaderAvatarBroken(false);
+  }, [user?.avatarUrl]);
 
   useEffect(() => {
     const applyBodyScrollLock = () => {
@@ -217,7 +223,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                             onClick={() => setShowNotifications(!showNotifications)}
                             className={`relative p-2.5 rounded-full transition-all duration-200 ${showNotifications ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}`}
                         >
-                            <Bell size={20} />
+                            <BellIcon size={20} />
                             {pendingTasks.length > 0 && (
                                 <span className={`absolute top-2 right-2.5 h-2 w-2 rounded-full ring-2 ring-white ${highPriorityCount > 0 ? 'bg-red-500' : 'bg-blue-500'}`}></span>
                             )}
@@ -274,8 +280,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                       </div>
                       <div className="h-10 w-10 rounded-full p-0.5 bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md group-hover:shadow-lg transition-all ring-2 ring-white">
                         <div className="h-full w-full rounded-full bg-white flex items-center justify-center overflow-hidden border-2 border-white">
-                            {user?.avatarUrl ? (
-                                <img src={user.avatarUrl} alt={user.fullName} className="h-full w-full object-cover" />
+                            {user?.avatarUrl && !isHeaderAvatarBroken ? (
+                                <img
+                                  src={user.avatarUrl}
+                                  alt={user.fullName}
+                                  className="h-full w-full object-cover"
+                                  onError={() => setIsHeaderAvatarBroken(true)}
+                                />
                             ) : (
                                 <UserCircle size={24} className="text-slate-400" />
                             )}

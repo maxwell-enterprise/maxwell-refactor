@@ -12,7 +12,7 @@ const NOTIF_DEV_MSG =
   'Notifikasi ini belum dapat diaktifkan. Fitur masih dalam tahap pengembangan.';
 
 const ProfileSettings: React.FC = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, refreshSession } = useAuth();
     const { showToast } = useToast();
     const avatarInputRef = useRef<HTMLInputElement | null>(null);
     
@@ -29,6 +29,7 @@ const ProfileSettings: React.FC = () => {
     });
     const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
     const [avatarPayload, setAvatarPayload] = useState<string | null | undefined>(undefined);
+    const [isAvatarBroken, setIsAvatarBroken] = useState(false);
 
     // Password State
     const [passwords, setPasswords] = useState({
@@ -51,6 +52,7 @@ const ProfileSettings: React.FC = () => {
             email: user?.email || '',
         }));
         setAvatarPreview(user?.avatarUrl ?? null);
+        setIsAvatarBroken(false);
     }, [user?.fullName, user?.email, user?.avatarUrl]);
 
     useEffect(() => {
@@ -119,6 +121,7 @@ const ProfileSettings: React.FC = () => {
             const dataUrl = await fileToCompressedDataUrl(file);
             setAvatarPreview(dataUrl);
             setAvatarPayload(dataUrl);
+            setIsAvatarBroken(false);
             showToast('Photo selected. Click Save Changes.', 'success');
         } catch {
             showToast('Failed to process image.', 'error');
@@ -170,6 +173,7 @@ const ProfileSettings: React.FC = () => {
                 return;
             }
             setAvatarPayload(undefined);
+            await refreshSession();
             showToast('Profile updated successfully', 'success');
         } catch {
             // fallback for local/mock mode
@@ -250,8 +254,13 @@ const ProfileSettings: React.FC = () => {
                                 }
                             }}>
                                 <div className="w-20 h-20 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-md">
-                                    {avatarPreview ? (
-                                        <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+                                    {avatarPreview && !isAvatarBroken ? (
+                                        <img
+                                            src={avatarPreview}
+                                            alt="Avatar"
+                                            className="w-full h-full object-cover"
+                                            onError={() => setIsAvatarBroken(true)}
+                                        />
                                     ) : (
                                         <User size={40} className="w-full h-full p-4 text-slate-400" />
                                     )}

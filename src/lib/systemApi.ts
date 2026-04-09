@@ -3,8 +3,19 @@ import type { AIUsageLog } from '../types/index';
 import type { Role } from '../types/security';
 import type { SecurityAuditLog } from '../types/security';
 import { APP_CONFIG } from './config';
+import { getWorkspaceToken } from './workspaceAuthToken';
 
 const base = () => APP_CONFIG.API_BASE_URL.replace(/\/$/, '');
+
+function withDefaultHeaders(headers?: HeadersInit): Headers {
+  const merged = new Headers(headers);
+  merged.set('Content-Type', 'application/json');
+  const token = getWorkspaceToken();
+  if (token) {
+    merged.set('Authorization', `Bearer ${token}`);
+  }
+  return merged;
+}
 
 async function requestJson<T>(
   path: string,
@@ -13,10 +24,7 @@ async function requestJson<T>(
   const url = `${base()}${path.startsWith('/') ? path : `/${path}`}`;
   const res = await fetch(url, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
+    headers: withDefaultHeaders(init?.headers),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -32,10 +40,7 @@ async function requestOk(path: string, init?: RequestInit): Promise<void> {
   const url = `${base()}${path.startsWith('/') ? path : `/${path}`}`;
   const res = await fetch(url, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
+    headers: withDefaultHeaders(init?.headers),
   });
   if (!res.ok) {
     const text = await res.text();

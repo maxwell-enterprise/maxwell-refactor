@@ -1,5 +1,9 @@
 import { APP_CONFIG } from './config';
-import { getWorkspaceToken } from './workspaceAuthToken';
+import {
+  getWorkspaceToken,
+  markBackendHealthy,
+  registerBackendFailureAndMaybeLogout,
+} from './workspaceAuthToken';
 
 /** Nest `/fe` base (e.g. `http://localhost:3000/fe` with dev rewrite). */
 export function workspaceApiUrl(path: string): string {
@@ -14,13 +18,28 @@ export async function workspaceFetch(
   init: RequestInit = {},
 ): Promise<Response> {
   const token = getWorkspaceToken();
-  return fetch(workspaceApiUrl(path), {
-    ...init,
-    credentials: 'include',
-    cache: 'no-store',
-    headers: {
-      ...(init.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+  try {
+    const response = await fetch(workspaceApiUrl(path), {
+      ...init,
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        ...(init.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (token && [500, 502, 503, 504].includes(response.status)) {
+      registerBackendFailureAndMaybeLogout();
+    } else {
+      markBackendHealthy();
+    }
+
+    return response;
+  } catch (error) {
+    if (token) {
+      registerBackendFailureAndMaybeLogout();
+    }
+    throw error;
+  }
 }

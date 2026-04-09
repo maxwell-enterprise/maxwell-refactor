@@ -188,7 +188,7 @@ const DiscountManager: React.FC = () => {
                             </div>
                             
                             {can('WRITE') && (
-                                <div className="absolute top-10 right-2 z-10 flex flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/95 p-1 shadow-sm backdrop-blur-sm sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
+                                <div className="absolute top-10 right-2 z-10 flex flex-row items-center gap-1 rounded-lg border border-slate-200/80 bg-white/95 p-1 shadow-sm backdrop-blur-sm sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                                     <button 
                                         type="button"
                                         onClick={() => handleEdit(discount)}

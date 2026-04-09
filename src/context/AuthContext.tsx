@@ -34,6 +34,7 @@ interface AuthContextType {
     provider?: 'google' | 'email',
   ) => Promise<void>;
   logout: () => void;
+  refreshSession: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -68,11 +69,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           } | null;
         }
       | undefined;
+    let lastStatus: number | undefined;
 
     // Retry once to smooth rapid account-switch timing after OAuth callback.
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const res = await workspaceFetch('/auth/session');
+        lastStatus = res.status;
+        if (!res.ok) {
+          throw new Error(`session_http_${res.status}`);
+        }
         data = (await res.json()) as {
           user: {
             id: string;
@@ -89,6 +95,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           continue;
         }
       }
+    }
+
+    // Keep existing session state when backend is temporarily unreachable.
+    // Only clear local token on explicit auth failure from server.
+    if (!data && lastStatus !== 401 && lastStatus !== 403) {
+      setIsLoading(false);
+      return;
     }
 
     if (!data?.user) {
@@ -130,6 +143,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     };
     window.addEventListener(getWorkspaceTokenChangedEventName(), onTokenChanged);
     window.addEventListener('storage', onStorage);
+    const onOnline = () => {
+      void hydrateWorkspaceSession();
+    };
+    const onFocus = () => {
+      void hydrateWorkspaceSession();
+    };
+    window.addEventListener('online', onOnline);
+    window.addEventListener('focus', onFocus);
 
     return () => {
       cancelled = true;
@@ -138,6 +159,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         onTokenChanged,
       );
       window.removeEventListener('storage', onStorage);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('focus', onFocus);
     };
   }, [hydrateWorkspaceSession]);
 
@@ -239,12 +262,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     setUser(null);
   };
 
+  const refreshSession = useCallback(async () => {
+    if (USE_WORKSPACE && !APP_CONFIG.USE_MOCK_GLOBAL) {
+      await hydrateWorkspaceSession();
+    }
+  }, [hydrateWorkspaceSession]);
+
   const isAuthenticated = user !== null;
   const userRole = user?.role || UserRole.GUEST;
 
   return (
     <AuthContext.Provider
-      value={{ user, userRole, login, logout, isAuthenticated, isLoading }}
+      value={{
+        user,
+        userRole,
+        login,
+        logout,
+        refreshSession,
+        isAuthenticated,
+        isLoading,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -14,8 +14,18 @@ import { CampaignService } from './services/campaignService';
 /** Persists last admin screen so refresh on `/dashboard` returns to the same view (same tab). */
 const VIEW_STORAGE_KEY = 'maxwell_current_view';
 
+function toFeatureSlug(view: ViewState): string {
+  return String(view).toLowerCase().replace(/_/g, '-');
+}
+
+function fromFeatureSlug(slug: string): ViewState | null {
+  const normalized = slug.trim().toUpperCase().replace(/-/g, '_');
+  const values = Object.values(ViewState) as string[];
+  return values.includes(normalized) ? (normalized as ViewState) : null;
+}
+
 const App: React.FC = () => {
-  const { userRole, isAuthenticated, isLoading, login } = useAuth();
+  const { user, userRole, isAuthenticated, isLoading, login } = useAuth();
   const [currentView, setCurrentViewState] = useState<ViewState>(ViewState.DASHBOARD);
   const [redirectingGuestFromDashboard, setRedirectingGuestFromDashboard] =
     useState(false);
@@ -43,6 +53,17 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view');
+    if (!viewParam) return;
+    const parsed = fromFeatureSlug(viewParam);
+    if (parsed) {
+      setCurrentViewState(parsed);
+    }
+  }, []);
+
+  useEffect(() => {
     try {
       const raw = sessionStorage.getItem(VIEW_STORAGE_KEY);
       if (raw && (Object.values(ViewState) as string[]).includes(raw)) {
@@ -67,6 +88,20 @@ const App: React.FC = () => {
       setIsPersonalZone(true);
     }
   }, [userRole]);
+
+  useEffect(() => {
+    if (!isAuthenticated || typeof window === 'undefined') return;
+    if (!window.location.pathname.startsWith('/dashboard')) return;
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', toFeatureSlug(currentView));
+    if (user?.fullName?.trim()) {
+      url.searchParams.set('user', user.fullName.trim());
+    } else {
+      url.searchParams.delete('user');
+    }
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [isAuthenticated, currentView, user?.fullName]);
 
   useEffect(() => {
     if (isLoading || isAuthenticated || typeof window === 'undefined') return;

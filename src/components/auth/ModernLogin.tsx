@@ -6,6 +6,7 @@ import { UserService } from '../../services/userService';
 import { DataService } from '../../services/dataService'; 
 import { useToast } from '../../context/ToastContext';
 import { workspaceApiUrl } from '../../lib/workspaceApi';
+import { setWorkspaceToken } from '../../lib/workspaceAuthToken';
 
 /** Nest `/fe/auth/*` — identity di backend, bukan Next/Prisma. */
 const USE_WORKSPACE =
@@ -53,6 +54,8 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
 
     if (USE_WORKSPACE) {
       setIsLoading(true);
+      // Start a fresh auth attempt: clear potentially stale local JWT first.
+      setWorkspaceToken(null);
       try {
         const res = await fetch(workspaceApiUrl('/auth/email/send'), {
           method: 'POST',
@@ -78,7 +81,10 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
         setStep('EMAIL_SENT');
         showToast('Periksa inbox email Anda untuk tautan masuk.', 'success');
       } catch {
-        showToast('Gagal mengirim tautan masuk.', 'error');
+        showToast(
+          'Auth backend tidak terjangkau. Jalankan backend di :3002 dulu, lalu coba lagi.',
+          'error',
+        );
       } finally {
         setIsLoading(false);
       }
@@ -121,7 +127,29 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
       return;
     }
     setIsLoading(true);
-    window.location.href = workspaceApiUrl('/auth/google');
+    // Start a fresh auth attempt: clear potentially stale local JWT first.
+    setWorkspaceToken(null);
+    try {
+      const health = await fetch(workspaceApiUrl('/health'), {
+        method: 'GET',
+        cache: 'no-store',
+      });
+      if (!health.ok) {
+        showToast(
+          'Auth backend belum siap. Cek server :3002, lalu coba Google login lagi.',
+          'error',
+        );
+        return;
+      }
+      window.location.href = workspaceApiUrl('/auth/google');
+    } catch {
+      showToast(
+        'Auth backend tidak terjangkau. Jalankan backend di :3002 dulu.',
+        'error',
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDevSelect = async (user: UserProfile) => {
