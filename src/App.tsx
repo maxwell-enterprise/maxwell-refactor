@@ -8,6 +8,8 @@ import LandingPage from './components/LandingPage';
 import BackgroundWorker from './components/system/BackgroundWorker';
 import { resolveView } from './features/dashboard/logic/viewResolver';
 import SessionLoadingScreen from './components/system/SessionLoadingScreen';
+import { CampaignAttributionService } from './services/campaignAttributionService';
+import { CampaignService } from './services/campaignService';
 
 /** Persists last admin screen so refresh on `/dashboard` returns to the same view (same tab). */
 const VIEW_STORAGE_KEY = 'maxwell_current_view';
@@ -22,6 +24,22 @@ const App: React.FC = () => {
 
   useEffect(() => {
     SeedService.init().catch(err => console.error("Seeding failed", err));
+  }, []);
+
+  // Fallback tracker for non-app-router entry: record click before auth/dashboard.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const source = params.get('source')?.trim();
+    if (!source) return;
+
+    const normalized = CampaignAttributionService.saveSource(source);
+    if (!normalized) return;
+    if (!CampaignAttributionService.shouldTrackClick(normalized)) return;
+
+    CampaignService.trackClick(normalized).catch((error) => {
+      console.warn('[Campaign] app-level click tracking failed:', error);
+    });
   }, []);
 
   useEffect(() => {

@@ -33,6 +33,7 @@ import { collectEventIdsFromProducts } from '../../utils/productEventRefs';
 import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 import { CampaignService } from '../../services/campaignService';
 import { CampaignAttributionService } from '../../services/campaignAttributionService';
+import { UserVoucherService } from '../../services/userVoucherService';
 
 const PAGE_SIZE = 18;
 
@@ -66,6 +67,9 @@ const Storefront: React.FC = () => {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [attributionSource, setAttributionSource] = useState<string | undefined>(undefined); 
     const [autoAppliedDiscount, setAutoAppliedDiscount] = useState<string>('');
+    const [stickyVoucher, setStickyVoucher] = useState<{ code: string; productId?: string } | null>(null);
+    const [autoCheckoutProductId, setAutoCheckoutProductId] = useState<string | null>(null);
+    const [autoCheckoutArmed, setAutoCheckoutArmed] = useState(false);
 
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
@@ -97,9 +101,17 @@ const Storefront: React.FC = () => {
         const params = new URLSearchParams(window.location.search);
         const querySource = params.get('source');
         const queryDiscount = params.get('discount');
+        const queryProductId = params.get('productId') || params.get('product') || null;
+        const queryAutoCheckout = params.get('checkout') === '1' || params.get('autocheckout') === '1';
 
         if (queryDiscount) {
             setAutoAppliedDiscount(queryDiscount.trim().toUpperCase());
+        }
+        if (queryProductId) {
+          setAutoCheckoutProductId(queryProductId.trim());
+        }
+        if (queryAutoCheckout) {
+          setAutoCheckoutArmed(true);
         }
 
         const sourceFromStorage = CampaignAttributionService.getSource();
@@ -119,6 +131,23 @@ const Storefront: React.FC = () => {
             console.warn('[Campaign] Failed to track click:', error);
         });
     }, []);
+
+    // Load sticky voucher from backend (per-account)
+    useEffect(() => {
+      if (!user?.id) return;
+      (async () => {
+        try {
+          const v = await UserVoucherService.getMyVoucher();
+          if (v?.code) {
+            setStickyVoucher({ code: v.code, productId: v.productId });
+          } else {
+            setStickyVoucher(null);
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    }, [user?.id]);
 
     const buildListQuery = useCallback(
         (pageNum: number) => ({
@@ -186,6 +215,15 @@ const Storefront: React.FC = () => {
                 pageRef.current = 1;
                 setHasMore(t > 0 && data.length < t);
                 await mergeEventsForProducts(data);
+
+                // Auto-checkout: if URL carries productId+discount, prefill cart then open checkout.
+                if (autoCheckoutArmed && autoCheckoutProductId) {
+                  const target = data.find((p) => p.id === autoCheckoutProductId);
+                  if (target) {
+                    setCart([{ productId: target.id, variantId: target.hasVariants ? (target.variants?.[0]?.id ?? undefined) : undefined, quantity: 1 }]);
+                    setIsPaymentModalOpen(true);
+                  }
+                }
             } catch (err) {
                 if (!cancelled && gen === listFetchGenRef.current) {
                     const raw = err instanceof Error ? err.message : String(err);
@@ -211,7 +249,23 @@ const Storefront: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [user, debouncedSearch, selectedCategory, buildListQuery, mergeEventsForProducts]);
+    }, [user, debouncedSearch, selectedCategory, buildListQuery, mergeEventsForProducts, autoCheckoutArmed, autoCheckoutProductId]);
+
+    // If URL had voucher params, claim to backend so it sticks to account.
+    useEffect(() => {
+      if (!user?.id) return;
+      if (!autoAppliedDiscount) return;
+      // Only claim once per mount for this page.
+      (async () => {
+        try {
+          await UserVoucherService.claimMyVoucher(autoAppliedDiscount, autoCheckoutProductId ?? undefined);
+          setStickyVoucher({ code: autoAppliedDiscount, productId: autoCheckoutProductId ?? undefined });
+        } catch {
+          // ignore
+        }
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, autoAppliedDiscount]);
 
     useEffect(() => {
         setActiveVariantSelections((prev) => {
@@ -684,7 +738,14 @@ const Storefront: React.FC = () => {
                 userRole={userRole}
                 onUpdateQuantity={updateCartQuantity}
                 onRemoveItem={removeFromCart}
-                preAppliedDiscountCode={autoAppliedDiscount}
+                preAppliedDiscountCode={
+                  // Prefer sticky voucher when cart is for its product; else fall back to URL discount.
+                  stickyVoucher?.code &&
+                  (!stickyVoucher.productId ||
+                    cart.some((c) => c.productId === stickyVoucher.productId))
+                    ? stickyVoucher.code
+                    : autoAppliedDiscount
+                }
                 attributionSource={attributionSource} 
             />
 

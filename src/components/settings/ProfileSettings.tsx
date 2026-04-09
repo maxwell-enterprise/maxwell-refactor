@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, Lock, Bell, Camera, Save, LogOut } from 'lucide-react';
+import { User, Lock, Bell, Camera, Save, LogOut, Trash2 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { UserService } from '../../services/userService';
 import { UserNotificationPreferencesService } from '../../services/userNotificationPreferencesService';
+import { workspaceFetch } from '../../lib/workspaceApi';
+import { UserRole } from '../../types/index';
 
 const NOTIF_DEV_MSG =
   'Notifikasi ini belum dapat diaktifkan. Fitur masih dalam tahap pengembangan.';
@@ -12,6 +14,7 @@ const NOTIF_DEV_MSG =
 const ProfileSettings: React.FC = () => {
     const { user, logout } = useAuth();
     const { showToast } = useToast();
+    const avatarInputRef = useRef<HTMLInputElement | null>(null);
     
     const [activeTab, setActiveTab] = useState<'PROFILE' | 'SECURITY' | 'NOTIFICATIONS'>('PROFILE');
     const [isLoading, setIsLoading] = useState(false);
@@ -23,8 +26,9 @@ const ProfileSettings: React.FC = () => {
         // These fields are mock for now as they aren't on UserProfile type yet, 
         // but we handle basic fields.
         phone: '081234567890', 
-        title: 'Member'
     });
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
+    const [avatarPayload, setAvatarPayload] = useState<string | null | undefined>(undefined);
 
     // Password State
     const [passwords, setPasswords] = useState({
@@ -39,6 +43,15 @@ const ProfileSettings: React.FC = () => {
         emailMarketing: false,
         smsAlerts: false,
     });
+
+    useEffect(() => {
+        setFormData((prev) => ({
+            ...prev,
+            fullName: user?.fullName || '',
+            email: user?.email || '',
+        }));
+        setAvatarPreview(user?.avatarUrl ?? null);
+    }, [user?.fullName, user?.email, user?.avatarUrl]);
 
     useEffect(() => {
         if (!user?.id) return;
@@ -68,6 +81,52 @@ const ProfileSettings: React.FC = () => {
         }
     }, [activeTab]);
 
+    const fileToCompressedDataUrl = async (file: File): Promise<string> => {
+        const bitmap = await createImageBitmap(file);
+        const maxSide = 512;
+        const ratio = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+        const w = Math.max(1, Math.round(bitmap.width * ratio));
+        const h = Math.max(1, Math.round(bitmap.height * ratio));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas is not supported');
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        const out = canvas.toDataURL('image/jpeg', 0.85);
+        bitmap.close();
+        return out;
+    };
+
+    const handleAvatarClick = () => {
+        avatarInputRef.current?.click();
+    };
+
+    const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            showToast('Please choose an image file.', 'error');
+            e.target.value = '';
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Image is too large. Max 5MB.', 'error');
+            e.target.value = '';
+            return;
+        }
+        try {
+            const dataUrl = await fileToCompressedDataUrl(file);
+            setAvatarPreview(dataUrl);
+            setAvatarPayload(dataUrl);
+            showToast('Photo selected. Click Save Changes.', 'success');
+        } catch {
+            showToast('Failed to process image.', 'error');
+        } finally {
+            e.target.value = '';
+        }
+    };
+
     const flipNotification = (
         key: 'emailTransactional' | 'emailMarketing' | 'smsAlerts',
     ) => {
@@ -89,14 +148,40 @@ const ProfileSettings: React.FC = () => {
         if (!user) return;
         setIsLoading(true);
         try {
-            await UserService.updateUserProfile(user.id, {
-                fullName: formData.fullName,
-                // Email usually requires re-verification, we simulate update here
-                email: formData.email
+            const res = await workspaceFetch('/me/profile', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fullName: formData.fullName,
+                    email: formData.email,
+                    image: avatarPayload,
+                }),
             });
+            if (!res.ok) {
+                let msg = 'Failed to update profile';
+                try {
+                    const data = (await res.json()) as { message?: string | string[] };
+                    if (typeof data?.message === 'string') msg = data.message;
+                    else if (Array.isArray(data?.message)) msg = data.message.join(', ');
+                } catch {
+                    /* ignore */
+                }
+                showToast(msg, 'error');
+                return;
+            }
+            setAvatarPayload(undefined);
             showToast('Profile updated successfully', 'success');
-        } catch (e) {
-            showToast('Failed to update profile', 'error');
+        } catch {
+            // fallback for local/mock mode
+            try {
+                await UserService.updateUserProfile(user.id, {
+                    fullName: formData.fullName,
+                    email: formData.email
+                });
+                showToast('Profile updated successfully', 'success');
+            } catch {
+                showToast('Failed to update profile', 'error');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -115,6 +200,40 @@ const ProfileSettings: React.FC = () => {
         }, 800);
     };
 
+    const handleDeleteAccount = async () => {
+        if (!user?.id) return;
+        if (user.role === UserRole.SUPER_ADMIN) {
+            showToast('Super Admin account cannot be deleted.', 'error');
+            return;
+        }
+        const ok = window.confirm(
+            'Delete this account permanently? This action cannot be undone.'
+        );
+        if (!ok) return;
+        setIsLoading(true);
+        try {
+            const res = await workspaceFetch('/me/account', { method: 'DELETE' });
+            if (!res.ok) {
+                let msg = 'Failed to delete account.';
+                try {
+                    const data = (await res.json()) as { message?: string | string[] };
+                    if (typeof data?.message === 'string') msg = data.message;
+                    else if (Array.isArray(data?.message)) msg = data.message.join(', ');
+                } catch {
+                    /* ignore */
+                }
+                showToast(msg, 'error');
+                return;
+            }
+            showToast('Account deleted.', 'success');
+            await logout();
+        } catch {
+            showToast('Network error while deleting account.', 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="p-6 max-w-4xl mx-auto animate-fade-in">
             <h1 className="text-2xl font-bold text-slate-900 mb-6">Account Settings</h1>
@@ -124,10 +243,15 @@ const ProfileSettings: React.FC = () => {
                 <div className="w-full md:w-64 flex-shrink-0">
                     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                         <div className="p-6 flex flex-col items-center border-b border-slate-100 bg-slate-50">
-                            <div className="relative group cursor-pointer">
+                            <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0} onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    handleAvatarClick();
+                                }
+                            }}>
                                 <div className="w-20 h-20 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-md">
-                                    {user?.avatarUrl ? (
-                                        <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                    {avatarPreview ? (
+                                        <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
                                     ) : (
                                         <User size={40} className="w-full h-full p-4 text-slate-400" />
                                     )}
@@ -135,6 +259,13 @@ const ProfileSettings: React.FC = () => {
                                 <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Camera size={24} className="text-white" />
                                 </div>
+                                <input
+                                    ref={avatarInputRef}
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp"
+                                    className="hidden"
+                                    onChange={handleAvatarFileChange}
+                                />
                             </div>
                             <h3 className="font-bold text-slate-900 mt-3">{formData.fullName || user?.fullName}</h3>
                             <p className="text-xs text-slate-500">{user?.role}</p>
@@ -164,6 +295,22 @@ const ProfileSettings: React.FC = () => {
                         </nav>
                         
                         <div className="p-4 border-t border-slate-100">
+                            <button
+                                onClick={handleDeleteAccount}
+                                disabled={isLoading || user?.role === UserRole.SUPER_ADMIN}
+                                className={`mb-2 w-full flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                    user?.role === UserRole.SUPER_ADMIN
+                                        ? 'text-slate-400 bg-slate-50 cursor-not-allowed'
+                                        : 'text-red-600 hover:bg-red-50'
+                                }`}
+                                title={
+                                    user?.role === UserRole.SUPER_ADMIN
+                                        ? 'Super Admin account cannot be deleted.'
+                                        : 'Delete account permanently'
+                                }
+                            >
+                                <Trash2 size={18} className="mr-3" /> Delete Account
+                            </button>
                             <button onClick={logout} className="w-full flex items-center px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                                 <LogOut size={18} className="mr-3"/> Sign Out
                             </button>
@@ -195,9 +342,10 @@ const ProfileSettings: React.FC = () => {
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Job Title</label>
                                         <input 
                                             type="text" 
-                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={formData.title}
-                                            onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-500 cursor-not-allowed outline-none"
+                                            value={(user?.role || 'MEMBER').replace(/_/g, ' ')}
+                                            readOnly
+                                            disabled
                                         />
                                     </div>
                                     <div>

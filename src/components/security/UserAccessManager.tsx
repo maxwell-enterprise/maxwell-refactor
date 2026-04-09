@@ -187,7 +187,9 @@ const UserAccessManager: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {filteredUsers.map(user => (
+                        {filteredUsers.map((user) => {
+                            const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
+                            return (
                             <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                 <td className="px-6 py-4">
                                     <div className="flex items-center">
@@ -205,6 +207,9 @@ const UserAccessManager: React.FC = () => {
                                         className={`text-xs font-bold py-1.5 pl-2 pr-8 rounded-lg border appearance-none cursor-pointer outline-none focus:ring-2 focus:ring-blue-500/20 transition-all ${getRoleColor(user.role)}`}
                                         value={user.role}
                                         onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
+                                        disabled={isSuperAdmin}
+                                        aria-disabled={isSuperAdmin ? 'true' : undefined}
+                                        title={isSuperAdmin ? 'Super Admin role cannot be changed from Quick Actions.' : undefined}
                                     >
                                         {Object.values(UserRole).map(role => (
                                             <option key={role} value={role} className="bg-white text-slate-700">
@@ -230,15 +235,26 @@ const UserAccessManager: React.FC = () => {
                                         </button>
                                         <button
                                             onClick={() => handleRevokeAccess(user)}
-                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                                            title="Revoke staff access (set role to MEMBER)"
+                                            disabled={isSuperAdmin}
+                                            aria-disabled={isSuperAdmin ? 'true' : undefined}
+                                            className={`p-2 rounded-lg ${
+                                              isSuperAdmin
+                                                ? 'text-slate-300 cursor-not-allowed'
+                                                : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                            }`}
+                                            title={
+                                              isSuperAdmin
+                                                ? 'Super Admin access cannot be revoked from Quick Actions.'
+                                                : 'Revoke staff access (set role to MEMBER)'
+                                            }
                                         >
                                             <XCircle size={16} />
                                         </button>
                                     </div>
                                 </td>
                             </tr>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             )}

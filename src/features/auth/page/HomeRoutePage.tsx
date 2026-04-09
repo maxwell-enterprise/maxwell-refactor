@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import LandingPage from "../../../components/LandingPage";
 import SessionLoadingScreen from "../../../components/system/SessionLoadingScreen";
 import { useAuth } from "../../../context/AuthContext";
+import { CampaignAttributionService } from "../../../services/campaignAttributionService";
+import { CampaignService } from "../../../services/campaignService";
 
 /**
  * Home route composition: auth redirect + landing.
@@ -19,6 +21,22 @@ export default function HomeRoutePage() {
       router.replace("/dashboard");
     }
   }, [isLoading, isAuthenticated, router]);
+
+  // Track campaign click as early as possible (landing page, before login).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const source = params.get("source")?.trim();
+    if (!source) return;
+
+    const normalized = CampaignAttributionService.saveSource(source);
+    if (!normalized) return;
+    if (!CampaignAttributionService.shouldTrackClick(normalized)) return;
+
+    CampaignService.trackClick(normalized).catch((error) => {
+      console.warn("[Campaign] early click tracking failed:", error);
+    });
+  }, []);
 
   if (isLoading) {
     return <SessionLoadingScreen />;
