@@ -29,16 +29,15 @@ import { MockInventoryRepository } from './mock/mockInventoryRepository';
 import { SupabaseInventoryRepository } from './supabase/supabaseInventoryRepository';
 import { MockWorkflowRepository } from './mock/mockWorkflowRepository';
 import { SupabaseWorkflowRepository } from './supabase/supabaseWorkflowRepository';
-import { ApiWorkflowRepository } from './api/apiWorkflowRepository';
 import { MockGamificationRepository } from './mock/mockGamificationRepository';
 import { SupabaseGamificationRepository } from './supabase/supabaseGamificationRepository';
 import { MockContentRepository } from './mock/mockContentRepository';
 import { SupabaseContentRepository } from './supabase/supabaseContentRepository';
+import { ApiContentRepository } from './api/apiContentRepository';
 import { MockCommunicationRepository } from './mock/mockCommunicationRepository';
 import { SupabaseCommunicationRepository } from './supabase/supabaseCommunicationRepository';
 import { MockWhatsappRepository } from './mock/mockWhatsappRepository';
 import { SupabaseWhatsappRepository } from './supabase/supabaseWhatsappRepository';
-import { ApiWhatsappRepository } from './api/apiWhatsappRepository';
 import { MockEventRepository } from './mock/mockEventRepository';
 import { SupabaseEventRepository } from './supabase/supabaseEventRepository';
 import { ApiEventRepository } from './api/apiEventRepository';
@@ -190,8 +189,13 @@ export const RepositoryFactory = {
     getGamificationRepository: (): IGamificationRepository => {
         if (!gamificationRepo) {
             const mode = getDomainMode('Gamification', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.GAMIFICATION);
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
-            gamificationRepo = useRealDb ? new SupabaseGamificationRepository() : new MockGamificationRepository();
+            if (mode === 'API') {
+                gamificationRepo = new ApiGamificationRepository();
+            } else if (!APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE') {
+                gamificationRepo = new SupabaseGamificationRepository();
+            } else {
+                gamificationRepo = new MockGamificationRepository();
+            }
         }
         return gamificationRepo;
     },
@@ -199,8 +203,13 @@ export const RepositoryFactory = {
     getContentRepository: (): IContentRepository => {
         if (!contentRepo) {
             const mode = getDomainMode('Content', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.CONTENT);
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
-            contentRepo = useRealDb ? new SupabaseContentRepository() : new MockContentRepository();
+            if (mode === 'API') {
+                contentRepo = new ApiContentRepository();
+            } else if (!APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE') {
+                contentRepo = new SupabaseContentRepository();
+            } else {
+                contentRepo = new MockContentRepository();
+            }
         }
         return contentRepo;
     },

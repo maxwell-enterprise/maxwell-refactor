@@ -355,34 +355,57 @@ const CertificationConfig: React.FC = () => {
     );
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-full flex flex-col">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <Award className="mr-3 text-amber-500" /> Certification Rules
-                    </h1>
-                    <p className="text-slate-500 mt-1">Define logic for automated achievement issuance.</p>
-                </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button 
-                        onClick={() => { setActiveTab('RULES'); setIsEditingTag(false); setIsEditingRule(false); }} 
-                        className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'RULES' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}
-                    >
-                        Rules Engine
-                    </button>
-                    <button 
-                        onClick={() => { setActiveTab('TAGS'); setIsEditingTag(false); setIsEditingRule(false); }} 
-                        className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'TAGS' ? 'bg-white shadow text-indigo-700' : 'text-slate-500'}`}
-                    >
-                        Tag Library
-                    </button>
+        <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
+            <div className="border-b border-slate-200 bg-white">
+                <div className="page-container flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4 sm:py-5">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                            <Award className="h-5 w-5" strokeWidth={2} aria-hidden />
+                        </span>
+                        <div className="min-w-[220px] pt-0.5 sm:min-w-[280px]">
+                            <h1 className="text-xl font-bold leading-tight tracking-tight text-slate-900 sm:text-2xl">
+                                Certification Rules
+                            </h1>
+                            <p className="mt-1.5 max-w-2xl text-sm leading-normal text-slate-600 sm:text-[15px]">
+                                Define logic for automated achievement issuance.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="w-full max-w-full overflow-x-auto rounded-lg bg-slate-100 p-0.5 shadow-inner sm:ml-auto sm:w-auto sm:shrink-0">
+                        <div className="inline-flex flex-nowrap gap-0.5">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setActiveTab('RULES');
+                                    setIsEditingTag(false);
+                                    setIsEditingRule(false);
+                                }}
+                                className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors sm:text-sm ${activeTab === 'RULES' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/90' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Rules Engine
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setActiveTab('TAGS');
+                                    setIsEditingTag(false);
+                                    setIsEditingRule(false);
+                                }}
+                                className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors sm:text-sm ${activeTab === 'TAGS' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200/90' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Tag Library
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* TAB CONTENT */}
+            <div className="min-h-0 flex-1 overflow-auto">
+                <div className="page-container py-4 sm:py-6">
             {loading ? (
-                <div className="flex flex-1 flex-col items-center justify-center min-h-[min(50vh,320px)] text-slate-500 text-sm">
-                    Memuat data…
+                <div className="flex min-h-[min(40vh,280px)] flex-col items-center justify-center gap-2 text-sm text-slate-500">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-400" aria-hidden />
+                    Loading…
                 </div>
             ) : (
             <>
@@ -399,13 +422,13 @@ const CertificationConfig: React.FC = () => {
                         {rules.length === 0 ? (
                             <div className="flex flex-1 flex-col items-center justify-center min-h-[min(50vh,280px)] rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center">
                                 <Award className="text-slate-300 mb-3" size={40} strokeWidth={1.25} />
-                                <p className="text-slate-600 font-medium">Belum ada certification rule</p>
-                                <p className="text-slate-500 text-sm mt-1 max-w-md">Tambah rule baru untuk mengatur logika penerbitan sertifikat otomatis.</p>
+                                <p className="text-slate-600 font-medium">No certification rules yet</p>
+                                <p className="mt-1 max-w-md text-sm text-slate-500">Add a rule to control how achievements unlock certificates.</p>
                             </div>
                         ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {rules.map(rule => (
-                                <div key={rule.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative">
+                                <div key={rule.id} className="bg-white p-5 rounded-xl border border-slate-300 shadow-sm hover:shadow-md transition-shadow relative">
                                     <button onClick={() => handleEditRule(rule)} className="absolute top-4 right-4 text-slate-400 hover:text-blue-600 p-1"><ListChecks size={18}/></button>
                                     
                                     <div className="flex items-start gap-4 mb-4">
@@ -418,7 +441,7 @@ const CertificationConfig: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs space-y-2">
+                                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-2">
                                         <div className="flex justify-between">
                                             <span className="text-slate-500 font-medium">Logic</span>
                                             <span className="font-mono font-bold text-blue-700">{rule.logic.replace('_', ' ')}</span>
@@ -456,11 +479,13 @@ const CertificationConfig: React.FC = () => {
                         {tags.length === 0 ? (
                             <div className="flex flex-1 flex-col items-center justify-center min-h-[min(50vh,280px)] rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center">
                                 <Tag className="text-slate-300 mb-3" size={40} strokeWidth={1.25} />
-                                <p className="text-slate-600 font-medium">Belum ada master tag</p>
-                                <p className="text-slate-500 text-sm mt-1 max-w-md">Buat tag selesai (done) yang bisa dipakai di event dan certification rules.</p>
+                                <p className="text-slate-600 font-medium">No master tags yet</p>
+                                <p className="mt-1 max-w-md text-sm text-slate-500">
+                                    Create completion (done) tags for events and certification rules.
+                                </p>
                             </div>
                         ) : (
-                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                        <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-sm">
                             <table className="w-full text-left text-sm">
                                 <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                                     <tr>
@@ -470,7 +495,7 @@ const CertificationConfig: React.FC = () => {
                                         <th className="p-4 text-right">Action</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className="divide-y divide-slate-300">
                                     {tags.map(tag => (
                                         <tr key={tag.id} className="hover:bg-slate-50">
                                             <td className="p-4 font-bold text-slate-900">{tag.label}</td>
@@ -495,6 +520,8 @@ const CertificationConfig: React.FC = () => {
             )}
             </>
             )}
+                </div>
+            </div>
         </div>
     );
 };

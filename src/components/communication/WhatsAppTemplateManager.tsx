@@ -244,10 +244,10 @@ const WhatsAppTemplateManager: React.FC = () => {
     };
 
     return (
-        <div className="flex h-full gap-6">
+        <div className="flex h-full min-h-0 min-w-0 flex-col gap-4 lg:flex-row lg:gap-6">
             
-            {/* LEFT: LIST */}
-            <div className="w-1/3 min-w-[280px] bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shadow-sm">
+            {/* LEFT: LIST — full width on mobile, fixed width on large screens */}
+            <div className="flex w-full min-h-[240px] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:min-h-0 lg:w-[min(100%,320px)] lg:max-w-[380px]">
                 <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                     <h3 className="font-bold text-slate-800 text-sm">Message Library</h3>
                     <div className="flex gap-2">
@@ -322,18 +322,18 @@ const WhatsAppTemplateManager: React.FC = () => {
             </div>
 
             {/* RIGHT: EDITOR / PREVIEW */}
-            <div className="flex-1 flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden relative">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 {(isEditing && editForm) ? (
                     <div className="flex flex-col h-full">
-                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                             <input 
                                 type="text" 
-                                className="font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-green-500 outline-none w-1/2 transition-colors"
+                                className="min-w-0 w-full font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-green-500 outline-none sm:max-w-md transition-colors"
                                 value={editForm.label}
                                 onChange={e => setEditForm({...editForm, label: e.target.value})}
                                 placeholder="Template Name"
                             />
-                            <div className="flex gap-2">
+                            <div className="flex shrink-0 flex-wrap gap-2 justify-end">
                                 <button
                                     type="button"
                                     onClick={() => { setIsEditing(false); setEditForm(null); setErrors([]); }}
@@ -361,10 +361,10 @@ const WhatsAppTemplateManager: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="flex-1 flex p-6 gap-6 overflow-hidden">
+                        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden p-4 lg:flex-row lg:gap-6 lg:p-6">
                             {/* Editor Input */}
-                            <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2">
-                                <div className="grid grid-cols-2 gap-4">
+                            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 lg:overflow-y-auto lg:pr-2">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Content Category (Tag)</label>
                                         <select 
@@ -456,9 +456,9 @@ const WhatsAppTemplateManager: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Live Preview */}
-                            <div className="w-[300px] flex flex-col items-center justify-center shrink-0">
-                                <div className="w-[280px] h-[550px] bg-slate-900 rounded-[2.5rem] border-[8px] border-slate-800 shadow-2xl relative overflow-hidden flex flex-col transform scale-95 origin-top">
+                            {/* Live Preview — below editor on mobile, beside on lg */}
+                            <div className="flex w-full max-w-full flex-col items-center justify-center border-t border-slate-100 pt-6 shrink-0 lg:w-[300px] lg:border-t-0 lg:pt-0 lg:border-l lg:border-slate-100 lg:pl-6">
+                                <div className="w-[min(100%,280px)] h-[min(70vh,550px)] max-h-[550px] bg-slate-900 rounded-[2.5rem] border-[8px] border-slate-800 shadow-2xl relative overflow-hidden flex flex-col transform scale-[0.92] origin-top sm:scale-95">
                                     {/* Notch */}
                                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-800 rounded-b-xl z-20"></div>
                                     

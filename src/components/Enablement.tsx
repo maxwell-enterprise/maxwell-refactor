@@ -99,28 +99,37 @@ const Enablement: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in relative pb-24">
+        <div className="relative flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
+            {/* Wider than default page-container on desktop so AI Mentor 3-col workbench matches reference */}
+            <div className="mx-auto box-border flex min-h-0 w-full min-w-0 max-w-[min(100%,100rem)] flex-1 flex-col gap-6 px-3 py-4 sm:gap-8 sm:px-5 sm:py-6 lg:px-10 lg:py-6">
             {/* Header & Smart Banner */}
-            <div className="space-y-6 mb-6">
-                <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                            <GraduationCap className="mr-3 text-indigo-600" /> Success Toolkit
-                        </h1>
-                        <p className="text-slate-500 mt-1">Operational guides, local business context, and competency validation.</p>
+            <div className="space-y-6">
+                <div className="flex flex-col gap-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                            <GraduationCap className="h-6 w-6" strokeWidth={2} aria-hidden />
+                        </span>
+                        <div className="min-w-0">
+                            <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl">
+                                Success Toolkit
+                            </h1>
+                            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px]">
+                                Operational guides, local business context, and competency validation.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
                 {/* THE SMART BRIDGE BANNER */}
-                <div className="bg-gradient-to-r from-indigo-900 to-blue-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-2/3 h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div>
-                            <div className="inline-flex items-center px-3 py-1 rounded-full bg-white/10 border border-white/20 text-indigo-100 text-xs font-bold mb-3">
-                                <GraduationCap size={14} className="mr-2"/> Official Curriculum
+                <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-900 to-blue-900 p-5 text-white shadow-xl sm:p-6">
+                    <div className="absolute right-0 top-0 h-full w-2/3 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" aria-hidden />
+                    <div className="relative z-10 flex flex-col items-stretch justify-between gap-6 md:flex-row md:items-center">
+                        <div className="min-w-0">
+                            <div className="mb-3 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold text-indigo-100">
+                                <GraduationCap size={14} className="mr-2 shrink-0" aria-hidden /> Official Curriculum
                             </div>
-                            <h2 className="text-2xl font-bold mb-1">Looking for Core Certification Material?</h2>
-                            <p className="text-indigo-200 text-sm max-w-xl">
+                            <h2 className="mb-1 text-xl font-bold sm:text-2xl">Looking for Core Certification Material?</h2>
+                            <p className="max-w-xl text-sm text-indigo-200">
                                 Access the John Maxwell video library, core teaching modules, and certification tracks on our Global LMS.
                             </p>
                         </div>
@@ -128,32 +137,39 @@ const Enablement: React.FC = () => {
                             href="https://online.maxwellleadership.com" 
                             target="_blank" 
                             rel="noreferrer" 
-                            className="shrink-0 flex items-center bg-white text-indigo-900 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 shadow-lg transition-transform hover:scale-105"
+                            className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-white px-5 py-3 text-sm font-bold text-indigo-900 shadow-lg transition-transform hover:scale-[1.02] hover:bg-indigo-50 md:self-center"
                         >
-                            Go to Official LMS <ExternalLink size={18} className="ml-2"/>
+                            Go to Official LMS <ExternalLink size={18} className="shrink-0" aria-hidden />
                         </a>
                     </div>
                 </div>
             </div>
 
             {/* Navigation */}
-            <div className="flex bg-slate-100 p-1 rounded-lg w-fit mb-6">
-                <button onClick={() => setActiveTab('TOOLKIT')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center ${activeTab === 'TOOLKIT' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>
-                    <Briefcase size={16} className="mr-2"/> Operational Resources
+            <div className="max-w-full min-w-0 overflow-x-scroll-touch rounded-lg bg-slate-100 p-0.5 shadow-inner">
+                <div className="inline-flex min-w-0 flex-nowrap gap-0.5 sm:w-full sm:min-w-0">
+                <button type="button" onClick={() => setActiveTab('TOOLKIT')} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors sm:flex-1 sm:justify-center sm:px-4 sm:py-2.5 sm:text-sm ${activeTab === 'TOOLKIT' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/90' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <Briefcase size={16} className="mr-2 shrink-0" aria-hidden /> Operational Resources
                 </button>
-                <button onClick={() => setActiveTab('MENTORING')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center ${activeTab === 'MENTORING' ? 'bg-white shadow text-indigo-700' : 'text-slate-500'}`}>
-                    <BrainCircuit size={16} className="mr-2"/> AI Mentor
+                <button type="button" onClick={() => setActiveTab('MENTORING')} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors sm:flex-1 sm:justify-center sm:px-4 sm:py-2.5 sm:text-sm ${activeTab === 'MENTORING' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200/90' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <BrainCircuit size={16} className="mr-2 shrink-0" aria-hidden /> AI Mentor
                 </button>
-                <button onClick={() => setActiveTab('VALIDATION')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center ${activeTab === 'VALIDATION' ? 'bg-white shadow text-green-700' : 'text-slate-500'}`}>
-                    <ShieldCheck size={16} className="mr-2"/> Validation & Exams
+                <button type="button" onClick={() => setActiveTab('VALIDATION')} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors sm:flex-1 sm:justify-center sm:px-4 sm:py-2.5 sm:text-sm ${activeTab === 'VALIDATION' ? 'bg-white text-green-700 shadow-sm ring-1 ring-slate-200/90' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <ShieldCheck size={16} className="mr-2 shrink-0" aria-hidden /> Validation &amp; Exams
                 </button>
+                </div>
             </div>
 
-            <div className="flex-1 overflow-auto">
+            <div className="min-h-0 flex-1">
                 {activeTab === 'TOOLKIT' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6 lg:grid-cols-3">
+                        {articles.length === 0 && (
+                            <div className="lg:col-span-3 rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
+                                Materi operasional saat ini belum tersedia.
+                            </div>
+                        )}
                         {articles.map(article => (
-                            <div key={article.id} className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md transition-all flex flex-col h-full group">
+                            <div key={article.id} className="group flex h-full min-w-0 flex-col rounded-xl border border-slate-300 bg-white p-5 shadow-sm transition-all hover:shadow-md">
                                 <div className="flex justify-between items-start mb-3">
                                     <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase flex items-center gap-1">
                                         {getCategoryIcon(article.category)} {article.category.replace('_', ' ')}
@@ -162,7 +178,7 @@ const Enablement: React.FC = () => {
                                 </div>
                                 <h4 className="font-bold text-slate-900 mb-2 leading-snug group-hover:text-blue-600 transition-colors">{article.title}</h4>
                                 <p className="text-sm text-slate-500 mb-4 line-clamp-3 flex-1">{article.summary}</p>
-                                <div className="mt-auto pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+                                <div className="mt-auto flex items-center justify-between border-t border-slate-200 pt-4 text-xs text-slate-500">
                                     <span className="flex items-center"><Clock size={12} className="mr-1"/> {article.readTimeMin} min read</span>
                                     <button className="text-blue-600 font-bold hover:underline flex items-center">Read Now <ArrowRight size={14} className="ml-1"/></button>
                                 </div>
@@ -172,18 +188,23 @@ const Enablement: React.FC = () => {
                 )}
 
                 {activeTab === 'MENTORING' && session && persona && (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
-                        <div className="lg:col-span-8 space-y-8">
-                            <MenteeProgressDashboard session={session} onToggleAction={handleToggleAction} />
-                        </div>
-                        <div className="lg:col-span-4 h-full sticky top-0">
+                    <MenteeProgressDashboard
+                        session={session}
+                        onToggleAction={handleToggleAction}
+                        chatSlot={
                             <DigitalMentorChat session={session} persona={persona} onUpdate={setSession} />
-                        </div>
+                        }
+                    />
+                )}
+
+                {activeTab === 'MENTORING' && (!session || !persona) && (
+                    <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
+                        AI Mentor saat ini belum tersedia.
                     </div>
                 )}
 
                 {activeTab === 'VALIDATION' && (
-                    <div className="max-w-3xl mx-auto space-y-4">
+                    <div className="mx-auto w-full max-w-3xl space-y-4">
                         <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 flex gap-3 mb-6">
                             <ShieldCheck className="text-yellow-600 shrink-0" size={20} />
                             <div>
@@ -194,10 +215,16 @@ const Enablement: React.FC = () => {
                             </div>
                         </div>
 
+                        {quizzes.length === 0 && (
+                            <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
+                                Validation &amp; exam saat ini belum tersedia.
+                            </div>
+                        )}
+
                         {quizzes.map(quiz => {
                             const attempt = history.find(h => h.quizId === quiz.id);
                             return (
-                                <div key={quiz.id} className="bg-white p-6 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
+                                <div key={quiz.id} className="flex items-center justify-between rounded-xl border border-slate-300 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">
                                             <h4 className="font-bold text-slate-900">{quiz.title}</h4>
@@ -260,6 +287,7 @@ const Enablement: React.FC = () => {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 };

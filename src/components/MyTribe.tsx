@@ -14,6 +14,7 @@ const MyTribe: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [selectedMember, setSelectedMember] = useState<TribeMember | null>(null);
     const [showRoundTable, setShowRoundTable] = useState(false);
+    const tribeDataSourceMode = TribeService.getDataSourceMode();
 
     useEffect(() => {
         if (user) {
@@ -61,6 +62,13 @@ const MyTribe: React.FC = () => {
                             <input type="text" placeholder="Search..." className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-indigo-500" />
                         </div>
                     </div>
+
+                    {!loading && members.length === 0 && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            Data member untuk fitur ini saat ini belum tersedia.
+                            {tribeDataSourceMode === 'UNWIRED' && ' Tim sedang menyiapkan koneksi backend untuk menu ini.'}
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {loading ? <div className="col-span-2 text-center text-slate-400 py-10">Loading Tribe...</div> :
@@ -130,7 +138,7 @@ const MyTribe: React.FC = () => {
                             <Calendar size={18} className="mr-2 text-slate-500"/> Upcoming Sessions
                         </h3>
                         <div className="space-y-4">
-                            {sessions.length === 0 ? <p className="text-sm text-slate-400 text-center py-4">No sessions scheduled.</p> :
+                            {sessions.length === 0 ? <p className="text-sm text-slate-400 text-center py-4">Sesi belum tersedia saat ini.</p> :
                              sessions.map(sess => (
                                 <div key={sess.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                                     <div className="flex justify-between items-start mb-1">

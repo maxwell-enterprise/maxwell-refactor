@@ -4,7 +4,6 @@ import { AttendanceService } from '../../services/attendanceService';
 import { DataService } from '../../services/dataService';
 import { AttendanceRecord, Event, Member } from '../../types/index';
 import { EventGateConfig } from '../../types/attendance';
-import { ATTENDANCE_TEST_GATES } from '../../seeds/attendance_testing';
 import { 
     Calendar, Users, ArrowRight, BarChart3, Download, Search, 
     RefreshCw, UserX, MessageCircle, MapPin, Ticket, ClipboardList, Mail
@@ -69,14 +68,7 @@ const AttendanceConsole: React.FC = () => {
         if (selectedEvent?.gates?.length) {
             return selectedEvent.gates.filter((gate) => gate.isActive);
         }
-
-        return ATTENDANCE_TEST_GATES.map((gate) => ({
-            id: gate.id,
-            name: gate.label,
-            allowedTiers: gate.allowedTiers,
-            assignedUserIds: [],
-            isActive: true,
-        }));
+        return [];
     }, [selectedEvent]);
 
     // --- METRICS ---
@@ -122,41 +114,42 @@ const AttendanceConsole: React.FC = () => {
     );
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in bg-slate-50">
+        <div className="page-container flex flex-col animate-fade-in bg-slate-50 pb-8">
             {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <BarChart3 className="mr-3 text-blue-600" /> Attendance Command Center
+            <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-start mb-5 sm:mb-6 min-w-0">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
+                        <BarChart3 className="shrink-0 text-blue-600" size={28} /> 
+                        <span className="leading-tight">Attendance Command Center</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Real-time monitoring of event entry.</p>
+                    <p className="text-slate-500 mt-1.5 text-sm sm:text-base">Real-time monitoring of event entry.</p>
                 </div>
                 
-                {/* GLOBAL TAB SWITCHER */}
-                <div className="flex bg-white p-1 rounded-lg border border-slate-200">
+                {/* GLOBAL TAB SWITCHER — scroll on narrow screens, wrap on tablet */}
+                <div className="flex w-full lg:w-auto overflow-x-auto pb-1 -mx-1 px-1 sm:overflow-visible sm:flex-wrap sm:gap-2 lg:gap-0 bg-white sm:bg-white p-1 rounded-xl border border-slate-200 shadow-sm lg:shadow-none">
                     <button 
                         onClick={() => setActiveTab('LIVE_DASHBOARD')}
-                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'LIVE_DASHBOARD' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        className={`shrink-0 px-3 sm:px-4 py-2.5 text-sm font-bold rounded-lg transition-all whitespace-nowrap ${activeTab === 'LIVE_DASHBOARD' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                     >
-                        <BarChart3 size={16} className="inline mr-2"/> Live Dashboard
+                        <BarChart3 size={16} className="inline mr-2 align-text-bottom"/> Live Dashboard
                     </button>
                     <button 
                         onClick={() => setActiveTab('PARTICIPANTS')}
-                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'PARTICIPANTS' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        className={`shrink-0 px-3 sm:px-4 py-2.5 text-sm font-bold rounded-lg transition-all whitespace-nowrap ${activeTab === 'PARTICIPANTS' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                     >
-                        <Users size={16} className="inline mr-2"/> Participants
+                        <Users size={16} className="inline mr-2 align-text-bottom"/> Participants
                     </button>
                     <button 
                         onClick={() => setActiveTab('DISTRIBUTION')}
-                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'DISTRIBUTION' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        className={`shrink-0 px-3 sm:px-4 py-2.5 text-sm font-bold rounded-lg transition-all whitespace-nowrap ${activeTab === 'DISTRIBUTION' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                     >
-                        <Ticket size={16} className="inline mr-2"/> Unassigned
+                        <Ticket size={16} className="inline mr-2 align-text-bottom"/> Unassigned
                     </button>
                     <button 
                         onClick={() => setActiveTab('INVITATIONS')}
-                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'INVITATIONS' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        className={`shrink-0 px-3 sm:px-4 py-2.5 text-sm font-bold rounded-lg transition-all whitespace-nowrap ${activeTab === 'INVITATIONS' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                     >
-                        <Mail size={16} className="inline mr-2"/> Sent Invites
+                        <Mail size={16} className="inline mr-2 align-text-bottom"/> Sent Invites
                     </button>
                 </div>
             </div>
@@ -171,25 +164,25 @@ const AttendanceConsole: React.FC = () => {
 
             {activeTab === 'LIVE_DASHBOARD' && (
                 <>
-                    <div className="flex justify-end gap-4 items-center mb-6">
+                    <div className="flex flex-col sm:flex-row sm:justify-end gap-3 sm:items-center mb-5 sm:mb-6 min-w-0">
                          <select 
-                            className="p-2 border border-slate-300 rounded-lg bg-white text-sm font-bold w-64"
+                            className="min-w-0 w-full sm:w-72 p-2.5 border border-slate-300 rounded-lg bg-white text-sm font-bold"
                             value={selectedEventId || ''}
                             onChange={(e) => setSelectedEventId(e.target.value)}
                         >
                             {events.map(e => <option key={e.id} value={e.id}>{e.date} - {e.name}</option>)}
                         </select>
-                        <button onClick={() => selectedEventId && loadAttendance(selectedEventId)} className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600">
+                        <button type="button" onClick={() => selectedEventId && loadAttendance(selectedEventId)} className="shrink-0 p-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 touch-target sm:min-h-0 sm:min-w-0 self-start sm:self-center">
                             <RefreshCw size={18} className={loading ? 'animate-spin' : ''}/>
                         </button>
                     </div>
 
                     {/* Metrics Dashboard */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-lg">
-                            <p className="text-xs font-bold text-slate-400 uppercase">Total Present</p>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 min-w-0">
+                        <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-lg min-w-0">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Total Present</p>
                             <div className="flex items-end gap-2 mt-1">
-                                <span className="text-3xl font-bold">{totalPresent}</span>
+                                <span className="text-3xl sm:text-4xl font-bold tabular-nums">{totalPresent}</span>
                                 <span className="text-sm text-slate-400 mb-1">/ {capacity}</span>
                             </div>
                             <div className="w-full bg-slate-700 h-1.5 rounded-full mt-3 overflow-hidden">
@@ -197,65 +190,71 @@ const AttendanceConsole: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm col-span-2">
-                            <p className="text-xs font-bold text-slate-400 uppercase mb-3">Gate Throughput</p>
-                            <div className="grid grid-cols-3 gap-2">
-                                {visibleGates.map(gate => (
-                                    <div key={gate.id} className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                        <div className="text-[10px] font-bold text-slate-500 truncate">{gate.name}</div>
-                                        <div className="text-xl font-bold text-slate-800">{gateStats[gate.id] || 0}</div>
+                        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm md:col-span-2 min-w-0">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Gate Throughput</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-0">
+                                {visibleGates.length === 0 ? (
+                                    <div className="col-span-full bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-700">
+                                        Gate belum dikonfigurasi pada event ini. Silakan set gate di Event Operations.
                                     </div>
-                                ))}
+                                ) : (
+                                    visibleGates.map(gate => (
+                                        <div key={gate.id} className="bg-slate-50 p-3 rounded-xl border border-slate-100 min-w-0">
+                                            <div className="text-xs sm:text-sm font-bold text-slate-600 leading-snug break-words line-clamp-3">{gate.name}</div>
+                                            <div className="text-xl font-bold text-slate-800 mt-1 tabular-nums">{gateStats[gate.id] || 0}</div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
 
-                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                            <p className="text-xs font-bold text-slate-400 uppercase mb-3">Tier Breakdown</p>
+                        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm min-w-0">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Tier Breakdown</p>
                             <div className="space-y-2">
                                 {Object.entries(tierStats).map(([tier, count]) => (
-                                    <div key={tier} className="flex justify-between text-sm">
-                                        <span className="font-medium text-slate-600">{tier}</span>
-                                        <span className="font-bold text-slate-900">{count}</span>
+                                    <div key={tier} className="flex justify-between gap-2 text-sm min-w-0">
+                                        <span className="font-medium text-slate-600 truncate">{tier}</span>
+                                        <span className="font-bold text-slate-900 shrink-0 tabular-nums">{count}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 flex gap-6 overflow-hidden">
-                        {/* LEFT: PRESENCE LIST */}
-                        <div className="flex-1 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shadow-sm">
-                            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                                <h3 className="font-bold text-slate-800 text-sm">Live Feed</h3>
-                                <div className="flex gap-2">
+                    <div className="flex flex-col xl:flex-row gap-4 xl:gap-6 min-w-0 xl:items-stretch">
+                        {/* LEFT: PRESENCE LIST — scroll long lists inside card on xl; page scrolls on smaller */}
+                        <div className="w-full xl:flex-1 min-w-0 min-h-[20rem] xl:min-h-[28rem] xl:max-h-[calc(100dvh-14rem)] bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shadow-sm">
+                            <div className="p-3 sm:p-4 border-b border-slate-100 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-slate-50">
+                                <h3 className="font-bold text-slate-800 text-sm sm:text-base">Live Feed</h3>
+                                <div className="flex gap-2 min-w-0">
                                     <input 
                                         type="text" 
                                         placeholder="Search..." 
-                                        className="pl-3 pr-2 py-1 text-xs border rounded bg-white"
+                                        className="min-w-0 flex-1 pl-3 pr-2 py-2 text-sm border rounded-lg bg-white"
                                         value={searchTerm}
                                         onChange={e => setSearchTerm(e.target.value)}
                                     />
-                                    <button className="text-slate-500 hover:text-blue-600"><Download size={16}/></button>
+                                    <button type="button" className="shrink-0 p-2 text-slate-500 hover:text-blue-600 touch-target sm:min-h-0 sm:min-w-0"><Download size={16}/></button>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto">
-                                <table className="w-full text-left text-xs">
-                                    <thead className="bg-white text-slate-500 font-bold border-b border-slate-100 sticky top-0">
+                            <div className="flex-1 overflow-y-auto overflow-x-auto min-w-0">
+                                <table className="w-full text-left text-sm min-w-[280px]">
+                                    <thead className="bg-white text-slate-500 font-bold border-b border-slate-100 sticky top-0 text-xs sm:text-sm">
                                         <tr>
-                                            <th className="p-3">Time</th>
-                                            <th className="p-3">Attendee</th>
-                                            <th className="p-3">Gate</th>
-                                            <th className="p-3">Tier</th>
+                                            <th className="p-2 sm:p-3 whitespace-nowrap">Time</th>
+                                            <th className="p-2 sm:p-3 min-w-[100px]">Attendee</th>
+                                            <th className="p-2 sm:p-3">Gate</th>
+                                            <th className="p-2 sm:p-3">Tier</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {filteredRecords.map(r => (
                                             <tr key={r.id} className="hover:bg-slate-50">
-                                                <td className="p-3 font-mono text-slate-500">{new Date(r.scannedAt).toLocaleTimeString()}</td>
-                                                <td className="p-3 font-medium">{r.memberName}</td>
-                                                <td className="p-3 text-slate-600">{r.gateId || 'Self-Scan'}</td>
-                                                <td className="p-3">
-                                                    <span className={`px-1.5 py-0.5 rounded font-bold ${r.ticketTier === 'VIP' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                <td className="p-2 sm:p-3 font-mono text-slate-500 text-xs sm:text-sm whitespace-nowrap">{new Date(r.scannedAt).toLocaleTimeString()}</td>
+                                                <td className="p-2 sm:p-3 font-medium break-words max-w-[140px] sm:max-w-none">{r.memberName}</td>
+                                                <td className="p-2 sm:p-3 text-slate-600 break-words">{r.gateId || 'Self-Scan'}</td>
+                                                <td className="p-2 sm:p-3">
+                                                    <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-xs ${r.ticketTier === 'VIP' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
                                                         {r.ticketTier}
                                                     </span>
                                                 </td>
@@ -267,18 +266,18 @@ const AttendanceConsole: React.FC = () => {
                         </div>
 
                         {/* RIGHT: MISSING PERSONS (Actionable) */}
-                        <div className="w-80 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shadow-sm">
-                             <div className="p-4 border-b border-slate-100 bg-red-50 flex justify-between items-center">
-                                <h3 className="font-bold text-red-800 text-sm flex items-center">
-                                    <UserX size={16} className="mr-2"/> Not Checked-In
+                        <div className="w-full xl:w-80 shrink-0 min-w-0 xl:max-h-[calc(100dvh-14rem)] bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shadow-sm max-h-[min(50vh,24rem)]">
+                             <div className="p-3 sm:p-4 border-b border-slate-100 bg-red-50 flex justify-between items-center">
+                                <h3 className="font-bold text-red-800 text-sm sm:text-base flex items-center gap-2 min-w-0">
+                                    <UserX size={18} className="shrink-0"/> <span className="truncate">Not Checked-In</span>
                                 </h3>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                            <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2 min-h-0">
                                 {missingMembers.map(m => (
-                                    <div key={m.id} className="p-3 border border-slate-100 rounded-lg flex items-center justify-between hover:border-red-200 group transition-all">
-                                        <div>
-                                            <div className="font-bold text-sm text-slate-700">{m.name}</div>
-                                            <div className="text-[10px] text-slate-400">{m.phone}</div>
+                                    <div key={m.id} className="p-3 border border-slate-100 rounded-lg flex items-center justify-between gap-2 hover:border-red-200 group transition-all min-w-0">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="font-bold text-sm text-slate-700 break-words">{m.name}</div>
+                                            <div className="text-xs text-slate-400 mt-0.5 break-all">{m.phone}</div>
                                         </div>
                                         <WhatsAppQuickAction 
                                             phone={m.phone} 

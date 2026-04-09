@@ -7,6 +7,7 @@ import { SeedService } from './services/seedService';
 import LandingPage from './components/LandingPage';
 import BackgroundWorker from './components/system/BackgroundWorker';
 import { resolveView } from './features/dashboard/logic/viewResolver';
+import SessionLoadingScreen from './components/system/SessionLoadingScreen';
 
 /** Persists last admin screen so refresh on `/dashboard` returns to the same view (same tab). */
 const VIEW_STORAGE_KEY = 'maxwell_current_view';
@@ -14,6 +15,8 @@ const VIEW_STORAGE_KEY = 'maxwell_current_view';
 const App: React.FC = () => {
   const { userRole, isAuthenticated, isLoading, login } = useAuth();
   const [currentView, setCurrentViewState] = useState<ViewState>(ViewState.DASHBOARD);
+  const [redirectingGuestFromDashboard, setRedirectingGuestFromDashboard] =
+    useState(false);
 
   const [isPersonalZone, setIsPersonalZone] = useState(false);
 
@@ -47,13 +50,20 @@ const App: React.FC = () => {
     }
   }, [userRole]);
 
+  useEffect(() => {
+    if (isLoading || isAuthenticated || typeof window === 'undefined') return;
+    if (window.location.pathname.startsWith('/dashboard')) {
+      setRedirectingGuestFromDashboard(true);
+      window.location.replace('/');
+    }
+  }, [isLoading, isAuthenticated]);
+
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-500 gap-2">
-        <div className="h-8 w-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" aria-hidden />
-        <p className="text-sm">Memuat sesi…</p>
-      </div>
-    );
+    return <SessionLoadingScreen />;
+  }
+
+  if (redirectingGuestFromDashboard) {
+    return <SessionLoadingScreen />;
   }
 
   if (!isAuthenticated) {

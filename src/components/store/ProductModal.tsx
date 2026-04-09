@@ -7,6 +7,8 @@ import { RoyaltyService } from '../../services/royaltyService';
 import { RoyaltyContract } from '../../types/royalty'; 
 import { UserService } from '../../services/userService'; 
 import { CreditTagService } from '../../services/creditTagService'; 
+import { APP_CONFIG } from '../../lib/config';
+import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
 import { X, Save, Box, Image, DollarSign, Tag, CreditCard, Package, Ticket, Zap, Link, Trash2, Plus, Gift, Layers, Percent, User, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useAccess } from '../../context/SecurityContext';
@@ -50,6 +52,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
 
     const priceInputRef = useRef<HTMLInputElement | null>(null);
     const variantPriceInputRef = useRef<HTMLInputElement | null>(null);
+    const imageInputRef = useRef<HTMLInputElement | null>(null);
 
     // --- MASTER DATA ---
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -62,6 +65,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     
     // --- UI STATE ---
     const [activeTab, setActiveTab] = useState<'MARKETING' | 'ITEMS' | 'ROYALTIES'>('MARKETING');
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
 
     // --- FORM STATE ---
     const productDefaults: Partial<Product> = {
@@ -303,6 +307,60 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
         onSave(productToSave);
     };
 
+    const uploadProductImage = async (file: File): Promise<string> => {
+        const form = new FormData();
+        form.append('file', file);
+
+        const token = getWorkspaceToken();
+        const baseUrl = APP_CONFIG.API_BASE_URL.replace(/\/+$/, '');
+        const res = await fetch(`${baseUrl}/products/upload-image`, {
+            method: 'POST',
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: form,
+        });
+
+        if (!res.ok) {
+            const detail = await res.text();
+            throw new Error(`Upload gagal: ${detail || res.statusText}`);
+        }
+
+        const payload = (await res.json()) as { url?: string };
+        if (!payload.url) {
+            throw new Error('Upload gagal: URL gambar tidak diterima dari backend.');
+        }
+        return payload.url;
+    };
+
+    const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            showToast('File harus berupa gambar.', 'error');
+            return;
+        }
+
+        const maxBytes = 2 * 1024 * 1024; // align with bucket 2MB limit
+        if (file.size > maxBytes) {
+            showToast('Ukuran gambar maksimal 2MB.', 'error');
+            return;
+        }
+
+        setIsUploadingImage(true);
+        try {
+            const publicUrl = await uploadProductImage(file);
+            setFormData((prev) => ({ ...prev, imageUrl: publicUrl }));
+            showToast('Gambar berhasil diupload.', 'success');
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Upload gambar gagal.', 'error');
+        } finally {
+            setIsUploadingImage(false);
+            if (imageInputRef.current) imageInputRef.current.value = '';
+        }
+    };
+
     const currentSelectedEvent = events.find(e => e.id === selectedEventId);
     const activeItemsList = formData.hasVariants && activeVariantIndex >= 0 
         ? formData.variants?.[activeVariantIndex]?.items || [] 
@@ -439,13 +497,35 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center"><Image size={12} className="mr-1"/> Image URL</label>
-                                        <input 
-                                            type="text" 
-                                            className="w-full p-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={formData.imageUrl}
-                                            onChange={e => setFormData({...formData, imageUrl: e.target.value})}
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center"><Image size={12} className="mr-1"/> Product Image</label>
+                                        <input
+                                            ref={imageInputRef}
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp,image/*"
+                                            className="hidden"
+                                            onChange={handleImageFileChange}
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => imageInputRef.current?.click()}
+                                            disabled={isUploadingImage}
+                                            className="w-full p-3 border border-slate-300 rounded-xl text-sm text-left bg-white hover:bg-slate-50 disabled:opacity-60"
+                                        >
+                                            {isUploadingImage ? 'Uploading image...' : 'Choose image'}
+                                        </button>
+                                        {formData.imageUrl && (
+                                            <div className="mt-2 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                                <img
+                                                    src={formData.imageUrl}
+                                                    alt="Product preview"
+                                                    className="h-14 w-14 rounded-md border border-slate-200 object-cover"
+                                                />
+                                                <div className="min-w-0 text-[11px] text-slate-500">
+                                                    <p className="font-semibold text-slate-700">Image ready</p>
+                                                    <p className="truncate">{formData.imageUrl}</p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

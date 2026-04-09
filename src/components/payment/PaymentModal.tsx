@@ -277,6 +277,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 trx.id,
                 trx.totalAmount,
                 trx.itemsSnapshot,
+                trx.customerEmail,
               );
               onPaymentSuccess?.();
               onClose();
@@ -350,6 +351,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             transaction.id,
             transaction.totalAmount,
             transaction.itemsSnapshot,
+            transaction.customerEmail,
           );
           onClose();
       } catch (e) {

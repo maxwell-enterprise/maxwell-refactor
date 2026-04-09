@@ -79,22 +79,24 @@ const GamificationConfig: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in">
+        <div className="page-container flex flex-col animate-fade-in pb-8 min-w-0 min-h-0">
             
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <Trophy className="mr-3 text-amber-500" /> Gamification Engine
+            <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-5 sm:mb-6 min-w-0">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
+                        <Trophy className="shrink-0 text-amber-500" /> <span className="leading-tight">Gamification Engine</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Configure incentives, badges, and point logic.</p>
+                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Configure incentives, badges, and point logic.</p>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setActiveTab('BADGES')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'BADGES' ? 'bg-white shadow text-amber-600' : 'text-slate-500'}`}>Badges</button>
-                    <button onClick={() => setActiveTab('RULES')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'RULES' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>Scoring Rules</button>
+                <div className="overflow-x-scroll-touch rounded-lg bg-slate-100 p-1 shrink-0 self-start sm:self-auto w-full sm:w-auto">
+                    <div className="inline-flex max-w-none flex-nowrap gap-1">
+                    <button type="button" onClick={() => setActiveTab('BADGES')} className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeTab === 'BADGES' ? 'bg-white shadow text-amber-600' : 'text-slate-500'}`}>Badges</button>
+                    <button type="button" onClick={() => setActiveTab('RULES')} className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeTab === 'RULES' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>Scoring Rules</button>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-sm p-6 relative">
+            <div className="min-w-0 overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
                 
                 {/* BADGES EDITOR */}
                 {activeTab === 'BADGES' && (
@@ -108,7 +110,7 @@ const GamificationConfig: React.FC = () => {
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {badges.map((badge, idx) => (
-                                <div key={badge.id} className="border border-slate-200 rounded-xl p-4 flex gap-4 bg-slate-50/50 hover:shadow-md transition-shadow group relative">
+                                <div key={badge.id} className="border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row gap-4 bg-slate-50/50 hover:shadow-md transition-shadow group relative min-w-0 max-w-full">
                                     <button onClick={() => removeBadge(idx)} className="absolute top-2 right-2 text-slate-300 hover:text-red-500 p-1 rounded hover:bg-slate-100">
                                         <Trash2 size={16} />
                                     </button>
@@ -130,17 +132,17 @@ const GamificationConfig: React.FC = () => {
                                         </select>
                                     </div>
                                     
-                                    <div className="flex-1 space-y-2">
-                                        <div className="flex gap-2 pr-6">
+                                    <div className="min-w-0 flex-1 space-y-2">
+                                        <div className="flex flex-col gap-2 min-w-0 pr-0 sm:flex-row sm:gap-2 sm:pr-6">
                                             <input 
                                                 type="text" 
-                                                className="font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none w-full"
+                                                className="min-w-0 font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none w-full"
                                                 value={badge.name}
                                                 onChange={(e) => updateBadge(idx, 'name', e.target.value)}
                                                 placeholder="Badge Name"
                                             />
                                             <select 
-                                                className="text-xs font-bold uppercase bg-white border border-slate-200 rounded px-2 outline-none"
+                                                className="shrink-0 text-xs font-bold uppercase bg-white border border-slate-200 rounded px-2 outline-none sm:max-w-[9rem]"
                                                 value={badge.rarity}
                                                 onChange={(e) => updateBadge(idx, 'rarity', e.target.value)}
                                             >
@@ -212,17 +214,19 @@ const GamificationConfig: React.FC = () => {
                             </p>
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="grid grid-cols-12 gap-4 px-4 py-2 bg-slate-100 rounded-lg text-xs font-bold text-slate-500 uppercase">
+                        <div className="space-y-2 min-w-0">
+                            <div className="overflow-x-scroll-touch rounded-lg">
+                            <div className="min-w-[640px] space-y-2">
+                            <div className="grid grid-cols-12 gap-2 sm:gap-4 px-3 sm:px-4 py-2 bg-slate-100 rounded-lg text-[10px] sm:text-xs font-bold text-slate-500 uppercase">
                                 <div className="col-span-1 text-center">Active</div>
                                 <div className="col-span-4">System Trigger</div>
-                                <div className="col-span-2 text-center">Points Awarded</div>
+                                <div className="col-span-2 text-center">Points</div>
                                 <div className="col-span-5">Admin Note</div>
                             </div>
                             {rules.map((rule, idx) => {
                                 const def = getTriggerDef(rule.triggerType);
                                 return (
-                                    <div key={rule.id} className="grid grid-cols-12 gap-4 px-4 py-3 bg-white border border-slate-200 rounded-lg items-center hover:shadow-sm">
+                                    <div key={rule.id} className="grid grid-cols-12 gap-2 sm:gap-4 px-3 sm:px-4 py-3 bg-white border border-slate-200 rounded-lg items-center hover:shadow-sm">
                                         <div className="col-span-1 text-center">
                                             <input 
                                                 type="checkbox" 
@@ -262,6 +266,8 @@ const GamificationConfig: React.FC = () => {
                                     </div>
                                 );
                             })}
+                            </div>
+                            </div>
                         </div>
                         <div className="sticky bottom-0 bg-white pt-4 border-t border-slate-100 flex justify-end">
                             <button onClick={handleSaveRules} className="bg-slate-900 text-white px-6 py-2 rounded-lg font-bold flex items-center hover:bg-slate-800">

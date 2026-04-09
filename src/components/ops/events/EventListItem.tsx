@@ -14,95 +14,153 @@ interface EventListItemProps {
 }
 
 const EventListItem: React.FC<EventListItemProps> = ({ event, isChild = false, onEdit, onDelete, onGateConfig, onProjector, canWrite }) => {
-    // Check if event is past
     const isPast = new Date(event.date) < new Date(new Date().setHours(0,0,0,0));
 
     return (
-        <div key={event.id} className={`flex items-center justify-between p-4 bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors ${isChild ? 'pl-10 bg-slate-50/50' : ''} ${isPast ? 'opacity-80' : ''}`}>
-            <div className="flex items-center gap-4">
-                <div className={`w-1 h-10 rounded-full ${
-                    isPast ? 'bg-slate-300' :
-                    event.type === 'CONTAINER' ? 'bg-slate-800' : 
-                    event.type === 'SESSION' ? 'bg-blue-500' :
-                    event.isRecurring ? 'bg-amber-500' :
-                    'bg-green-500'
-                }`}></div>
-                <div>
-                    <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold ${isPast ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'}`}>{event.name}</span>
-                        
+        <div
+            key={event.id}
+            className={`flex min-w-0 max-w-full flex-col gap-3 bg-white p-3 transition-colors sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:p-4 ${
+                isChild ? 'bg-slate-50/50 pl-4 sm:pl-10' : ''
+            } ${isPast ? 'opacity-80' : ''} hover:bg-slate-50`}
+        >
+            <div className="flex min-w-0 flex-1 gap-3">
+                <div
+                    className={`mt-0.5 h-10 w-1 shrink-0 rounded-full sm:h-12 ${
+                        isPast
+                            ? 'bg-slate-300'
+                            : event.type === 'CONTAINER'
+                              ? 'bg-slate-800'
+                              : event.type === 'SESSION'
+                                ? 'bg-blue-500'
+                                : event.isRecurring
+                                  ? 'bg-amber-500'
+                                  : 'bg-green-500'
+                    }`}
+                />
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                        <span
+                            className={`min-w-0 max-w-full text-[15px] font-bold leading-snug break-words sm:text-sm ${
+                                isPast ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'
+                            }`}
+                        >
+                            {event.name}
+                        </span>
+
                         {isPast && (
-                            <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 flex items-center">
-                                <History size={8} className="mr-1"/> PAST EVENT
+                            <span className="inline-flex shrink-0 items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
+                                <History size={8} className="mr-1 shrink-0" /> PAST EVENT
                             </span>
                         )}
 
                         {event.isVisibleInCatalog === false && (
-                            <span className="text-[9px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded border border-slate-300 flex items-center" title="Hidden from Catalogue">
-                                <EyeOff size={8} className="mr-1"/> HIDDEN
+                            <span
+                                className="inline-flex shrink-0 items-center rounded border border-slate-300 bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600"
+                                title="Hidden from Catalogue"
+                            >
+                                <EyeOff size={8} className="mr-1 shrink-0" /> HIDDEN
                             </span>
                         )}
 
                         {event.type === 'CONTAINER' && event.selectionConfig?.mode === 'OPTION' && (
-                             <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center shadow-sm">
-                                 <ListFilter size={8} className="mr-1"/> 
-                                 Pick {event.selectionConfig.minSelect}-{event.selectionConfig.maxSelect} Sessions
-                             </span>
+                            <span className="inline-flex max-w-full items-center rounded border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 shadow-sm">
+                                <ListFilter size={8} className="mr-1 shrink-0" />
+                                <span className="break-words">
+                                    Pick {event.selectionConfig.minSelect}-{event.selectionConfig.maxSelect} Sessions
+                                </span>
+                            </span>
                         )}
 
                         {event.type !== 'CONTAINER' && (
-                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
-                                event.admissionPolicy === 'OPEN_MEMBER' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'
-                            }`}>
+                            <span
+                                className={`inline-flex shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                                    event.admissionPolicy === 'OPEN_MEMBER'
+                                        ? 'border-green-200 bg-green-50 text-green-700'
+                                        : 'border-slate-200 bg-slate-100 text-slate-500'
+                                }`}
+                            >
                                 {event.admissionPolicy.replace('_', ' ')}
                             </span>
                         )}
                         {event.isRecurring && (
-                             <span className="text-[9px] font-bold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 flex items-center">
-                                 <RotateCw size={8} className="mr-1"/> {event.recurringMeta?.frequency || 'RECURRING'}
-                             </span>
-                        )}
-                        {event.doneTag && (
-                            <span className="text-[9px] font-bold bg-green-50 text-green-700 px-1.5 py-0.5 rounded border border-green-200 flex items-center" title={`Grants: ${event.doneTag}`}>
-                                <Award size={8} className="mr-1"/> Certified
+                            <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                                <RotateCw size={8} className="mr-1 shrink-0" /> {event.recurringMeta?.frequency || 'RECURRING'}
                             </span>
                         )}
-                        {event.locationMode === 'ONLINE' && <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100"><Monitor size={8} className="inline mr-1"/>Online</span>}
+                        {event.doneTag && (
+                            <span
+                                className="inline-flex shrink-0 items-center rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-[10px] font-bold text-green-700"
+                                title={`Grants: ${event.doneTag}`}
+                            >
+                                <Award size={8} className="mr-1 shrink-0" /> Certified
+                            </span>
+                        )}
+                        {event.locationMode === 'ONLINE' && (
+                            <span className="inline-flex shrink-0 items-center rounded border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-600">
+                                <Monitor size={8} className="mr-1 inline shrink-0" />
+                                Online
+                            </span>
+                        )}
                     </div>
-                    <div className="text-xs text-slate-500 flex gap-3 mt-0.5">
-                        <span className="flex items-center"><Calendar size={10} className="mr-1"/> {event.isRecurring ? `Starts ${event.date}` : event.date}</span>
-                        {event.endDate && <span className="flex items-center text-slate-400"> - {event.endDate}</span>}
-                        {event.time && <span className="flex items-center"><Clock size={10} className="mr-1"/> {event.time}</span>}
-                        {event.location && <span className="flex items-center"><MapPin size={10} className="mr-1"/> {event.location}</span>}
-                        <span className="flex items-center"><Users size={10} className="mr-1"/> {event.attendees}/{event.capacity}</span>
+                    <div className="mt-2 flex flex-col gap-1.5 text-[13px] text-slate-600 sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-1 sm:text-xs">
+                        <span className="inline-flex min-w-0 items-start gap-1 break-words">
+                            <Calendar size={12} className="mt-0.5 shrink-0 text-slate-400" />
+                            {event.isRecurring ? `Starts ${event.date}` : event.date}
+                            {event.endDate && <span className="text-slate-400"> – {event.endDate}</span>}
+                        </span>
+                        {event.time && (
+                            <span className="inline-flex items-center gap-1">
+                                <Clock size={12} className="shrink-0 text-slate-400" /> {event.time}
+                            </span>
+                        )}
+                        {event.location && (
+                            <span className="inline-flex min-w-0 items-start gap-1 break-words">
+                                <MapPin size={12} className="mt-0.5 shrink-0 text-slate-400" /> {event.location}
+                            </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                            <Users size={12} className="shrink-0 text-slate-400" /> {event.attendees}/{event.capacity}
+                        </span>
                     </div>
                 </div>
             </div>
-            
-            <div className="flex items-center gap-2">
+
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
                 {event.type !== 'CONTAINER' && canWrite && onGateConfig && (
-                    <button 
-                        onClick={() => onGateConfig(event)} 
-                        className="p-1.5 text-slate-400 hover:text-purple-600 rounded hover:bg-purple-50" 
+                    <button
+                        type="button"
+                        onClick={() => onGateConfig(event)}
+                        className="touch-target rounded p-2 text-slate-400 hover:bg-purple-50 hover:text-purple-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
                         title="Configure Gate Scanning"
                     >
                         <ScanLine size={16} />
                     </button>
                 )}
                 {event.type !== 'CONTAINER' && onProjector && (
-                    <button onClick={() => onProjector(event)} className="p-1.5 text-slate-400 hover:text-purple-600 rounded hover:bg-purple-50" title="Projector Mode">
+                    <button
+                        type="button"
+                        onClick={() => onProjector(event)}
+                        className="touch-target rounded p-2 text-slate-400 hover:bg-purple-50 hover:text-purple-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
+                        title="Projector Mode"
+                    >
                         <Projector size={16} />
                     </button>
                 )}
                 {canWrite && (
                     <>
-                        <button onClick={() => onEdit(event)} className="p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Edit">
+                        <button
+                            type="button"
+                            onClick={() => onEdit(event)}
+                            className="touch-target rounded p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
+                            title="Edit"
+                        >
                             <Settings size={16} />
                         </button>
                         {onDelete && (
-                            <button 
-                                onClick={() => onDelete(event.id)} 
-                                className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50" 
+                            <button
+                                type="button"
+                                onClick={() => onDelete(event.id)}
+                                className="touch-target rounded p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
                                 title="Delete Event"
                             >
                                 <Trash2 size={16} />

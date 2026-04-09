@@ -1,8 +1,7 @@
 
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { useAccess } from '../context/SecurityContext'; 
-import { ShoppingBag, Box, Ticket, Settings, PieChart, Warehouse, History } from 'lucide-react';
+import { ShoppingBag, Ticket, Settings, PieChart, Warehouse, History } from 'lucide-react';
 import Storefront from './store/Storefront';
 import InventoryManager from './store/InventoryManager';
 import DiscountManager from './store/DiscountManager';
@@ -17,63 +16,71 @@ const Store: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'catalog' | 'inventory' | 'discounts' | 'rules' | 'analytics' | 'history'>('catalog');
 
   return (
-    <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in relative">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Marketplace & Resources</h1>
-          <p className="text-slate-500 mt-1">Acquire certification packages, tickets, and learning tools.</p>
+    <div className="page-container flex min-h-0 flex-1 flex-col animate-fade-in relative min-w-0">
+      <div className="mb-4 flex shrink-0 flex-col gap-4 sm:mb-6 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Marketplace & Resources</h1>
+          <p className="mt-1 text-sm text-slate-500 sm:text-base">Acquire certification packages, tickets, and learning tools.</p>
         </div>
         
-        <div className="bg-slate-100 p-1 rounded-lg flex shadow-inner overflow-x-auto">
+        <div className="max-w-full overflow-x-scroll-touch rounded-xl bg-slate-100 p-1 shadow-inner">
+          <div className="inline-flex flex-nowrap gap-0.5">
              <button 
+                type="button"
                 onClick={() => setActiveTab('catalog')} 
-                className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'catalog' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'catalog' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
              >
-                <ShoppingBag size={16} className="mr-2" /> Store
+                <ShoppingBag size={16} className="mr-1.5 shrink-0 sm:mr-2" /> Store
              </button>
 
              <button 
+                type="button"
                 onClick={() => setActiveTab('history')} 
-                className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'history' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
              >
-                <History size={16} className="mr-2" /> My Orders
+                <History size={16} className="mr-1.5 shrink-0 sm:mr-2" /> My Orders
              </button>
              
              {canManageInventory('READ') && (
                  <button 
+                    type="button"
                     onClick={() => setActiveTab('inventory')} 
-                    className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'inventory' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
                  >
-                    <Warehouse size={16} className="mr-2" /> Warehouse
+                    <Warehouse size={16} className="mr-1.5 shrink-0 sm:mr-2" /> Warehouse
                  </button>
              )}
              
              {canManageDiscounts('READ') && (
                  <>
                     <button 
+                        type="button"
                         onClick={() => setActiveTab('discounts')} 
-                        className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'discounts' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'discounts' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        <Ticket size={16} className="mr-2" /> Vouchers
+                        <Ticket size={16} className="mr-1.5 shrink-0 sm:mr-2" /> Vouchers
                     </button>
                     <button 
+                        type="button"
                         onClick={() => setActiveTab('rules')} 
-                        className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'rules' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'rules' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        <Settings size={16} className="mr-2" /> Rules
+                        <Settings size={16} className="mr-1.5 shrink-0 sm:mr-2" /> Rules
                     </button>
                     <button 
+                        type="button"
                         onClick={() => setActiveTab('analytics')} 
-                        className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'analytics' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        <PieChart size={16} className="mr-2" /> Stats
+                        <PieChart size={16} className="mr-1.5 shrink-0 sm:mr-2" /> Stats
                     </button>
                  </>
              )}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 relative">
+      <div className="relative min-h-0 min-w-0 flex-1">
           {activeTab === 'catalog' && <Storefront />}
           {activeTab === 'history' && <PurchaseHistory />}
           {activeTab === 'inventory' && <InventoryManager />}

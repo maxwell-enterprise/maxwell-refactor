@@ -10,6 +10,8 @@ const MasterTierConfig: React.FC = () => {
     const [tiers, setTiers] = useState<MasterTier[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [tierToDelete, setTierToDelete] = useState<MasterTier | null>(null);
     const [editForm, setEditForm] = useState<Partial<MasterTier>>({});
 
     useEffect(() => {
@@ -39,10 +41,25 @@ const MasterTierConfig: React.FC = () => {
     };
 
     const handleDelete = async (tier: MasterTier) => {
-        if (confirm("Delete this Master Tier? This will not affect existing events, but will remove it from the selection list.")) {
-            await ReferenceService.deleteMasterTier(tier);
+        setTierToDelete(tier);
+    };
+
+    const confirmDelete = async () => {
+        if (!tierToDelete) return;
+        setIsDeleting(true);
+        try {
+            await ReferenceService.deleteMasterTier(tierToDelete);
             showToast('Tier deleted', 'info');
-            loadTiers();
+            setTierToDelete(null);
+            await loadTiers();
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const closeDeleteModal = () => {
+        if (!isDeleting) {
+            setTierToDelete(null);
         }
     };
 
@@ -154,6 +171,44 @@ const MasterTierConfig: React.FC = () => {
                             <button onClick={handleSave} className="w-full py-2.5 bg-indigo-600 text-white rounded-lg font-bold shadow-md hover:bg-indigo-700 mt-2">
                                 Save Master Tier
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* DELETE CONFIRM MODAL */}
+            {tierToDelete && (
+                <div className="fixed inset-0 z-[110] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden animate-scale-in">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-slate-800">Delete Master Tier</h3>
+                            <button onClick={closeDeleteModal} disabled={isDeleting}>
+                                <X size={20} className="text-slate-400"/>
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-sm text-slate-700">
+                                Delete <span className="font-semibold">{tierToDelete.name}</span>?
+                            </p>
+                            <p className="mt-2 text-xs text-slate-500">
+                                This will not affect existing events, but this tier will be removed from future selection.
+                            </p>
+                            <div className="mt-5 flex justify-end gap-2">
+                                <button
+                                    onClick={closeDeleteModal}
+                                    disabled={isDeleting}
+                                    className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    disabled={isDeleting}
+                                    className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
+                                >
+                                    {isDeleting ? 'Deleting...' : 'Delete Tier'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

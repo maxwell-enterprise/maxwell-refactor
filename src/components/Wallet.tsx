@@ -82,39 +82,52 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
       setDistributionContext(tickets);
   };
 
+  const emptyShell =
+    'rounded-[2rem] border-2 border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm sm:rounded-[2.5rem] sm:py-20';
+
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6 animate-fade-in pb-32 relative">
-        {/* Mobile-First Header */}
-        <div className="flex justify-between items-center bg-white p-4 rounded-[2rem] border border-slate-200 shadow-sm md:hidden">
+    <div className="relative flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
+      {/* Title lives in DashboardLayout (Personal Zone / WALLET) — no duplicate heading here */}
+      <div className="page-container flex min-h-0 flex-1 flex-col gap-5 py-4 sm:gap-6 sm:py-6">
+        {/* Mobile-only wallet chrome */}
+        <div className="flex items-center justify-between rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:hidden">
             <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center text-white shadow-lg">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg">
                     <QrCode size={24} />
                 </div>
                 <div>
                     <h1 className="text-lg font-bold text-slate-900">Wallet</h1>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Secure ID: {user?.id.slice(-6).toUpperCase()}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Secure ID: {user?.id.slice(-6).toUpperCase()}</p>
                 </div>
             </div>
             {items.length > 0 && (
-                <button onClick={() => setViewingTicket(items[0])} className="p-3 bg-slate-100 rounded-full text-slate-600 active:bg-slate-200">
+                <button type="button" onClick={() => setViewingTicket(items[0])} className="rounded-full bg-slate-100 p-3 text-slate-600 active:bg-slate-200">
                     <Search size={20} />
                 </button>
             )}
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex bg-slate-200/50 p-1.5 rounded-2xl md:max-w-md md:mx-auto">
-            <button onClick={() => setActiveTab('TICKETS')} className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${activeTab === 'TICKETS' ? 'bg-white text-indigo-600 shadow-md ring-1 ring-black/5' : 'text-slate-500'}`}>My Tickets</button>
-            <button onClick={() => setActiveTab('ASSETS')} className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${activeTab === 'ASSETS' ? 'bg-white text-indigo-600 shadow-md ring-1 ring-black/5' : 'text-slate-500'}`}>Program Credits</button>
-            <button onClick={() => setActiveTab('HISTORY')} className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${activeTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-md ring-1 ring-black/5' : 'text-slate-500'}`}>Activity</button>
+        {/* Centered pill tabs — matches reference */}
+        <div className="flex w-full justify-center">
+          <div className="w-full max-w-xl overflow-x-scroll-touch rounded-2xl bg-slate-100 p-1 shadow-inner sm:max-w-2xl">
+            <div className="flex min-w-0 gap-1">
+              <button type="button" onClick={() => setActiveTab('TICKETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'TICKETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>My Tickets</button>
+              <button type="button" onClick={() => setActiveTab('ASSETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'ASSETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Program Credits</button>
+              <button type="button" onClick={() => setActiveTab('HISTORY')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'HISTORY' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Activity</button>
+            </div>
+          </div>
         </div>
 
-        <div className="min-h-[400px]">
+        <div className="min-h-0 flex-1">
             {activeTab === 'HISTORY' && <WalletHistory />}
 
             {activeTab === 'ASSETS' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {creditPasses.length === 0 && <div className="col-span-full text-center py-20 text-slate-400 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">No active program credits.</div>}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {creditPasses.length === 0 && (
+                      <div className={`col-span-full ${emptyShell}`}>
+                        <p className="text-base font-medium text-slate-600">No active program credits.</p>
+                      </div>
+                    )}
                     {creditPasses.map((item) => (
                         <div key={item.id} className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden group">
                              <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-all scale-150 rotate-12">
@@ -156,10 +169,10 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
             {activeTab === 'TICKETS' && (
                 <div className="space-y-6">
                     {groupedTickets.length === 0 ? (
-                        <div className="text-center py-20 text-slate-400 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
-                             <Ticket size={48} className="mx-auto mb-4 opacity-20"/>
-                             <p className="font-bold text-slate-600">Your Wallet is Empty</p>
-                             <p className="text-xs mt-1">Acquired tickets will appear here for you to use or share.</p>
+                        <div className={emptyShell}>
+                             <Ticket size={44} strokeWidth={1.25} className="mx-auto mb-4 text-slate-300"/>
+                             <p className="font-bold text-slate-800">Your Wallet is Empty</p>
+                             <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">Acquired tickets will appear here for you to use or share.</p>
                         </div>
                     ) : groupedTickets.map((group, idx) => {
                         // 1. Regular Ticket (The first one, assumed for Self)
@@ -241,6 +254,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                                 {/* Action Button (Replacing QR) */}
                                                 <div className="flex items-center pl-2">
                                                     <button 
+                                                        type="button"
                                                         onClick={() => openDistribution(bundleTickets)}
                                                         className="bg-indigo-600 text-white p-4 rounded-xl shadow-lg hover:bg-indigo-700 transition-all active:scale-95 group-hover/bundle:scale-105"
                                                     >
@@ -275,6 +289,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                 onSuccess={() => { setDistributionContext(null); loadWallet(); }}
             />
         )}
+      </div>
     </div>
   );
 };

@@ -52,9 +52,9 @@ const WalletHistory: React.FC = () => {
     if (loading) return <div className="p-8 text-center text-slate-400 text-xs">Loading history...</div>;
 
     if (history.length === 0) return (
-        <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
-            <History size={32} className="mx-auto mb-2 text-slate-300"/>
-            <p className="text-sm text-slate-500 font-medium">No activity recorded yet.</p>
+        <div className="rounded-[2.5rem] border-2 border-dashed border-slate-200 bg-slate-50/90 px-6 py-20 text-center">
+            <History size={40} className="mx-auto mb-4 text-slate-300"/>
+            <p className="text-base font-medium text-slate-600">No activity recorded yet.</p>
         </div>
     );
 

@@ -99,13 +99,32 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
   const isMemberMode = isPersonalZone || userRole === UserRole.MEMBER;
 
   return (
-    <>
-      <div className="static w-72 bg-slate-900 text-white z-50 flex flex-col h-full border-r border-slate-800 shrink-0">
+    <div className="relative h-full w-0 shrink-0 lg:w-72">
+      {/* One flex child for the shell: mobile width 0 so main fills; lg reserves 288px like before. */}
+      {isOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={toggleSidebar}
+        />
+      )}
+
+      <div
+        className={[
+          'flex flex-col h-full w-72 bg-slate-900 text-white border-r border-slate-800',
+          'fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-out',
+          'lg:static lg:inset-auto lg:z-auto lg:translate-x-0 lg:transform-none',
+          isOpen ? 'translate-x-0' : '-translate-x-full',
+        ].join(' ')}
+      >
         <div className="p-4 bg-slate-950/50 shrink-0">
              <div className="flex items-center gap-3 mb-6 px-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-900/50">
-                    M
-                </div>
+                <img
+                    src="/mxwel.png"
+                    alt="Maxwell logo"
+                    className="h-8 w-8 rounded-lg object-cover shadow-lg shadow-blue-900/50"
+                />
                 <div>
                     <span className="font-bold text-sm tracking-wide block">Maxwell Leadership</span>
                     <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Enterprise</span>
@@ -200,7 +219,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
             </button>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

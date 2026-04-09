@@ -37,7 +37,7 @@ const DigitalMentorChat: React.FC<DigitalMentorChatProps> = ({ session, persona,
   };
 
   return (
-    <div className="flex flex-col h-[600px] bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-fade-in-up">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-3xl border border-slate-300 bg-white shadow-xl animate-fade-in-up">
         {/* Header */}
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">

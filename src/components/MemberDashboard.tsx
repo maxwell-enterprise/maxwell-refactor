@@ -88,34 +88,40 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
 
   if (loading) {
     return (
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-fade-in pb-24">
-        <div className="h-10 w-64 bg-slate-200 rounded-xl animate-pulse" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 h-64 bg-slate-100 rounded-[2rem] animate-pulse" />
-          <div className="h-72 bg-slate-100 rounded-2xl animate-pulse" />
+      <div className="flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
+        <div className="page-container flex flex-1 flex-col gap-6 py-4 sm:gap-8 sm:py-6">
+          <div className="h-10 w-64 rounded-xl bg-slate-200 animate-pulse" />
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            <div className="h-64 animate-pulse rounded-[2rem] bg-slate-100 lg:col-span-2" />
+            <div className="h-72 animate-pulse rounded-2xl bg-slate-100" />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8 animate-fade-in pb-24">
+    <div className="flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
+      <div className="page-container flex min-h-0 flex-1 flex-col gap-6 py-4 sm:gap-8 sm:py-6">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
-                <h1 className="text-2xl font-bold text-slate-900">
-                    Hello, <span className="text-blue-600">{user?.fullName.split(' ')[0]}</span>
+                <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
+                    Hello,{' '}
+                    <span className="text-blue-600">
+                      {user?.fullName?.split(' ')[0] ?? 'there'}
+                    </span>
                 </h1>
                 <p className="text-slate-500 text-sm mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
             </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            <div className="space-y-8 lg:col-span-2">
                 
                 {/* Evolution Journey */}
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
+                <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
                     <div className="flex justify-between items-center mb-8">
                         <h3 className="font-bold text-slate-900 flex items-center">
                             <Award size={20} className="text-blue-600 mr-2" /> Evolution Journey
@@ -154,7 +160,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                 </div>
 
                 {/* Next Event Card */}
-                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden group cursor-pointer" onClick={() => onNavigate(ViewState.WALLET)}>
+                <div className="group relative cursor-pointer overflow-hidden rounded-[2.5rem] bg-slate-900 p-8 text-white shadow-xl" onClick={() => onNavigate(ViewState.WALLET)}>
                     <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-all scale-125">
                         <Calendar size={140} />
                     </div>
@@ -193,15 +199,14 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
             </div>
 
             <div className="lg:col-span-1">
-                {/* Replaced Leaderboard with Wallet Summary */}
                 <WalletSummaryWidget walletItems={wallet} onNavigate={onNavigate} />
             </div>
         </div>
 
-        {/* Sign Modal */}
         {showSignModal && pendingContract && (
             <ContractSigningModal instance={pendingContract} onClose={() => setShowSignModal(false)} onSigned={() => { setShowSignModal(false); setPendingContract(null); }} />
         )}
+      </div>
     </div>
   );
 };

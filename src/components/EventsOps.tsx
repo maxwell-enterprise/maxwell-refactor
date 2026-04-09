@@ -36,6 +36,7 @@ const EventsAdmin: React.FC = () => {
   const [selectedType, setSelectedType] = useState<string>('All');
   const [events, setEvents] = useState<Event[]>([]);
   const [expandedSeries, setExpandedSeries] = useState<string[]>([]); 
+  const [isDeleteInFlight, setIsDeleteInFlight] = useState(false);
   
   // New/Edit Event State
   const [isEditing, setIsEditing] = useState(false);
@@ -121,6 +122,7 @@ const EventsAdmin: React.FC = () => {
 
   // --- REFACTORED DELETE LOGIC USING GLOBAL DIALOG ---
   const handleClickDelete = async (eventId: string) => {
+      if (isDeleteInFlight) return;
       const event = events.find(e => e.id === eventId);
       if (!event) return;
 
@@ -157,27 +159,38 @@ const EventsAdmin: React.FC = () => {
       });
 
       if (confirmed) {
-          processDelete(eventId);
+          await processDelete(eventId);
       }
   };
 
+  const readErrorMessage = (e: unknown, fallback: string): string => {
+      if (e instanceof Error && e.message.trim().length > 0) return e.message;
+      return fallback;
+  };
+
   const processDelete = async (id: string) => {
+      setIsDeleteInFlight(true);
       try {
           await DataService.deleteEvent(id);
           showToast('Event deleted successfully', 'success');
-          loadEvents();
+          await loadEvents();
       } catch (e) {
-          showToast('Failed to delete event', 'error');
+          showToast(readErrorMessage(e, 'Failed to delete event'), 'error');
+      } finally {
+          setIsDeleteInFlight(false);
       }
   };
 
   const handleSeriesDelete = async (seriesId: string, strategy: 'CASCADE' | 'ORPHAN') => {
+      setIsDeleteInFlight(true);
       try {
           await DataService.deleteSeries(seriesId, strategy);
           showToast(`Series deleted. Children ${strategy === 'CASCADE' ? 'deleted' : 'unlinked'}.`, 'success');
-          loadEvents();
+          await loadEvents();
       } catch (e) {
-          showToast('Failed to process series deletion', 'error');
+          showToast(readErrorMessage(e, 'Failed to process series deletion'), 'error');
+      } finally {
+          setIsDeleteInFlight(false);
       }
   };
 
@@ -275,42 +288,46 @@ const EventsAdmin: React.FC = () => {
   if (!can('READ')) return <div className="p-8 text-center text-slate-400">Access Restricted</div>;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in relative">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-              <Settings size={24} className="mr-3 text-slate-700"/> Event Operations
+    <div className="page-container space-y-4 sm:space-y-6 animate-fade-in relative pb-8 min-w-0">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
+              <Settings size={26} className="shrink-0 text-slate-700"/> <span className="leading-tight">Event Operations</span>
           </h1>
-          <p className="text-slate-500 mt-1">Manage schedules, admission gates, and series structures.</p>
+          <p className="text-slate-500 mt-1 text-sm sm:text-base">Manage schedules, admission gates, and series structures.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0">
             {can('WRITE') && mainTab === 'EVENTS' && (
-                <button onClick={handleOpenCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center shadow-lg transition-transform active:scale-95">
-                    <Plus size={18} className="mr-2" /> New Event
+                <button type="button" onClick={handleOpenCreate} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition-transform hover:bg-blue-700 active:scale-95 sm:w-auto">
+                    <Plus size={18} className="shrink-0" /> New Event
                 </button>
             )}
         </div>
       </div>
 
       {/* Main Tab Switcher */}
-      <div className="flex gap-4 border-b border-slate-200">
+      <div className="overflow-x-scroll-touch border-b border-slate-200">
+          <div className="inline-flex min-w-0 gap-1 sm:gap-4">
           <button 
+            type="button"
             onClick={() => setMainTab('EVENTS')}
-            className={`pb-3 px-2 text-sm font-bold transition-all border-b-2 ${mainTab === 'EVENTS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`shrink-0 whitespace-nowrap border-b-2 pb-3 px-2 text-sm font-bold transition-all ${mainTab === 'EVENTS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
               Event Management
           </button>
           <button 
+            type="button"
             onClick={() => setMainTab('MASTER_TIERS')}
-            className={`pb-3 px-2 text-sm font-bold transition-all border-b-2 flex items-center ${mainTab === 'MASTER_TIERS' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 pb-3 px-2 text-sm font-bold transition-all ${mainTab === 'MASTER_TIERS' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
-              <Layers size={14} className="mr-2"/> Master Tiers
+              <Layers size={14} className="shrink-0"/> Master Tiers
           </button>
+          </div>
       </div>
 
       {/* VIEW: MASTER TIERS */}
       {mainTab === 'MASTER_TIERS' && (
-          <div className="h-[600px]">
+          <div className="min-h-[50vh] sm:min-h-[560px] sm:h-[600px]">
               <MasterTierConfig />
           </div>
       )}
@@ -319,7 +336,7 @@ const EventsAdmin: React.FC = () => {
       {mainTab === 'EVENTS' && (
         <>
           {/* Filters & View Switcher */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white p-3 shadow-sm sm:gap-4 sm:p-4">
               <div className="flex gap-2">
                    <button onClick={() => setViewMode('series')} className={`px-3 py-1.5 text-xs font-bold rounded border ${viewMode === 'series' ? 'bg-slate-100 text-slate-900 border-slate-300' : 'text-slate-500 border-transparent'}`}>
                        Hierarchy View
@@ -343,14 +360,14 @@ const EventsAdmin: React.FC = () => {
           </div>
 
           {/* Main List Rendering */}
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
             {filteredEvents.length === 0 ? (
                  <div className="p-12 text-center text-slate-400">
                     <Calendar size={48} className="mx-auto mb-4 opacity-50" />
                     <p>No events found for the selected filters.</p>
                 </div>
             ) : viewMode === 'list' ? (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-300">
                     {filteredEvents.map(event => (
                         <EventListItem 
                             key={event.id} 
@@ -364,12 +381,12 @@ const EventsAdmin: React.FC = () => {
                     ))}
                 </div>
             ) : (
-                <div className="p-4 space-y-4 bg-slate-50">
+                <div className="space-y-3 bg-slate-50 p-3 sm:space-y-4 sm:p-4">
                     {seriesGroupedEvents.seriesList.map(series => {
                         const children = events.filter(e => e.parentEventId === series.id);
                         const isExpanded = expandedSeries.includes(series.id);
                         return (
-                            <div key={series.id} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                            <div key={series.id} className="bg-white border border-slate-300 rounded-lg overflow-hidden shadow-sm">
                                 <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50" onClick={() => toggleSeriesExpand(series.id)}>
                                     <div className="flex items-center gap-3">
                                         <FolderOpen size={18} className="text-slate-500 fill-slate-100" />
@@ -385,7 +402,7 @@ const EventsAdmin: React.FC = () => {
                                     </div>
                                 </div>
                                 {isExpanded && (
-                                    <div className="border-t border-slate-100">
+                                    <div className="divide-y divide-slate-300 border-t border-slate-300">
                                         {children.length === 0 && <div className="p-4 text-xs text-slate-400 italic pl-10">No sessions in this container yet.</div>}
                                         {children.map(child => (
                                             <EventListItem 
@@ -406,9 +423,9 @@ const EventsAdmin: React.FC = () => {
                     })}
 
                     {seriesGroupedEvents.recurringList.length > 0 && (
-                         <div className="mt-4">
-                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Recurring Sessions (Routine)</h4>
-                            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                         <div className="mt-2 sm:mt-4">
+                            <h4 className="mb-2 px-1 text-xs font-bold uppercase tracking-widest text-slate-400">Recurring Sessions (Routine)</h4>
+                            <div className="divide-y divide-slate-300 overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
                                 {seriesGroupedEvents.recurringList.map(e => (
                                     <EventListItem key={e.id} event={e} onEdit={handleOpenEdit} onDelete={() => handleClickDelete(e.id)} onGateConfig={setGateConfigEvent} onProjector={setProjectorEvent} canWrite={can('WRITE')} />
                                 ))}
@@ -417,9 +434,9 @@ const EventsAdmin: React.FC = () => {
                     )}
 
                     {seriesGroupedEvents.orphans.length > 0 && (
-                        <div className="mt-4">
-                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Independent Events</h4>
-                            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                        <div className="mt-2 sm:mt-4">
+                            <h4 className="mb-2 px-1 text-xs font-bold uppercase tracking-widest text-slate-400">Independent Events</h4>
+                            <div className="divide-y divide-slate-300 overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
                                 {seriesGroupedEvents.orphans.map(e => (
                                     <EventListItem key={e.id} event={e} onEdit={handleOpenEdit} onDelete={() => handleClickDelete(e.id)} onGateConfig={setGateConfigEvent} onProjector={setProjectorEvent} canWrite={can('WRITE')} />
                                 ))}

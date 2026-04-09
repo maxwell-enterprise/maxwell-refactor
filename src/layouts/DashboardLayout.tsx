@@ -7,6 +7,8 @@ import { Menu, Bell, Search, UserCircle, ChevronDown, CheckCircle, RefreshCw } f
 import { useAuth } from '../context/AuthContext';
 import { TaskService, UnifiedTask } from '../services/taskService';
 import PersonaSwitcherModal from '../components/auth/PersonaSwitcherModal'; // NEW IMPORT
+import { useToast } from '../context/ToastContext';
+import { markRbacInboxRead } from '../lib/rbacInboxClient';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -18,6 +20,7 @@ interface DashboardLayoutProps {
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView, onNavigate, isPersonalZone, onToggleZone }) => {
   const { user, userRole, logout } = useAuth();
+  const { showToast } = useToast();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Replace simple menu state with modal state
@@ -53,22 +56,74 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
 
   const highPriorityCount = pendingTasks.filter(t => t.priority === 'HIGH').length;
 
+  const handleNotificationItemClick = async (task: UnifiedTask) => {
+    const inboxId = task.metadata?.rbacInboxId;
+    if (task.source === 'SYSTEM' && inboxId) {
+      setShowNotifications(false);
+      await markRbacInboxRead(inboxId);
+      showToast(
+        'Akun Anda diarahkan ke RBAC: kami mengeluarkan sesi ini supaya login berikutnya memuat role baru.',
+        'info',
+      );
+      await logout();
+      return;
+    }
+    onNavigate(ViewState.MY_TASKS);
+    setShowNotifications(false);
+  };
+
+  /** Close mobile drawer after navigation; desktop layout ignores `isSidebarOpen` via `lg:translate-x-0`. */
+  const handleNavigate = (view: ViewState) => {
+    onNavigate(view);
+    setIsSidebarOpen(false);
+  };
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [currentView]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    const applyBodyScrollLock = () => {
+      const narrow = window.matchMedia('(max-width: 1023px)').matches;
+      if (isSidebarOpen && narrow) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
+    };
+    applyBodyScrollLock();
+    window.addEventListener('resize', applyBodyScrollLock);
+    return () => {
+      window.removeEventListener('resize', applyBodyScrollLock);
+      document.body.style.overflow = '';
+    };
+  }, [isSidebarOpen]);
+
   return (
-    <div className="h-screen w-full bg-slate-50 flex overflow-hidden font-sans text-slate-900">
+    <div className="flex h-screen w-full min-w-0 max-w-full overflow-hidden bg-slate-50 font-sans text-slate-900">
       <Sidebar 
         currentView={currentView} 
-        onNavigate={onNavigate} 
+        onNavigate={handleNavigate} 
         isOpen={isSidebarOpen}
-        toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        toggleSidebar={() => setIsSidebarOpen((v) => !v)}
         userRole={userRole}
         isPersonalZone={isPersonalZone}
         onToggleZone={onToggleZone}
       />
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+      {/* No overflow-x-hidden here — it clips wide tables/cards; <main> handles scroll */}
+      <div className="relative flex h-full min-h-0 min-w-0 max-w-full flex-1 flex-col">
         
         {/* --- MODERN HEADER START --- */}
-        <header className="h-[72px] px-6 z-40 sticky top-0 transition-all duration-300 flex items-center justify-between
+        <header className="h-[72px] z-40 sticky top-0 flex items-center justify-between px-3 transition-all duration-300 sm:px-6
             bg-white/85 backdrop-blur-xl border-b border-slate-200/80 
             shadow-[0_8px_30px_rgb(0,0,0,0.04)] shrink-0"
         >
@@ -184,7 +239,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                                         pendingTasks.slice(0, 5).map(task => (
                                             <button 
                                                 key={task.id}
-                                                onClick={() => { onNavigate(ViewState.MY_TASKS); setShowNotifications(false); }}
+                                                onClick={() => void handleNotificationItemClick(task)}
                                                 className="w-full text-left p-4 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors group"
                                             >
                                                 <div className="flex justify-between items-start mb-1.5">
@@ -233,7 +288,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
         </header>
         {/* --- MODERN HEADER END --- */}
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-0 relative bg-slate-50">
+        <main className="relative flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col overflow-y-auto bg-slate-50 p-0">
           {children}
         </main>
 
@@ -241,7 +296,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
         <CommandPalette 
             isOpen={isCmdOpen} 
             onClose={() => setIsCmdOpen(false)} 
-            onNavigate={onNavigate} 
+            onNavigate={handleNavigate} 
         />
         
         {/* New Persona Switcher Modal */}

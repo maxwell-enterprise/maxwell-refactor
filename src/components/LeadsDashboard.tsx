@@ -69,15 +69,16 @@ const LeadsDashboard: React.FC = () => {
     });
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in relative">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <Target className="mr-3 text-orange-600" /> Sales Pipeline
+        <div className="page-container space-y-5 sm:space-y-6 animate-fade-in relative pb-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-end min-w-0">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
+                        <Target className="shrink-0 text-orange-600" size={28} /> 
+                        <span className="leading-tight">Sales Pipeline</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Prospects, guests, and qualified leads.</p>
+                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Prospects, guests, and qualified leads.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full lg:w-auto min-w-0">
                     <button 
                         onClick={() => setShowQualifiedOnly(!showQualifiedOnly)}
                         className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center transition-all ${showQualifiedOnly ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}
@@ -85,8 +86,8 @@ const LeadsDashboard: React.FC = () => {
                         <Award size={14} className="mr-1.5"/> Qualified Only
                     </button>
 
-                    <div className="relative w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <div className="relative w-full sm:w-64 min-w-0">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
                         <input 
                             type="text" 
                             placeholder="Search leads..." 
@@ -98,8 +99,9 @@ const LeadsDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden pb-20">
-                <table className="w-full text-left text-sm">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden pb-20 min-w-0">
+                <div className="overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
+                <table className="w-full min-w-[720px] text-left text-sm">
                     <thead className="bg-orange-50 text-orange-800 font-bold border-b border-orange-100">
                         <tr>
                             <th className="px-4 py-4 w-10 text-center cursor-pointer hover:bg-orange-100" onClick={toggleAll}>
@@ -201,6 +203,7 @@ const LeadsDashboard: React.FC = () => {
                         )}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {/* FLOATING ACTION BAR FOR BULK INVITE */}

@@ -69,7 +69,10 @@ function resolveApiBaseUrl(): string {
 
 // ENVIRONMENT VARIABLES (Next.js uses process.env.NEXT_PUBLIC_* for client-side)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+  '';
 const apiBaseUrl = resolveApiBaseUrl();
 const externalApiOnly = process.env.NEXT_PUBLIC_EXTERNAL_API_ONLY === 'true';
 
@@ -120,9 +123,11 @@ export const APP_CONFIG = {
     PAYMENTS:       resolveDomainMode(process.env.NEXT_PUBLIC_PAYMENTS_BACKEND),
     EVENTS:         resolveDomainMode(process.env.NEXT_PUBLIC_EVENTS_BACKEND),
     OPS:            resolveDomainMode(process.env.NEXT_PUBLIC_OPS_BACKEND),
-    GAMIFICATION:   (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode,
+    /** Badges, rules, profiles — Nest `/fe/gamification/*` when `API` (default). Override: `NEXT_PUBLIC_GAMIFICATION_BACKEND`. */
+    GAMIFICATION:   resolveDomainMode(process.env.NEXT_PUBLIC_GAMIFICATION_BACKEND),
     COMMUNICATION:  resolveDomainMode(process.env.NEXT_PUBLIC_COMMUNICATION_BACKEND), // Email & WA
-    CONTENT:        (hasSupabaseKeys ? 'SUPABASE' : 'MOCK') as BackendMode, // CMS
+    /** CMS posts — Nest `/fe/content/posts` when `API` (default). Override: `NEXT_PUBLIC_CONTENT_BACKEND`. */
+    CONTENT:        resolveDomainMode(process.env.NEXT_PUBLIC_CONTENT_BACKEND),
     COMMERCE:       resolveDomainMode(process.env.NEXT_PUBLIC_COMMERCE_BACKEND),
     /** Automations, security logs, AI usage, DB meta — Nest `/fe/system/*` when `API` */
     SYSTEM:         resolveDomainMode(process.env.NEXT_PUBLIC_SYSTEM_BACKEND),

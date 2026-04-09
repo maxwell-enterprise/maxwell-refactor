@@ -2,7 +2,6 @@
 
 import React from "react";
 import { AuthProvider, ToastProvider, DialogProvider, SecurityProvider } from "../../../providers";
-
 type DashboardProvidersProps = {
   children: React.ReactNode;
 };

@@ -272,59 +272,112 @@ const InventoryManager: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+        <div className="flex min-h-[min(70vh,560px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 min-w-0 sm:min-h-0 sm:h-full">
             {/* Header */}
-            <div className="p-4 bg-white border-b border-slate-200 flex justify-between items-center">
-                <div className="flex gap-2">
-                    <button 
-                        onClick={() => setActiveTab('STOCK')}
-                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center ${activeTab === 'STOCK' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                    >
-                        <Package size={16} className="mr-2"/> Stock Overview
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('HISTORY')}
-                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center ${activeTab === 'HISTORY' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                    >
-                        <History size={16} className="mr-2"/> Movements
-                    </button>
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-white p-3 sm:p-4 min-w-0">
+                <div className="max-w-full overflow-x-scroll-touch rounded-xl bg-slate-100 p-1">
+                    <div className="inline-flex flex-nowrap gap-1">
+                        <button 
+                            type="button"
+                            onClick={() => setActiveTab('STOCK')}
+                            className={`flex shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'STOCK' ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:bg-slate-50/80'}`}
+                        >
+                            <Package size={16} className="mr-1.5 shrink-0 sm:mr-2"/> Stock
+                        </button>
+                        <button 
+                            type="button"
+                            onClick={() => setActiveTab('HISTORY')}
+                            className={`flex shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'HISTORY' ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:bg-slate-50/80'}`}
+                        >
+                            <History size={16} className="mr-1.5 shrink-0 sm:mr-2"/> Movements
+                        </button>
+                    </div>
                 </div>
                 
-                <div className="flex gap-2 items-center">
-                    <input type="file" ref={fileInputRef} hidden onChange={handleImport} accept=".xlsx,.xls"/>
-                    <button onClick={handleDownloadTemplate} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Download Template"><FileSpreadsheet size={18}/></button>
-                    <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Import Inventory"><Upload size={18}/></button>
-                    <button onClick={handleExport} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Export Inventory"><Download size={18}/></button>
-                    
-                    <button onClick={handleCreateItem} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm ml-2">
-                        <Plus size={16} className="mr-2"/> New Item
-                    </button>
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <input type="file" ref={fileInputRef} hidden onChange={handleImport} accept=".xlsx,.xls"/>
+                        <button type="button" onClick={handleDownloadTemplate} className="touch-target rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Download Template" aria-label="Download template"><FileSpreadsheet size={18}/></button>
+                        <button type="button" onClick={() => fileInputRef.current?.click()} className="touch-target rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Import Inventory" aria-label="Import inventory"><Upload size={18}/></button>
+                        <button type="button" onClick={handleExport} className="touch-target rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Export Inventory" aria-label="Export inventory"><Download size={18}/></button>
+                        
+                        <button type="button" onClick={handleCreateItem} className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700 sm:flex-initial">
+                            <Plus size={16} className="shrink-0"/> New item
+                        </button>
+                    </div>
 
-                    <div className="w-px h-6 bg-slate-200 mx-2"></div>
-
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <div className="relative min-w-0 w-full sm:max-w-xs sm:flex-1 lg:max-w-sm">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
                         <input 
-                            type="text" 
-                            placeholder="Search SKU or Name..." 
-                            className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 outline-none"
+                            type="search" 
+                            placeholder="Search SKU or name…" 
+                            className="w-full rounded-lg border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            aria-label="Search inventory"
                         />
                     </div>
                 </div>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-auto p-4">
+            <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
                 {activeTab === 'STOCK' && (
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                    <>
+                    {/* Mobile cards */}
+                    <div className="space-y-3 md:hidden">
+                        {loading ? (
+                            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400">Loading…</div>
+                        ) : filteredItems.length === 0 ? (
+                            <div className="rounded-xl border border-slate-200 bg-white p-8">
+                                <div className="flex flex-col items-center justify-center gap-3 text-center">
+                                    <Package className="shrink-0 text-slate-300" strokeWidth={1.25} size={44} aria-hidden />
+                                    <p className="text-sm text-slate-500">
+                                        {items.length === 0 ? 'No stock items yet.' : 'No items match your search.'}
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            filteredItems.map(item => (
+                                <div key={item.sku} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-bold text-slate-900 break-words">{item.name}</h3>
+                                                <button type="button" onClick={() => handleEditItem(item)} className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-blue-600" aria-label="Edit item">
+                                                    <Edit3 size={14}/>
+                                                </button>
+                                            </div>
+                                            <p className="mt-0.5 font-mono text-xs text-slate-500 break-all">{item.sku}</p>
+                                            <p className="mt-2 text-sm text-slate-600">{item.category}</p>
+                                        </div>
+                                        <span className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-full border ${getStatusColor(item.status)}`}>
+                                            {item.status}
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-3">
+                                        <div>
+                                            <span className="text-[10px] font-bold uppercase text-slate-400">On hand</span>
+                                            <p className="text-xl font-bold tabular-nums text-slate-900">{item.stock} <span className="text-sm font-normal text-slate-400">/ {item.reorderLevel} min</span></p>
+                                        </div>
+                                        <div className="flex w-full justify-end gap-2 sm:w-auto">
+                                            <button type="button" onClick={() => handleOpenMovementModal(item, 'GR')} className="touch-target rounded-lg bg-blue-50 p-2.5 text-blue-600 hover:bg-blue-100" title="Goods receipt" aria-label="Goods receipt"><Plus size={16} /></button>
+                                            <button type="button" onClick={() => handleOpenMovementModal(item, 'GI')} className="touch-target rounded-lg bg-amber-50 p-2.5 text-amber-600 hover:bg-amber-100" title="Goods issue" aria-label="Goods issue"><Minus size={16} /></button>
+                                            <button type="button" onClick={() => handleOpenMovementModal(item, 'ADJUSTMENT')} className="touch-target rounded-lg bg-slate-50 p-2.5 text-slate-600 hover:bg-slate-100" title="Adjust stock" aria-label="Adjust stock"><RefreshCw size={16} /></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <div className="hidden md:block overflow-x-scroll-touch rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <table className="w-full min-w-[720px] text-left text-sm">
+                            <thead className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
                                 <tr>
                                     <th className="p-4">Item Details</th>
                                     <th className="p-4">Category</th>
-                                    <th className="p-4">Stock Level</th>
+                                    <th className="p-4 whitespace-nowrap">Stock Level</th>
                                     <th className="p-4">Status</th>
                                     <th className="p-4 text-right">Quick Actions</th>
                                 </tr>
@@ -356,20 +409,20 @@ const InventoryManager: React.FC = () => {
                                     </tr>
                                 ) : (
                                 filteredItems.map(item => (
-                                    <tr key={item.sku} className="hover:bg-slate-50 group">
-                                        <td className="p-4">
-                                            <div className="font-bold text-slate-900 flex items-center">
-                                                {item.name}
-                                                <button onClick={() => handleEditItem(item)} className="ml-2 text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <tr key={item.sku} className="group hover:bg-slate-50">
+                                        <td className="p-4 max-w-[240px]">
+                                            <div className="flex items-center font-bold text-slate-900">
+                                                <span className="break-words">{item.name}</span>
+                                                <button type="button" onClick={() => handleEditItem(item)} className="ml-2 shrink-0 text-slate-400 opacity-0 transition-opacity hover:text-blue-600 group-hover:opacity-100">
                                                     <Edit3 size={14}/>
                                                 </button>
                                             </div>
-                                            <div className="text-xs text-slate-500 font-mono">{item.sku}</div>
+                                            <div className="font-mono text-xs text-slate-500 break-all">{item.sku}</div>
                                         </td>
                                         <td className="p-4 text-slate-600">{item.category}</td>
-                                        <td className="p-4">
+                                        <td className="p-4 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <span className="text-lg font-bold mr-2">{item.stock}</span>
+                                                <span className="mr-2 text-lg font-bold tabular-nums">{item.stock}</span>
                                                 <span className="text-xs text-slate-400">/ {item.reorderLevel} min</span>
                                             </div>
                                         </td>
@@ -380,15 +433,9 @@ const InventoryManager: React.FC = () => {
                                         </td>
                                         <td className="p-4 text-right">
                                             <div className="flex justify-end gap-2">
-                                                <button onClick={() => handleOpenMovementModal(item, 'GR')} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100" title="Goods Receipt (In)">
-                                                    <Plus size={16} />
-                                                </button>
-                                                <button onClick={() => handleOpenMovementModal(item, 'GI')} className="bg-amber-50 text-amber-600 p-2 rounded-lg hover:bg-amber-100" title="Goods Issue (Out)">
-                                                    <Minus size={16} />
-                                                </button>
-                                                <button onClick={() => handleOpenMovementModal(item, 'ADJUSTMENT')} className="bg-slate-50 text-slate-600 p-2 rounded-lg hover:bg-slate-100" title="Stock Adjustment">
-                                                    <RefreshCw size={16} />
-                                                </button>
+                                                <button type="button" onClick={() => handleOpenMovementModal(item, 'GR')} className="rounded-lg bg-blue-50 p-2 text-blue-600 hover:bg-blue-100" title="Goods Receipt (In)"><Plus size={16} /></button>
+                                                <button type="button" onClick={() => handleOpenMovementModal(item, 'GI')} className="rounded-lg bg-amber-50 p-2 text-amber-600 hover:bg-amber-100" title="Goods Issue (Out)"><Minus size={16} /></button>
+                                                <button type="button" onClick={() => handleOpenMovementModal(item, 'ADJUSTMENT')} className="rounded-lg bg-slate-50 p-2 text-slate-600 hover:bg-slate-100" title="Stock Adjustment"><RefreshCw size={16} /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -397,6 +444,7 @@ const InventoryManager: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                    </>
                 )}
 
                 {activeTab === 'HISTORY' && (
@@ -413,20 +461,20 @@ const InventoryManager: React.FC = () => {
                             />
                         ) : (
                         transactions.map(tx => (
-                            <div key={tx.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className={`p-3 rounded-full ${tx.quantity > 0 ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                            <div key={tx.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between min-w-0">
+                                <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
+                                    <div className={`shrink-0 rounded-full p-3 ${tx.quantity > 0 ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
                                         <FileText size={20} />
                                     </div>
-                                    <div>
-                                        <div className="font-bold text-slate-900">{tx.type} - {tx.reference}</div>
-                                        <div className="text-xs text-slate-500 font-mono mt-0.5">
-                                            {tx.sku} • {new Date(tx.timestamp).toLocaleString()} • by {tx.performedBy}
+                                    <div className="min-w-0">
+                                        <div className="font-bold text-slate-900 break-words">{tx.type} — {tx.reference}</div>
+                                        <div className="mt-1 font-mono text-xs text-slate-500 break-all leading-relaxed">
+                                            {tx.sku} · {new Date(tx.timestamp).toLocaleString()} · {tx.performedBy}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <div className={`text-lg font-bold ${tx.quantity > 0 ? 'text-green-600' : 'text-amber-600'}`}>
+                                <div className="flex shrink-0 items-center justify-between gap-4 border-t border-slate-100 pt-2 sm:flex-col sm:items-end sm:border-t-0 sm:pt-0 sm:text-right">
+                                    <div className={`text-lg font-bold tabular-nums ${tx.quantity > 0 ? 'text-green-600' : 'text-amber-600'}`}>
                                         {tx.quantity > 0 ? '+' : ''}{tx.quantity}
                                     </div>
                                     <div className="text-xs text-slate-400">Bal: {tx.balanceAfter}</div>

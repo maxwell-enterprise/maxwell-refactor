@@ -153,63 +153,83 @@ const AdminSecurity: React.FC = () => {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in relative">
-       {/* Header */}
-       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-            <ShieldCheck className="mr-3 text-blue-600" />
-            Security & Access Control Center
-          </h1>
-          <p className="text-slate-500 mt-1">Enterprise Governance, Risk, and Compliance (GRC)</p>
+    <div className="relative flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
+       {/* Header + tabs */}
+       <div className="shrink-0 border-b border-slate-200 bg-white">
+        <div className="page-container pb-3 pt-4 sm:pb-4 sm:pt-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <ShieldCheck className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold leading-tight tracking-tight text-slate-900 sm:text-2xl">
+                Security & Access Control Center
+              </h1>
+              <p className="mt-1.5 text-sm leading-normal text-slate-600 sm:text-[15px]">
+                Enterprise governance, risk, and compliance (GRC).
+              </p>
+            </div>
+          </div>
         </div>
-        
-        <div className="flex items-center gap-3">
-            {activeTab === 'MATRIX' && canManageIAM('FULL') && (
-                <>
-                    <input type="file" ref={fileInputRef} hidden onChange={handleImportRoles} accept=".xlsx,.xls"/>
-                    <div className="flex bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden h-9">
-                        <button onClick={handleDownloadTemplate} className="px-3 text-slate-500 hover:bg-slate-50 border-r border-slate-200" title="Template"><FileSpreadsheet size={16}/></button>
-                        <button onClick={() => fileInputRef.current?.click()} className="px-3 text-slate-600 hover:bg-slate-50 flex items-center text-xs font-bold"><Upload size={14} className="mr-2"/> Import</button>
-                    </div>
-                    <button onClick={handleExportRoles} className="h-9 px-3 bg-white border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 shadow-sm"><Download size={16}/></button>
-                </>
-            )}
 
-            <div className="flex bg-slate-200/50 p-1 rounded-lg">
+        <div className="page-container pb-3 pt-0 sm:pb-4">
+          <div className="max-w-full min-w-0 overflow-x-scroll-touch rounded-lg bg-slate-100 p-0.5 shadow-inner">
+            <div className="inline-flex w-max min-w-full flex-nowrap gap-0.5 sm:w-full sm:min-w-0">
                 <button 
+                    type="button"
                     onClick={() => setActiveTab('USERS')}
-                    className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'USERS' ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors sm:flex-1 sm:justify-center sm:text-sm ${activeTab === 'USERS' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/90' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    <Users size={16} className="mr-2"/> User Access
+                    <Users size={16} className="mr-2 shrink-0" aria-hidden /> User Access
                 </button>
                 <button 
+                    type="button"
                     onClick={() => setActiveTab('MATRIX')}
-                    className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'MATRIX' ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors sm:flex-1 sm:justify-center sm:text-sm ${activeTab === 'MATRIX' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/90' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    <Sliders size={16} className="mr-2"/> Access Policies
+                    <Sliders size={16} className="mr-2 shrink-0" aria-hidden /> Access Policies
                 </button>
                 <button 
+                    type="button"
                     onClick={() => setActiveTab('AUDIT')}
-                    className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'AUDIT' ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors sm:flex-1 sm:justify-center sm:text-sm ${activeTab === 'AUDIT' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/90' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    <History size={16} className="mr-2"/> Audit Logs
+                    <History size={16} className="mr-2 shrink-0" aria-hidden /> Audit Logs
                 </button>
             </div>
+          </div>
         </div>
+
+        {activeTab === 'MATRIX' && canManageIAM('FULL') && (
+          <div className="page-container flex flex-col gap-2 border-t border-slate-100 pb-4 pt-3 sm:flex-row sm:items-center sm:justify-start sm:gap-3">
+            <input type="file" ref={fileInputRef} hidden onChange={handleImportRoles} accept=".xlsx,.xls"/>
+            <p className="text-xs font-medium text-slate-500 sm:sr-only">Role data (Excel)</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
+                  <button type="button" onClick={handleDownloadTemplate} className="touch-target flex items-center justify-center px-3 text-slate-500 hover:bg-slate-50 sm:h-9 sm:min-h-0 sm:min-w-0 border-r border-slate-200" title="Download import template"><FileSpreadsheet size={16}/></button>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="touch-target flex items-center px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 sm:h-9 sm:min-h-0 sm:min-w-0"><Upload size={14} className="mr-2 shrink-0"/> Import</button>
+              </div>
+              <button type="button" onClick={handleExportRoles} className="touch-target inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 sm:h-9">
+                <Download size={16} className="shrink-0" aria-hidden />
+                Export roles
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="flex-1 min-h-0 flex gap-6 relative">
+      <div className="page-container flex min-h-0 flex-1 flex-col py-4 sm:py-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
           {activeTab === 'USERS' && (
-              <div className="w-full h-full">
+              <div className="min-h-0 w-full flex-1">
                   <UserAccessManager />
               </div>
           )}
 
           {activeTab === 'MATRIX' && (
             <>
-              {/* Left Pane: Role List */}
-              <div className="w-1/4 min-w-[250px]">
+              {/* Role list: full width on small screens, sidebar on lg */}
+              <div className="w-full shrink-0 lg:w-1/4 lg:min-w-[220px]">
                   <RoleManager 
                     roles={roles} 
                     selectedRoleId={selectedRoleId} 
@@ -217,8 +237,8 @@ const AdminSecurity: React.FC = () => {
                   />
               </div>
 
-              {/* Right Pane: Advanced Editor */}
-              <div className="flex-1 flex flex-col overflow-hidden relative bg-white rounded-xl border border-slate-200 shadow-sm">
+              {/* Advanced editor */}
+              <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
                   {workingRole ? (
                       <>
                         <div className="flex-1 overflow-hidden">
@@ -267,15 +287,15 @@ const AdminSecurity: React.FC = () => {
           )}
 
           {activeTab === 'AUDIT' && (
-              <div className="w-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="p-4 border-b border-slate-100 bg-slate-50">
+              <div className="flex w-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+                  <div className="border-b border-slate-200 bg-slate-50 p-4">
                       <h3 className="font-bold text-slate-800 flex items-center">
                           <History size={18} className="mr-2 text-slate-500"/> System Audit Trail
                       </h3>
                   </div>
-                  <div className="flex-1 overflow-y-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50 text-slate-500 font-medium">
+                  <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+                    <table className="w-full min-w-[560px] text-left text-sm">
+                        <thead className="bg-slate-50 font-medium text-slate-500">
                             <tr>
                                 <th className="p-4">Timestamp</th>
                                 <th className="p-4">Actor</th>
@@ -303,6 +323,7 @@ const AdminSecurity: React.FC = () => {
                   </div>
               </div>
           )}
+      </div>
       </div>
     </div>
   );

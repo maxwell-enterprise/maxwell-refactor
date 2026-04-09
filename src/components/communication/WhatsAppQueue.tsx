@@ -159,12 +159,12 @@ const WhatsAppQueue: React.FC = () => {
     };
 
     return (
-        <div className="h-full flex flex-col bg-white">
+        <div className="h-full min-h-0 min-w-0 flex flex-col bg-white">
             {/* Header / Filters */}
-            <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-4 justify-between bg-slate-50">
-                <div className="flex gap-2 items-center">
-                    <div className="relative w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <div className="p-3 sm:p-4 border-b border-slate-100 flex flex-col gap-3 sm:gap-4 bg-slate-50 min-w-0">
+                <div className="flex gap-2 items-center min-w-0 w-full">
+                    <div className="relative flex-1 min-w-0 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
                         <input 
                             type="text" 
                             placeholder="Search name or phone..." 
@@ -183,9 +183,9 @@ const WhatsAppQueue: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 min-w-0">
                     <select 
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none"
+                        className="min-w-0 flex-1 sm:flex-none px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none"
                         value={filterCategory}
                         onChange={(e) => setFilterCategory(e.target.value as any)}
                     >
@@ -196,7 +196,7 @@ const WhatsAppQueue: React.FC = () => {
                     </select>
                     
                     <select 
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none"
+                        className="min-w-0 flex-1 sm:flex-none px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none"
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value as any)}
                     >

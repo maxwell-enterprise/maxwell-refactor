@@ -220,46 +220,50 @@ const Marketing: React.FC = () => {
   const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8 animate-fade-in relative pb-24">
-        <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900">Marketing & Growth</h1>
-                <p className="text-slate-500 mt-1">Campaign attribution, smart links, and AI-driven performance tracking.</p>
+    <div className="page-container space-y-6 sm:space-y-8 animate-fade-in relative pb-24 min-w-0">
+        <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-end min-w-0">
+            <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Marketing & Growth</h1>
+                <p className="text-slate-500 mt-1 text-sm sm:text-base">Campaign attribution, smart links, and AI-driven performance tracking.</p>
             </div>
             
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end w-full lg:w-auto min-w-0">
+                <div className="flex gap-1 items-center shrink-0">
                 {canManageCampaigns('WRITE') && (
                     <>
                         <input type="file" ref={fileInputRef} hidden onChange={handleImport} accept=".xlsx,.xls"/>
-                        <button onClick={handleDownloadTemplate} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Template"><FileSpreadsheet size={18}/></button>
-                        <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Import"><Upload size={18}/></button>
+                        <button onClick={handleDownloadTemplate} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg touch-target sm:min-h-0 sm:min-w-0" title="Template"><FileSpreadsheet size={18}/></button>
+                        <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg touch-target sm:min-h-0 sm:min-w-0" title="Import"><Upload size={18}/></button>
                     </>
                 )}
-                <button onClick={handleExport} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg mr-2" title="Export"><Download size={18}/></button>
+                <button onClick={handleExport} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg touch-target sm:min-h-0 sm:min-w-0" title="Export"><Download size={18}/></button>
+                </div>
 
-                <div className="flex bg-slate-100 p-1 rounded-lg">
+                <div className="overflow-x-scroll-touch rounded-lg bg-slate-100 p-1">
+                    <div className="inline-flex max-w-none flex-nowrap gap-1">
                     {canManageCampaigns('WRITE') && (
                         <button 
                             onClick={() => setActiveTab('create')}
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center ${activeTab === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-medium rounded-md transition-all inline-flex items-center gap-2 whitespace-nowrap ${activeTab === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            <Link size={16} className="mr-2" /> Campaign Creator
+                            <Link size={16} className="shrink-0" /> <span>Campaign Creator</span>
                         </button>
                     )}
                     <button 
                         onClick={() => setActiveTab('analytics')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center ${activeTab === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-medium rounded-md transition-all inline-flex items-center gap-2 whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        <BarChart3 size={16} className="mr-2" /> Smart Analytics
+                        <BarChart3 size={16} className="shrink-0" /> <span>Smart Analytics</span>
                     </button>
+                    </div>
                 </div>
             </div>
         </div>
 
         {activeTab === 'create' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
                 {/* Creator Form */}
-                <div className={`bg-white p-6 rounded-xl border shadow-sm space-y-5 h-fit sticky top-6 transition-colors ${editingId ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'}`}>
+                <div className={`bg-white p-4 sm:p-6 rounded-xl border shadow-sm space-y-5 h-fit lg:sticky lg:top-4 transition-colors min-w-0 ${editingId ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'}`}>
                     <h3 className="font-bold text-slate-900 flex items-center justify-between">
                         <span className="flex items-center">
                             {editingId ? <Pencil size={18} className="mr-2 text-blue-600" /> : <Plus size={18} className="mr-2 text-blue-600" />}
@@ -357,15 +361,15 @@ const Marketing: React.FC = () => {
                 </div>
 
                 {/* Active Campaigns List */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-4 sm:space-y-6 min-w-0">
                     {/* Header with Search and Filter */}
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-4 min-w-0">
                         <div>
                             <h3 className="font-bold text-slate-900">Campaign Manager</h3>
                             <p className="text-xs text-slate-500">{filteredCampaigns.length} active links</p>
                         </div>
-                        <div className="flex gap-2 w-full md:w-auto">
-                            <div className="relative flex-1 md:w-48">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto min-w-0">
+                            <div className="relative flex-1 min-w-0 sm:min-w-[12rem]">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                                 <input 
                                     type="text" 
@@ -375,10 +379,10 @@ const Marketing: React.FC = () => {
                                     onChange={e => setSearchTerm(e.target.value)}
                                 />
                             </div>
-                            <div className="relative">
-                                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                            <div className="relative min-w-0 w-full sm:w-auto">
+                                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
                                 <select 
-                                    className="pl-9 pr-8 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:border-blue-500 bg-white cursor-pointer appearance-none"
+                                    className="w-full sm:w-auto min-w-0 pl-9 pr-8 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:border-blue-500 bg-white cursor-pointer appearance-none"
                                     value={filterCategory}
                                     onChange={e => setFilterCategory(e.target.value)}
                                 >
@@ -395,14 +399,14 @@ const Marketing: React.FC = () => {
                     </div>
 
                     {/* Grid List */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
                         {filteredCampaigns.length === 0 ? (
                              <div className="col-span-full py-12 text-center text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
                                  <Search size={32} className="mx-auto mb-2 opacity-20"/>
                                  <p className="text-sm">No campaigns found matching filters.</p>
                              </div>
                         ) : filteredCampaigns.map(campaign => (
-                            <div key={campaign.id} className={`bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all relative group flex flex-col justify-between ${editingId === campaign.id ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-200'}`}>
+                            <div key={campaign.id} className={`bg-white p-4 sm:p-5 rounded-xl border shadow-sm hover:shadow-md transition-all relative group flex flex-col justify-between min-w-0 max-w-full ${editingId === campaign.id ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-200'}`}>
                                 
                                 {canManageCampaigns('WRITE') && (
                                     <button 
@@ -429,9 +433,9 @@ const Marketing: React.FC = () => {
                                         </div>
                                     </div>
                                     
-                                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 mb-4 flex items-center justify-between group/link">
-                                        <code className="text-[10px] text-slate-500 truncate max-w-[200px]">{window.location.origin}{campaign.generatedLink}</code>
-                                        <div className="flex gap-2">
+                                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 mb-4 flex items-center gap-2 min-w-0 group/link">
+                                        <code className="text-[10px] text-slate-500 min-w-0 flex-1 truncate block">{window.location.origin}{campaign.generatedLink}</code>
+                                        <div className="flex gap-2 shrink-0">
                                             <button 
                                                 onClick={() => handleCopyLink(campaign.generatedLink)}
                                                 className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"
@@ -450,8 +454,8 @@ const Marketing: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-between text-sm border-t border-slate-100 pt-3 mt-auto">
-                                    <div className="flex gap-4">
+                                <div className="flex flex-wrap items-end justify-between gap-2 text-sm border-t border-slate-100 pt-3 mt-auto min-w-0">
+                                    <div className="flex gap-3 sm:gap-4 min-w-0">
                                         <div className="text-center">
                                             <div className="text-[10px] text-slate-400 uppercase font-bold">Clicks</div>
                                             <div className="font-bold text-slate-700">{campaign.clicks}</div>
@@ -466,8 +470,8 @@ const Marketing: React.FC = () => {
                                         </div>
                                     </div>
                                     {campaign.linkedDiscountCode && (
-                                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold flex items-center border border-green-200">
-                                            <Tag size={10} className="mr-1"/> {campaign.linkedDiscountCode}
+                                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold inline-flex items-center border border-green-200 shrink-0 max-w-full truncate">
+                                            <Tag size={10} className="mr-1 shrink-0"/> {campaign.linkedDiscountCode}
                                         </span>
                                     )}
                                 </div>
@@ -499,49 +503,49 @@ const Marketing: React.FC = () => {
         )}
 
         {activeTab === 'analytics' && (
-            <div className="space-y-8 animate-fade-in">
+            <div className="space-y-6 sm:space-y-8 animate-fade-in min-w-0">
                 {/* AI ADVISOR COMPONENT */}
                 <AIMarketingAdvisor insights={aiInsights} analyzing={analyzing} />
 
                 {/* OVERVIEW STATS */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 min-w-0">
+                    <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><MousePointer2 size={20}/></div>
                             <span className="text-slate-500 text-sm font-medium">Total Traffic</span>
                         </div>
-                        <div className="text-3xl font-bold text-slate-900">{campaigns.reduce((a,b) => a + b.clicks, 0)}</div>
+                        <div className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">{campaigns.reduce((a,b) => a + b.clicks, 0)}</div>
                     </div>
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="p-2 bg-green-100 text-green-600 rounded-lg"><CheckCircle size={20}/></div>
                             <span className="text-slate-500 text-sm font-medium">Total Conversions</span>
                         </div>
-                        <div className="text-3xl font-bold text-slate-900">{campaigns.reduce((a,b) => a + b.conversions, 0)}</div>
+                        <div className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">{campaigns.reduce((a,b) => a + b.conversions, 0)}</div>
                     </div>
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><DollarSign size={20}/></div>
                             <span className="text-slate-500 text-sm font-medium">Attributed Revenue</span>
                         </div>
-                        <div className="text-3xl font-bold text-slate-900">{formatIDR(campaigns.reduce((a,b) => a + b.revenue, 0))}</div>
+                        <div className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">{formatIDR(campaigns.reduce((a,b) => a + b.revenue, 0))}</div>
                     </div>
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><PieIcon size={20}/></div>
                             <span className="text-slate-500 text-sm font-medium">Avg. Conversion</span>
                         </div>
-                        <div className="text-3xl font-bold text-slate-900">
+                        <div className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">
                             {campaigns.reduce((a,b)=>a+b.clicks,0) > 0 ? (campaigns.reduce((a,b)=>a+b.conversions,0) / campaigns.reduce((a,b)=>a+b.clicks,0) * 100).toFixed(2) : 0}%
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-6 sm:gap-8 min-w-0">
                     {/* CHANNEL EFFICIENCY CHART */}
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm min-w-0 overflow-hidden">
                         <h3 className="font-bold text-slate-900 mb-6">Channel Efficiency (Revenue)</h3>
-                        <div className="h-80">
+                        <div className="h-72 sm:h-80 min-w-0">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={categoryStats} margin={{top: 20, right: 30, left: 20, bottom: 5}}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />

@@ -19,6 +19,11 @@ const SEED_PAYOUTS: PayoutTransaction[] = [
 ];
 
 export const TribeService = {
+    getDataSourceMode: (): 'MOCK' | 'SUPABASE' | 'UNWIRED' => {
+        if (APP_CONFIG.USE_MOCK) return 'MOCK';
+        if (supabase) return 'SUPABASE';
+        return 'UNWIRED';
+    },
     
     getMyTribe: async (facilitatorId: string): Promise<TribeMember[]> => {
         if (APP_CONFIG.USE_MOCK) {

@@ -114,43 +114,53 @@ const CRM: React.FC = () => {
 
     const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
+    const engagementPct = (id: string) => {
+        let h = 0;
+        for (let i = 0; i < id.length; i++) h = (h + id.charCodeAt(i) * (i + 1)) % 60;
+        return 40 + h;
+    };
+
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in relative pb-20">
+        <div className="page-container space-y-5 sm:space-y-6 animate-fade-in relative pb-20 min-w-0">
             {/* Header Area */}
-            <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <User className="mr-3 text-blue-600" /> Member Directory
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between min-w-0">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                            <User className="h-5 w-5" strokeWidth={2} />
+                        </span>
+                        <span className="leading-tight">Member Directory</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Manage profiles, memberships, and engagement history.</p>
+                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Manage profiles, memberships, and engagement history.</p>
                 </div>
                 
-                <div className="flex gap-2 items-center">
-                    {/* QUALIFIED TOGGLE */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 w-full lg:w-auto min-w-0">
                     <button 
+                        type="button"
                         onClick={() => setShowQualifiedOnly(!showQualifiedOnly)}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center transition-all ${showQualifiedOnly ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}
+                        className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${showQualifiedOnly ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}
                     >
-                        <Award size={14} className="mr-1.5"/> Qualified Only
+                        <Award size={14} className="shrink-0"/> Qualified Only
                     </button>
 
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <div className="relative min-w-0 flex-1 sm:min-w-[12rem] sm:max-w-xs">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
                         <input 
                             type="text" 
                             placeholder="Search name, company, or ID..." 
-                            className="w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
+                            className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-4 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <div className="relative">
+                    <div className="relative shrink-0">
                         <button 
+                            type="button"
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
-                            className={`p-2 border rounded-lg transition-all flex items-center gap-2 ${Object.values(activeFilters).some(v => !!v) ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-slate-300 text-slate-500 bg-white hover:bg-slate-50'}`}
+                            className={`rounded-lg border p-2 transition-all flex items-center gap-2 ${Object.values(activeFilters).some(v => !!v) ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-slate-300 text-slate-500 bg-white hover:bg-slate-50'}`}
                         >
                             <Filter size={18} />
-                            {Object.values(activeFilters).some(v => !!v) && <span className="w-2 h-2 bg-blue-600 rounded-full"></span>}
+                            {Object.values(activeFilters).some(v => !!v) && <span className="h-2 w-2 rounded-full bg-blue-600" />}
                         </button>
                         <MemberFilterPanel 
                             isOpen={isFilterOpen} 
@@ -161,10 +171,80 @@ const CRM: React.FC = () => {
                 </div>
             </div>
 
-            {/* Table Area */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
+            {/* Mobile: stacked cards (no horizontal table scroll) */}
+            <div className="space-y-3 md:hidden min-w-0">
+                {loading ? (
+                    <div className="rounded-xl border border-slate-200 bg-white py-12 text-center text-slate-400">Loading directory...</div>
+                ) : filteredMembers.length === 0 ? (
+                    <div className="rounded-xl border border-slate-200 bg-white py-12 text-center text-slate-400 flex flex-col items-center px-4">
+                        <AlertCircle size={32} className="mb-2 text-slate-300"/>
+                        <p>No results found for your filters.</p>
+                    </div>
+                ) : (
+                    filteredMembers.map(member => (
+                        <div
+                            key={member.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedMemberForView(member)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedMemberForView(member); } }}
+                            className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors cursor-pointer text-left min-w-0 max-w-full ${selectedMemberForView?.id === member.id ? 'ring-2 ring-blue-200 bg-blue-50/40' : 'hover:bg-slate-50'}`}
+                        >
+                            <div className="flex gap-3 min-w-0">
+                                <button
+                                    type="button"
+                                    className="shrink-0 pt-0.5 text-slate-400"
+                                    onClick={(e) => { e.stopPropagation(); toggleSelection(member.id); }}
+                                    aria-label={selectedMemberIds.has(member.id) ? 'Deselect' : 'Select'}
+                                >
+                                    {selectedMemberIds.has(member.id) ? <CheckSquare size={20} className="text-blue-600"/> : <Square size={20} className="text-slate-300" />}
+                                </button>
+                                <div className="h-10 w-10 shrink-0 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-xs">
+                                    {member.name.substring(0,2).toUpperCase()}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
+                                        <span className="break-words">{member.name}</span>
+                                        {member.tags?.includes('Qualified') && <CheckCircle size={14} className="text-blue-500 shrink-0" />}
+                                    </div>
+                                    <div className="text-xs text-slate-500 break-all">{member.email}</div>
+                                </div>
+                            </div>
+                            <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Current status</p>
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-bold border ${member.lifecycleStage === 'CERTIFIED' ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                                        {member.lifecycleStage}
+                                    </span>
+                                    {member.program && <p className="text-xs text-slate-600 mt-1.5">{member.program}</p>}
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Engagement</p>
+                                    <div className="h-2 max-w-full rounded-full bg-slate-100 overflow-hidden">
+                                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${engagementPct(member.id)}%` }} />
+                                    </div>
+                                    {member.joinMonth && <p className="text-[11px] text-slate-500 mt-1">{member.joinMonth}</p>}
+                                </div>
+                                <div className="flex items-center justify-between gap-2 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setProfilingMember(member); }}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700"
+                                    >
+                                        <UserCog size={16} /> Profile
+                                    </button>
+                                    <ChevronRight size={20} className="text-slate-300 shrink-0" aria-hidden />
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-w-0">
+                <div className="overflow-x-scroll-touch">
+                    <table className="w-full min-w-[720px] text-left text-sm">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                             <tr>
                                 <th className="px-4 py-4 w-10">
@@ -180,7 +260,7 @@ const CRM: React.FC = () => {
                             {loading ? (
                                 <tr><td colSpan={5} className="p-12 text-center text-slate-400">Loading directory...</td></tr>
                             ) : filteredMembers.length === 0 ? (
-                                <tr><td colSpan={5} className="p-12 text-center text-slate-400 flex flex-col items-center"><AlertCircle size={32} className="mb-2 text-slate-300"/><p>No results found for your filters.</p></td></tr>
+                                <tr><td colSpan={5} className="p-12 text-center text-slate-400"><div className="flex flex-col items-center"><AlertCircle size={32} className="mb-2 text-slate-300"/><p>No results found for your filters.</p></div></td></tr>
                             ) : filteredMembers.map(member => (
                                 <tr 
                                     key={member.id} 
@@ -191,16 +271,16 @@ const CRM: React.FC = () => {
                                         {selectedMemberIds.has(member.id) ? <CheckSquare size={18} className="text-blue-600"/> : <Square size={18} className="text-slate-300 group-hover:text-slate-400" />}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex items-center">
-                                            <div className="h-9 w-9 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-xs mr-3">
+                                        <div className="flex items-center min-w-0">
+                                            <div className="h-9 w-9 shrink-0 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-xs mr-3">
                                                 {member.name.substring(0,2).toUpperCase()}
                                             </div>
-                                            <div>
+                                            <div className="min-w-0">
                                                 <div className="font-bold text-slate-900 flex items-center gap-1">
-                                                    {member.name}
-                                                    {member.tags?.includes('Qualified') && <CheckCircle size={12} className="text-blue-500 fill-blue-50"/>}
+                                                    <span className="truncate">{member.name}</span>
+                                                    {member.tags?.includes('Qualified') && <CheckCircle size={12} className="text-blue-500 fill-blue-50 shrink-0"/>}
                                                 </div>
-                                                <div className="text-xs text-slate-500">{member.email}</div>
+                                                <div className="text-xs text-slate-500 truncate">{member.email}</div>
                                             </div>
                                         </div>
                                     </td>
@@ -212,13 +292,14 @@ const CRM: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                            <div className="h-full bg-blue-500" style={{ width: `${Math.floor(Math.random()*60)+40}%` }}></div>
+                                            <div className="h-full bg-blue-500" style={{ width: `${engagementPct(member.id)}%` }}></div>
                                         </div>
                                         <div className="text-[10px] text-slate-400 mt-1">{member.joinMonth}</div>
                                     </td>
                                     <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
                                         <div className="flex justify-end gap-2">
                                              <button 
+                                                type="button"
                                                 onClick={() => setProfilingMember(member)}
                                                 className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
                                                 title="Profile / Stalk"
@@ -237,16 +318,18 @@ const CRM: React.FC = () => {
 
             {/* FLOATING SELECTION BAR - WORLD CLASS UX */}
             {selectedMemberIds.size > 0 && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[90] animate-fade-in-up">
-                    <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 border border-slate-700">
-                        <div className="flex items-center gap-2 border-r border-slate-700 pr-6">
+                <div className="fixed bottom-6 left-4 right-4 z-[90] flex justify-center animate-fade-in-up sm:bottom-8 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-0">
+                    <div className="bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex flex-col gap-3 border border-slate-700 w-full max-w-lg sm:flex-row sm:items-center sm:gap-6 sm:px-6">
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-700 pb-3 sm:border-b-0 sm:pb-0 sm:border-r sm:pr-6">
+                            <div className="flex items-center gap-2">
                             <span className="bg-blue-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
                                 {selectedMemberIds.size}
                             </span>
                             <span className="text-sm font-medium text-slate-300">Selected</span>
+                            </div>
                         </div>
                         
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-between gap-4 sm:justify-end">
                             <button 
                                 onClick={() => setIsInviteModalOpen(true)}
                                 className="flex items-center gap-2 text-sm font-bold hover:text-blue-400 transition-colors"

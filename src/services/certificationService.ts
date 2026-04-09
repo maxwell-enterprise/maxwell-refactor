@@ -15,6 +15,9 @@ const shouldUseApi = () =>
     !APP_CONFIG.USE_MOCK_GLOBAL &&
     (APP_CONFIG.DOMAINS.OPS === 'API' || APP_CONFIG.DOMAINS.EVENTS === 'API');
 
+const membersViaApi = () =>
+    !APP_CONFIG.USE_MOCK_GLOBAL && APP_CONFIG.DOMAINS.MEMBERS === 'API';
+
 const getMasterTagMode = (): BackendMode =>
     shouldUseApi() ? 'API' : APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE';
 

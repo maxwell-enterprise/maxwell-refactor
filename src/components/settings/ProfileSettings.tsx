@@ -4,6 +4,10 @@ import { useAuth } from '../../context/AuthContext';
 import { User, Lock, Bell, Camera, Save, LogOut } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { UserService } from '../../services/userService';
+import { UserNotificationPreferencesService } from '../../services/userNotificationPreferencesService';
+
+const NOTIF_DEV_MSG =
+  'Notifikasi ini belum dapat diaktifkan. Fitur masih dalam tahap pengembangan.';
 
 const ProfileSettings: React.FC = () => {
     const { user, logout } = useAuth();
@@ -29,12 +33,57 @@ const ProfileSettings: React.FC = () => {
         confirm: ''
     });
 
-    // Notification State
+    /** Defaults off; hydrated from Nest `/fe/account-settings/...` when API is up. */
     const [notifications, setNotifications] = useState({
-        emailMarketing: true,
-        emailTransactional: true,
-        sms: false
+        emailTransactional: false,
+        emailMarketing: false,
+        smsAlerts: false,
     });
+
+    useEffect(() => {
+        if (!user?.id) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const prefs = await UserNotificationPreferencesService.getMe();
+                if (cancelled) return;
+                setNotifications({
+                    emailTransactional: prefs.emailTransactional,
+                    emailMarketing: prefs.emailMarketing,
+                    smsAlerts: prefs.smsAlerts,
+                });
+            } catch {
+                /* keep defaults — local FE or Nest not running */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
+
+    // Security tab is intentionally disabled for now.
+    useEffect(() => {
+        if (activeTab === 'SECURITY') {
+            setActiveTab('PROFILE');
+        }
+    }, [activeTab]);
+
+    const flipNotification = (
+        key: 'emailTransactional' | 'emailMarketing' | 'smsAlerts',
+    ) => {
+        const current = notifications[key];
+        if (!current) {
+            showToast(NOTIF_DEV_MSG, 'info');
+            return;
+        }
+        const next = { ...notifications, [key]: false };
+        setNotifications(next);
+        if (user?.id) {
+            void UserNotificationPreferencesService.patchMe({ [key]: false }).catch(
+                () => showToast('Gagal menyimpan preferensi', 'error'),
+            );
+        }
+    };
 
     const handleSaveProfile = async () => {
         if (!user) return;
@@ -99,8 +148,10 @@ const ProfileSettings: React.FC = () => {
                                 <User size={18} className="mr-3"/> Profile
                             </button>
                             <button 
-                                onClick={() => setActiveTab('SECURITY')}
-                                className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${activeTab === 'SECURITY' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                                disabled
+                                aria-disabled="true"
+                                title="Security settings are temporarily disabled."
+                                className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-slate-400 bg-slate-50 cursor-not-allowed opacity-70"
                             >
                                 <Lock size={18} className="mr-3"/> Security
                             </button>
@@ -231,41 +282,58 @@ const ProfileSettings: React.FC = () => {
                             <div className="space-y-6">
                                 <div>
                                     <h2 className="text-lg font-bold text-slate-900">Notification Preferences</h2>
-                                    <p className="text-sm text-slate-500">Control what emails and alerts you receive.</p>
+                                    <p className="text-sm text-slate-500">Control what emails and alerts you receive. New channels stay off until the service is ready.</p>
                                 </div>
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
-                                        <div>
-                                            <h4 className="font-bold text-slate-900 text-sm">Transactional Emails</h4>
+                                    <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-4">
+                                        <div className="min-w-0">
+                                            <h4 className="text-sm font-bold text-slate-900">Transactional emails</h4>
                                             <p className="text-xs text-slate-500">Invoices, tickets, and system alerts.</p>
                                         </div>
-                                        <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                                            <input type="checkbox" checked={notifications.emailTransactional} disabled className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 right-5" />
-                                            <label className="toggle-label block overflow-hidden h-5 rounded-full bg-green-300 cursor-pointer"></label>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
-                                        <div>
-                                            <h4 className="font-bold text-slate-900 text-sm">Marketing & Newsletters</h4>
-                                            <p className="text-xs text-slate-500">Event updates, new courses, and promotions.</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => setNotifications(prev => ({...prev, emailMarketing: !prev.emailMarketing}))}
-                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notifications.emailMarketing ? 'bg-blue-600' : 'bg-slate-200'}`}
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={notifications.emailTransactional}
+                                            onClick={() => flipNotification('emailTransactional')}
+                                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${notifications.emailTransactional ? 'bg-indigo-600' : 'bg-slate-200'}`}
                                         >
-                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notifications.emailMarketing ? 'translate-x-6' : 'translate-x-1'}`} />
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notifications.emailTransactional ? 'translate-x-6' : 'translate-x-1'}`}
+                                            />
                                         </button>
                                     </div>
-                                    <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
-                                        <div>
-                                            <h4 className="font-bold text-slate-900 text-sm">SMS Alerts</h4>
+                                    <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-4">
+                                        <div className="min-w-0">
+                                            <h4 className="text-sm font-bold text-slate-900">Marketing &amp; newsletters</h4>
+                                            <p className="text-xs text-slate-500">Event updates, new courses, and promotions.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={notifications.emailMarketing}
+                                            onClick={() => flipNotification('emailMarketing')}
+                                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${notifications.emailMarketing ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                                        >
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notifications.emailMarketing ? 'translate-x-6' : 'translate-x-1'}`}
+                                            />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-4">
+                                        <div className="min-w-0">
+                                            <h4 className="text-sm font-bold text-slate-900">SMS alerts</h4>
                                             <p className="text-xs text-slate-500">Urgent notifications to your phone.</p>
                                         </div>
-                                        <button 
-                                            onClick={() => setNotifications(prev => ({...prev, sms: !prev.sms}))}
-                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notifications.sms ? 'bg-blue-600' : 'bg-slate-200'}`}
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={notifications.smsAlerts}
+                                            onClick={() => flipNotification('smsAlerts')}
+                                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${notifications.smsAlerts ? 'bg-indigo-600' : 'bg-slate-200'}`}
                                         >
-                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notifications.sms ? 'translate-x-6' : 'translate-x-1'}`} />
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notifications.smsAlerts ? 'translate-x-6' : 'translate-x-1'}`}
+                                            />
                                         </button>
                                     </div>
                                 </div>

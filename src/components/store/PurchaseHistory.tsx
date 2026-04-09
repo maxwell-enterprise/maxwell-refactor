@@ -64,24 +64,25 @@ const PurchaseHistory: React.FC = () => {
                 : null;
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col">
-            <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 flex items-center text-sm">
-                    <ShoppingBag size={16} className="mr-2 text-indigo-600"/> My Orders
+        <div className="flex min-h-[min(60vh,480px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm min-w-0 sm:min-h-0 sm:h-full">
+            <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                <h3 className="flex shrink-0 items-center text-sm font-bold text-slate-800">
+                    <ShoppingBag size={16} className="mr-2 shrink-0 text-indigo-600"/> My Orders
                 </h3>
-                <div className="relative">
-                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
+                <div className="relative min-w-0 w-full sm:max-w-xs">
+                    <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden/>
                     <input 
-                        type="text" 
-                        className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-indigo-500 bg-white"
-                        placeholder="Search order..."
+                        type="search" 
+                        className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        placeholder="Search orders…"
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
+                        aria-label="Search orders"
                     />
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
                 {loading ? (
                     <div className="flex min-h-[120px] items-center justify-center py-12 text-center text-sm text-slate-400">
                         Loading orders…
@@ -94,18 +95,18 @@ const PurchaseHistory: React.FC = () => {
                     />
                 ) : (
                  filtered.map(order => (
-                    <div key={order.id} className="p-4 border border-slate-200 rounded-xl hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start mb-2">
-                            <div>
-                                <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 rounded">{order.id}</span>
-                                <div className="text-xs text-slate-400 mt-1">{new Date(order.date).toLocaleDateString()}</div>
+                    <div key={order.id} className="rounded-xl border border-slate-200 p-4 transition-shadow hover:shadow-md min-w-0">
+                        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                                <span className="inline-block max-w-full break-all rounded bg-slate-100 px-1.5 font-mono text-xs text-slate-500">{order.id}</span>
+                                <div className="mt-1 whitespace-nowrap text-xs text-slate-400">{new Date(order.date).toLocaleDateString()}</div>
                             </div>
-                            <div className="text-right">
-                                <div className="font-bold text-slate-900">{formatIDR(order.amount)}</div>
-                                <div className="mt-1">{getStatusBadge(order.status)}</div>
+                            <div className="flex shrink-0 flex-col gap-1 sm:items-end sm:text-right">
+                                <div className="font-bold tabular-nums text-slate-900">{formatIDR(order.amount)}</div>
+                                <div>{getStatusBadge(order.status)}</div>
                             </div>
                         </div>
-                        <p className="text-sm font-medium text-slate-700 line-clamp-2">
+                        <p className="text-sm font-medium leading-relaxed text-slate-700 break-words">
                             {order.description.replace(/Store Sale:.*? - /, '')}
                         </p>
                     </div>

@@ -20,7 +20,7 @@ const SchemaViewer: React.FC = () => {
 
   // Directly render the robust Architect suite which now includes the baseline viewer as Tab 1
   return (
-    <div className="h-[calc(100vh-64px)]">
+    <div className="flex min-h-0 flex-1 flex-col">
         <AIBlueprintArchitect />
     </div>
   );

@@ -4,8 +4,44 @@
   box-sizing: border-box;
 }
 
-html,
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  position: relative;
+}
+
+/**
+ * Shared dashboard page shell: comfortable type on phones, generous on desktop.
+ * Use on feature roots instead of raw `p-6` so cards stay inside the viewport edge.
+ *
+ * Vertical scroll: the dashboard `<main>` is `overflow-y-auto`. Avoid `h-[calc(100vh-…)]`
+ * on page roots so long lists/charts scroll with the page; use `min-h-*` / `max-h-*`
+ * only on inner panels that need their own scroll (tables, editors).
+ */
+@layer utilities {
+  /** Keeps page chrome inside the viewport; pair with min-w-0 on flex children. */
+  .page-container {
+    @apply box-border w-full max-w-7xl mx-auto min-w-0 px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-6;
+  }
+
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0;
+  }
+
+  /** Horizontal scroll for wide tables/tabs; stays within parent width (no edge bleed). */
+  .overflow-x-scroll-touch {
+    @apply max-w-full min-w-0 w-full overflow-x-auto overscroll-x-contain touch-pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
 }

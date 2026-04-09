@@ -1,7 +1,6 @@
 
 import { InitiatePaymentPayload, PaymentTransaction, PaymentMethodType, InstallmentSchedule } from '../types/index';
 import { ConfigService } from './configService';
-import { CampaignService } from './campaignService';
 import { QueueService } from './queueService';
 import { CommunicationService } from './communicationService'; 
 import { OpsService } from './opsService'; 
@@ -11,6 +10,28 @@ import { EventBus } from './eventBus';
 import { INVENTORY_DATA } from '../constants';
 import { RepositoryFactory } from './repositories/index';
 import { apiRequest } from '../repositories/api/apiClient';
+
+const buildPaymentIdempotencyKey = (
+  payload: InitiatePaymentPayload,
+): string => {
+  const stableItems = [...payload.items]
+    .map((item) => `${item.id}:${item.variantId || '-'}:${item.quantity}`)
+    .sort()
+    .join('|');
+  const stableBase = [
+    payload.customerEmail.trim().toLowerCase(),
+    payload.method,
+    payload.discountCode || '-',
+    Math.round(payload.totalAmount).toString(),
+    stableItems,
+  ].join('::');
+  let hash = 0;
+  for (let i = 0; i < stableBase.length; i += 1) {
+    hash = (hash << 5) - hash + stableBase.charCodeAt(i);
+    hash |= 0;
+  }
+  return `pay-${Math.abs(hash).toString(16)}-${stableItems.length}`;
+};
 
 export const PaymentService = {
   
@@ -66,6 +87,9 @@ export const PaymentService = {
       '/transactions/midtrans/snap',
       {
         method: 'POST',
+        headers: {
+          'x-idempotency-key': buildPaymentIdempotencyKey(payload),
+        },
         body: JSON.stringify({
           items: payload.items.map((i) => ({
             productId: i.id,
@@ -75,6 +99,7 @@ export const PaymentService = {
           paymentMethod: payload.method,
           // Controller uses `guestEmail` when userId is null.
           guestEmail: payload.customerEmail,
+          attributionSource: payload.attributionSource,
         }),
       },
     );
@@ -118,16 +143,32 @@ export const PaymentService = {
     transactionId: string,
     _amountReceived: number,
     itemsSnapshot?: PaymentTransaction['itemsSnapshot'],
+    customerEmail?: string,
   ): Promise<PaymentTransaction> => {
     // SECURITY: don't allow user to "simulate paid" unless backend says PAID.
     // Midtrans webhook is async, so we poll briefly.
+    if (!customerEmail || !customerEmail.includes('@')) {
+      throw new Error('Missing customer email for payment status verification');
+    }
     let backendTx: any = null;
     const maxAttempts = 12;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      backendTx = await apiRequest<any>(
-        `/transactions/${encodeURIComponent(transactionId)}`,
-      );
-      if (backendTx?.paymentStatus === 'PAID') break;
+      const statusRes = await apiRequest<{
+        paymentStatus: string;
+        totalAmount: number;
+      }>('/transactions/public-status', {
+        method: 'POST',
+        body: JSON.stringify({
+          transactionId,
+          customerEmail: customerEmail || '',
+        }),
+      });
+      backendTx = {
+        ...backendTx,
+        paymentStatus: statusRes.paymentStatus,
+        totalAmount: statusRes.totalAmount,
+      };
+      if (statusRes.paymentStatus === 'PAID') break;
       await new Promise((r) => setTimeout(r, 1500));
     }
 

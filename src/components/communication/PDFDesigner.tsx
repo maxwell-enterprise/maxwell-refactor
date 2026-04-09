@@ -183,10 +183,10 @@ const PDFDesigner: React.FC = () => {
     };
 
     return (
-        <div className="flex h-[calc(100vh-200px)] gap-6">
+        <div className="flex min-h-[min(70vh,640px)] w-full min-w-0 flex-col gap-4 xl:flex-row xl:items-start xl:gap-6">
             
             {/* LEFT TOOLBAR */}
-            <div className="w-80 flex flex-col gap-4 flex-shrink-0">
+            <div className="flex w-full min-w-0 flex-shrink-0 flex-col gap-4 xl:w-80">
                 {/* 1. Template Config (Existing code) */}
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                     <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Document Setup (A4)</h3>
@@ -210,9 +210,9 @@ const PDFDesigner: React.FC = () => {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                        <button onClick={() => handleOrientationChange('PORTRAIT')} className={`py-2 text-xs font-bold rounded border ${template.orientation === 'PORTRAIT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>Portrait</button>
-                        <button onClick={() => handleOrientationChange('LANDSCAPE')} className={`py-2 text-xs font-bold rounded border ${template.orientation === 'LANDSCAPE' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>Landscape</button>
+                    <div className="grid grid-cols-1 gap-2 mb-3 sm:grid-cols-2">
+                        <button type="button" onClick={() => handleOrientationChange('PORTRAIT')} className={`py-2.5 text-xs font-bold rounded border ${template.orientation === 'PORTRAIT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>Portrait</button>
+                        <button type="button" onClick={() => handleOrientationChange('LANDSCAPE')} className={`py-2.5 text-xs font-bold rounded border ${template.orientation === 'LANDSCAPE' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>Landscape</button>
                     </div>
 
                     <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100">
@@ -238,12 +238,11 @@ const PDFDesigner: React.FC = () => {
                         </label>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                        <button onClick={() => handleAddElement('TEXT')} className="flex items-center justify-center py-2 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 hover:bg-slate-100">
-                            <Type size={14} className="mr-1"/> Add Text
+                    <div className="grid grid-cols-1 gap-2 mb-4 sm:grid-cols-2">
+                        <button type="button" onClick={() => handleAddElement('TEXT')} className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 hover:bg-slate-100">
+                            <Type size={14} className="shrink-0"/> Add Text
                         </button>
-                        {/* NEW: Use VariableInserter */}
-                        <div className="relative">
+                        <div className="relative min-w-0">
                             <VariableInserter 
                                 onInsert={insertVariableIntoSelected} 
                                 align="left" 
@@ -323,9 +322,9 @@ const PDFDesigner: React.FC = () => {
                 </div>
             </div>
 
-            {/* CENTER CANVAS (Unchanged Logic, simplified render for brevity) */}
-            <div className="flex-1 bg-slate-100 rounded-xl border border-slate-300 overflow-auto flex items-center justify-center p-8 relative">
-                <div className="absolute top-4 right-4 flex gap-2 z-20">
+            {/* CANVAS */}
+            <div className="relative flex min-h-[280px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-300 bg-slate-100 xl:min-h-[480px]">
+                <div className="flex flex-wrap items-center justify-end gap-2 border-b border-slate-200 bg-white/80 p-3 z-20 sm:absolute sm:top-3 sm:right-3 sm:border-0 sm:bg-transparent sm:p-0">
                     <button 
                         type="button"
                         onClick={() => setIsPreviewMode(!isPreviewMode)} 
@@ -338,7 +337,7 @@ const PDFDesigner: React.FC = () => {
                         type="button"
                         onClick={() => handleSave()}
                         disabled={isSaving}
-                        className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-lg flex items-center hover:bg-slate-800 disabled:opacity-60 disabled:pointer-events-none"
+                        className="bg-slate-900 text-white px-3 py-2 sm:px-4 rounded-lg font-bold text-xs shadow-lg flex items-center hover:bg-slate-800 disabled:opacity-60 disabled:pointer-events-none"
                     >
                         {isSaving ? (
                             <>
@@ -352,9 +351,10 @@ const PDFDesigner: React.FC = () => {
                     </button>
                 </div>
 
+                <div className="flex flex-1 items-start justify-center overflow-auto p-3 sm:items-center sm:p-6">
                 <div 
                     ref={canvasRef}
-                    className="bg-white shadow-2xl relative transition-all duration-300 flex-shrink-0"
+                    className="relative flex-shrink-0 bg-white shadow-2xl transition-all duration-300 origin-top scale-[0.42] sm:scale-[0.58] md:scale-[0.72] lg:scale-90 xl:scale-100"
                     style={canvasStyle}
                     onClick={() => setSelectedElementId(null)}
                 >
@@ -401,6 +401,7 @@ const PDFDesigner: React.FC = () => {
                             </div>
                         );
                     })}
+                </div>
                 </div>
             </div>
         </div>

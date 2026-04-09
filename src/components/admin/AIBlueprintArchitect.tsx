@@ -223,10 +223,11 @@ const AIBlueprintArchitect: React.FC = () => {
     }, [usePostgresAudit, missingInRegistry, missingInDB]);
 
     return (
-        <div className="flex flex-col h-full bg-slate-50">
+        <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
             {/* TOP NAVIGATION TABS */}
-            <div className="bg-white border-b border-slate-200 px-6 pt-4 flex justify-between items-end shadow-sm shrink-0">
-                <div className="flex items-end gap-2 overflow-x-auto">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:px-5 sm:pt-4 lg:px-8">
+                <div className="max-w-full min-w-0 overflow-x-scroll-touch">
+                    <div className="inline-flex gap-1 pb-0.5">
                     {tabs.map(tab => {
                         const isActive = activeTab === tab.id;
                         const isDisabled = (tab.id === 'PROPOSED' || tab.id === 'BLUEPRINT') && !optimizationResult;
@@ -234,35 +235,36 @@ const AIBlueprintArchitect: React.FC = () => {
                         return (
                             <button
                                 key={tab.id}
+                                type="button"
                                 onClick={() => !isDisabled && setActiveTab(tab.id)}
                                 disabled={isDisabled}
                                 className={`
-                                    flex items-center px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-t-lg transition-all border-t border-x border-b-0 whitespace-nowrap
+                                    inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide transition-colors sm:px-3.5 sm:py-2.5 sm:text-xs
                                     ${isActive 
-                                        ? 'bg-white text-blue-600 border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.02)] translate-y-[1px]' 
-                                        : 'bg-slate-50 text-slate-500 border-transparent hover:bg-slate-100'
+                                        ? 'border-slate-200 bg-white text-blue-600 shadow-sm ring-1 ring-slate-200/90' 
+                                        : 'border-transparent bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                                     }
                                     ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
                                 `}
                             >
-                                {React.createElement(tab.icon, { size: 14, className: `mr-2 ${isActive ? 'text-blue-500' : 'text-slate-400'}` })}
+                                {React.createElement(tab.icon, { size: 14, className: `mr-1.5 shrink-0 sm:mr-2 ${isActive ? 'text-blue-500' : 'text-slate-400'}` })}
                                 {tab.label}
                                 {tab.id === 'PROPOSED' && optimizationResult && (
-                                    <span className="ml-2 bg-amber-100 text-amber-700 text-[9px] px-1.5 rounded-full font-bold">
+                                    <span className="ml-1.5 bg-amber-100 text-amber-700 text-[9px] px-1.5 rounded-full font-bold sm:ml-2">
                                         {optimizationResult.changes.length}
                                     </span>
                                 )}
                             </button>
                         );
                     })}
+                    </div>
                 </div>
 
-                {/* VERSION HISTORY SELECTOR */}
                 {history.length > 0 && (
-                    <div className="mb-3 flex items-center gap-2">
-                        <History size={16} className="text-slate-400"/>
+                    <div className="flex w-full shrink-0 items-center gap-2 sm:mb-1 sm:w-auto sm:justify-end">
+                        <History size={16} className="shrink-0 text-slate-400" aria-hidden />
                         <select 
-                            className="bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 pl-2 pr-8 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-2 pr-8 text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 sm:flex-none sm:max-w-[220px]"
                             value={selectedHistoryId}
                             onChange={(e) => handleHistorySelect(e.target.value)}
                         >
@@ -275,64 +277,58 @@ const AIBlueprintArchitect: React.FC = () => {
             </div>
 
             {/* CONTENT AREA */}
-            <div className="flex-1 overflow-hidden bg-white p-0">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
                 
                 {/* 0. AUDIT TAB */}
                 {activeTab === 'AUDIT' && (
-                    <div className="p-8 max-w-5xl mx-auto h-full overflow-y-auto">
-                        <div className="mb-8 text-center">
-                            <h2 className="text-2xl font-bold text-slate-900 mb-2">Schema Integrity Audit</h2>
+                    <div className="mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-y-auto overscroll-y-contain px-3 py-5 sm:px-6 sm:py-8">
+                        <div className="mb-6 text-center sm:mb-8">
+                            <h2 className="mb-2 text-xl font-bold leading-tight text-slate-900 sm:text-2xl">Schema Integrity Audit</h2>
                             {usePostgresAudit ? (
-                                <p className="text-slate-500 max-w-2xl mx-auto">
-                                    Membandingkan <strong>registry di kode</strong> (
-                                    <code className="text-xs">SchemaService</code>) dengan{' '}
-                                    <strong>tabel public</strong> di PostgreSQL lewat{' '}
-                                    <strong>Nest</strong>. Tanpa IndexedDB. Daftar tabel +{' '}
-                                    <code className="text-xs">pg_stat_activity</code> di-refresh otomatis ~4
-                                    detik (bisa dimatikan).
+                                <p className="mx-auto max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px]">
+                                    Compares the in-code registry (<code className="text-xs">SchemaService</code>) with{' '}
+                                    <strong>public</strong> PostgreSQL tables via <strong>Nest</strong> (no IndexedDB). Table
+                                    list and <code className="text-xs">pg_stat_activity</code> refresh about every 4 seconds
+                                    (can be disabled below).
                                 </p>
                             ) : (
-                                <p className="text-slate-500 max-w-2xl mx-auto">
-                                    Membandingkan registry di kode dengan{' '}
-                                    <strong>IndexedDB</strong> (mode dev lokal). Untuk audit terhadap
-                                    Supabase, set <code className="text-xs">NEXT_PUBLIC_SYSTEM_BACKEND=API</code>.
+                                <p className="mx-auto max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px]">
+                                    Compares the in-code registry with <strong>IndexedDB</strong> (local dev). For Supabase /
+                                    Postgres audit, set <code className="text-xs">NEXT_PUBLIC_SYSTEM_BACKEND=API</code>.
                                 </p>
                             )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Card 1: Registered Tables */}
-                            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                                <h3 className="font-bold text-slate-700 flex items-center mb-3">
-                                    <Database size={18} className="mr-2 text-blue-500"/> App Registry
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
+                            <div className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+                                <h3 className="mb-3 flex items-center font-bold text-slate-700">
+                                    <Database size={18} className="mr-2 shrink-0 text-blue-500"/> App registry
                                 </h3>
-                                <div className="text-3xl font-bold text-slate-900 mb-1">{tables.length}</div>
-                                <p className="text-xs text-slate-500">Tables defined in SchemaService code.</p>
+                                <div className="mb-1 text-3xl font-bold tabular-nums text-slate-900">{tables.length}</div>
+                                <p className="text-xs leading-snug text-slate-500">Tables defined in SchemaService.</p>
                             </div>
 
-                            {/* Card 2: Live side */}
-                            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                                <h3 className="font-bold text-slate-700 flex items-center mb-3">
-                                    <ShieldCheck size={18} className="mr-2 text-green-500"/> Live Database
+                            <div className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+                                <h3 className="mb-3 flex items-center font-bold text-slate-700">
+                                    <ShieldCheck size={18} className="mr-2 shrink-0 text-green-500"/> Live database
                                 </h3>
-                                <div className="text-3xl font-bold text-slate-900 mb-1">{liveDbNames.length}</div>
-                                <p className="text-xs text-slate-500">
+                                <div className="mb-1 text-3xl font-bold tabular-nums text-slate-900">{liveDbNames.length}</div>
+                                <p className="text-xs leading-snug text-slate-500">
                                     {usePostgresAudit
-                                        ? 'Public tables on Postgres (via Nest /fe/system/database/tables).'
+                                        ? 'Public tables (Nest /fe/system/database/tables).'
                                         : 'Object stores in browser IndexedDB.'}
                                 </p>
                             </div>
 
-                            {/* Card 3: Health Status */}
-                            <div className={`bg-white border rounded-xl p-5 shadow-sm ${auditHealthy ? 'border-green-200 bg-green-50/50' : 'border-amber-200 bg-amber-50/50'}`}>
-                                <h3 className={`font-bold flex items-center mb-3 ${auditHealthy ? 'text-green-700' : 'text-amber-700'}`}>
-                                    {auditHealthy ? <CheckCircle2 size={18} className="mr-2"/> : <AlertOctagon size={18} className="mr-2"/>}
-                                    System Health
+                            <div className={`rounded-xl border p-5 shadow-sm ${auditHealthy ? 'border-green-200 bg-green-50/60' : 'border-amber-200 bg-amber-50/60'}`}>
+                                <h3 className={`mb-3 flex items-center font-bold ${auditHealthy ? 'text-green-800' : 'text-amber-800'}`}>
+                                    {auditHealthy ? <CheckCircle2 size={18} className="mr-2 shrink-0"/> : <AlertOctagon size={18} className="mr-2 shrink-0"/>}
+                                    System health
                                 </h3>
-                                <div className={`text-3xl font-bold mb-1 ${auditHealthy ? 'text-green-700' : 'text-amber-700'}`}>
-                                    {auditHealthy ? '100%' : 'Needs Sync'}
+                                <div className={`mb-1 text-3xl font-bold tabular-nums ${auditHealthy ? 'text-green-800' : 'text-amber-800'}`}>
+                                    {auditHealthy ? 'OK' : 'Needs sync'}
                                 </div>
-                                <p className="text-xs opacity-80">
+                                <p className="text-xs leading-snug text-slate-600/90">
                                     {auditHealthy
                                         ? 'Registry matches live database.'
                                         : usePostgresAudit
@@ -343,27 +339,25 @@ const AIBlueprintArchitect: React.FC = () => {
                         </div>
 
                         {isSystemApiMode() && (
-                            <div className="mt-10 border border-indigo-200 bg-indigo-50/40 rounded-xl p-6">
-                                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                                    <div>
-                                        <h3 className="font-bold text-indigo-900 flex items-center gap-2">
-                                            <Database size={20} />
-                                            Detail & query aktif
+                            <div className="mt-8 rounded-xl border border-indigo-200/90 bg-indigo-50/50 p-4 sm:p-6">
+                                <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div className="min-w-0">
+                                        <h3 className="flex items-center gap-2 font-bold text-indigo-950">
+                                            <Database size={20} className="shrink-0" aria-hidden />
+                                            Live backend detail &amp; activity
                                         </h3>
-                                        <p className="text-xs text-indigo-800/80 mt-1">
-                                            Sama dengan sumber kartu &quot;Live Database&quot; di atas. Ukuran
-                                            baris ≈ <code className="text-[10px]">reltuples</code>; jalankan{' '}
-                                            <code className="text-[10px]">ANALYZE</code> bila perlu.
+                                        <p className="mt-1.5 text-xs leading-relaxed text-indigo-900/85">
+                                            Same source as the &quot;Live database&quot; card. Row counts are approximate (
+                                            <code className="text-[10px]">reltuples</code>); run <code className="text-[10px]">ANALYZE</code> if needed.
                                             {backendLoadedAt && (
-                                                <span className="ml-2">
-                                                    Terakhir:{' '}
-                                                    {new Date(backendLoadedAt).toLocaleString()}
+                                                <span className="mt-1 block text-indigo-800/90 sm:mt-0 sm:inline sm:ml-2">
+                                                    Last updated: {new Date(backendLoadedAt).toLocaleString()}
                                                 </span>
                                             )}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <label className="flex items-center gap-2 text-xs text-indigo-900 cursor-pointer">
+                                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                        <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-indigo-950">
                                             <input
                                                 type="checkbox"
                                                 checked={autoRefreshBackend}
@@ -372,142 +366,150 @@ const AIBlueprintArchitect: React.FC = () => {
                                                 }
                                                 className="rounded border-indigo-300"
                                             />
-                                            Live poll ~4s
+                                            Auto-refresh ~4s
                                         </label>
                                         <button
                                             type="button"
                                             onClick={() => void loadBackendMeta()}
                                             disabled={auditLoading}
-                                            className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
                                         >
-                                            <RefreshCw size={12} /> Refresh backend
+                                            <RefreshCw size={12} className="shrink-0" aria-hidden /> Refresh now
                                         </button>
                                     </div>
                                 </div>
                                 {backendErr && (
-                                    <p className="text-sm text-red-600 mb-3">{backendErr}</p>
+                                    <p className="mb-3 text-sm text-red-600">{backendErr}</p>
                                 )}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <div>
-                                        <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wide mb-2">
-                                            Tabel public ({backendTables.length})
+                                <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
+                                    <div className="min-w-0">
+                                        <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-indigo-950">
+                                            Public tables ({backendTables.length})
                                         </h4>
-                                        <div className="max-h-56 overflow-y-auto rounded-lg border border-indigo-100 bg-white text-xs font-mono">
+                                        <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white text-xs font-mono shadow-inner">
                                             {backendTables.slice(0, 40).map((t) => (
                                                 <div
                                                     key={t.name}
-                                                    className="flex justify-between px-3 py-1 border-b border-slate-50 last:border-0"
+                                                    className="flex flex-col gap-0.5 border-b border-slate-100 px-3 py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
                                                 >
-                                                    <span>{t.name}</span>
-                                                    <span className="text-slate-500">
+                                                    <span className="min-w-0 break-all">{t.name}</span>
+                                                    <span className="shrink-0 text-slate-500">
                                                         ~{t.rowEstimate.toLocaleString()} rows
                                                     </span>
                                                 </div>
                                             ))}
                                         </div>
                                         {backendTables.length > 40 && (
-                                            <p className="text-[10px] text-indigo-700 mt-1">
-                                                Menampilkan 40 pertama (urut estimasi baris).
+                                            <p className="mt-1.5 text-[10px] text-indigo-900/80">
+                                                Showing first 40 tables (sorted by estimated row count).
                                             </p>
                                         )}
                                     </div>
-                                    <div>
-                                        <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wide mb-2">
-                                            Sesi / query aktif (ringkas)
+                                    <div className="min-w-0">
+                                        <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-indigo-950">
+                                            Active sessions / queries
                                         </h4>
                                         {backendActivity?.note && (
-                                            <p className="text-xs text-amber-800 mb-2">
+                                            <p className="mb-2 text-xs text-amber-900">
                                                 {backendActivity.note}
                                             </p>
                                         )}
-                                        <div className="max-h-56 overflow-y-auto rounded-lg border border-indigo-100 bg-white text-[11px]">
+                                        <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white text-[11px] shadow-inner">
                                             {(backendActivity?.items ?? []).length === 0 &&
                                             !backendActivity?.note ? (
                                                 <p className="p-3 text-slate-500">
-                                                    Belum ada data atau sedang memuat…
+                                                    No activity data yet, or still loading…
                                                 </p>
                                             ) : (
                                                 (backendActivity?.items ?? []).map((row) => (
                                                     <div
                                                         key={row.pid}
-                                                        className="p-2 border-b border-slate-50 last:border-0"
+                                                        className="border-b border-slate-100 p-2.5 last:border-0"
                                                     >
-                                                        <div className="flex justify-between text-slate-600">
-                                                            <span>
+                                                        <div className="flex justify-between gap-2 text-slate-600">
+                                                            <span className="min-w-0">
                                                                 pid {row.pid}{' '}
                                                                 <span className="text-slate-400">
                                                                     {row.state ?? '—'}
                                                                 </span>
                                                             </span>
                                                             {row.secondsRunning != null && (
-                                                                <span>{row.secondsRunning}s</span>
+                                                                <span className="shrink-0">{row.secondsRunning}s</span>
                                                             )}
                                                         </div>
-                                                        <pre className="whitespace-pre-wrap break-all text-slate-700 mt-1">
+                                                        <pre className="mt-1 whitespace-pre-wrap break-all text-slate-700">
                                                             {row.querySnippet || '(no query text)'}
                                                         </pre>
                                                     </div>
                                                 ))
                                             )}
                                         </div>
-                                        <p className="text-[10px] text-indigo-700 mt-2">
-                                            Endpoint:{' '}
-                                            <code className="bg-white/80 px-1 rounded">
+                                        <p className="mt-2 text-[10px] leading-relaxed text-indigo-900/85">
+                                            Endpoint{' '}
+                                            <code className="rounded bg-white/90 px-1 py-0.5 text-[10px] ring-1 ring-indigo-100">
                                                 GET /fe/system/database/activity
-                                            </code>{' '}
-                                            — untuk analitik mendalam pakai Supabase Dashboard →
-                                            Reports / Query Performance.
+                                            </code>
+                                            . For deeper analytics, use Supabase Dashboard → Reports / Query Performance.
                                         </p>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* Missing Tables Alert */}
                         {missingInRegistry.length > 0 && (
-                            <div className="mt-8 bg-amber-50 border border-amber-200 rounded-xl p-6">
-                                <h4 className="font-bold text-amber-800 flex items-center mb-4">
-                                    <AlertTriangle size={20} className="mr-2"/> 
-                                    Discrepancy Detected: Missing Registrations
+                            <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50/80 p-4 sm:p-6">
+                                <h4 className="mb-3 flex items-center font-bold text-amber-900">
+                                    <AlertTriangle size={20} className="mr-2 shrink-0" aria-hidden />
+                                    Discrepancy: missing registrations
                                 </h4>
-                                <p className="text-sm text-amber-700 mb-4">
+                                <p className="mb-4 text-sm leading-relaxed text-amber-900/95">
                                     {usePostgresAudit
-                                        ? 'Tabel berikut ada di PostgreSQL (public) tetapi tidak terdaftar di schemaService — tidak akan masuk AI Architect sampai ditambah.'
-                                        : 'The following tables exist in your local database but are not registered in schemaService.ts. They will not appear in the AI Architect analysis until added.'}
+                                        ? 'These tables exist in PostgreSQL (public) but are not registered in schemaService — they will not appear in AI Architect until added.'
+                                        : 'The following tables exist locally but are not registered in schemaService.ts. They will not appear in AI Architect until added.'}
                                 </p>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                    {missingInRegistry.map(t => (
-                                        <div key={t} className="bg-white px-3 py-2 rounded border border-amber-100 text-xs font-mono text-amber-900 shadow-sm flex items-center">
-                                            <div className="w-2 h-2 rounded-full bg-amber-500 mr-2"></div>
-                                            {t}
-                                        </div>
+                                <ul className="divide-y divide-amber-200/80 overflow-hidden rounded-lg border border-amber-200 bg-white">
+                                    {missingInRegistry.map((t) => (
+                                        <li
+                                            key={t}
+                                            className="flex items-start gap-2 px-3 py-2.5 font-mono text-xs text-amber-950 sm:items-center"
+                                        >
+                                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500 sm:mt-0" aria-hidden />
+                                            <span className="min-w-0 break-all">{t}</span>
+                                        </li>
                                     ))}
+                                </ul>
+                                <div className="mt-4 flex justify-start">
+                                    <button
+                                        type="button"
+                                        onClick={() => loadData()}
+                                        className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-amber-700"
+                                    >
+                                        <RefreshCw size={14} className="shrink-0" aria-hidden /> Refresh audit
+                                    </button>
                                 </div>
-                                <button 
-                                    onClick={() => loadData()}
-                                    className="mt-6 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold hover:bg-amber-700 flex items-center"
-                                >
-                                    <RefreshCw size={14} className="mr-2"/> Refresh Audit
-                                </button>
                             </div>
                         )}
 
-                        {/* Ghost Tables Alert (Code has it, DB doesn't) */}
                         {missingInDB.length > 0 && (
-                            <div className="mt-8 bg-slate-50 border border-slate-200 rounded-xl p-6 opacity-75">
-                                <h4 className="font-bold text-slate-700 flex items-center mb-2">
-                                    <AlertCircle size={20} className="mr-2"/> Ghost Definitions
+                            <div className="mt-8 rounded-xl border border-slate-300 bg-slate-50 p-4 sm:p-6">
+                                <h4 className="mb-2 flex items-center font-bold text-slate-800">
+                                    <AlertCircle size={20} className="mr-2 shrink-0 text-slate-500" aria-hidden /> Ghost definitions
                                 </h4>
-                                <p className="text-sm text-slate-500 mb-4">
+                                <p className="mb-4 text-sm leading-relaxed text-slate-600">
                                     {usePostgresAudit
-                                        ? 'Didefinisikan di kode tetapi belum ada tabel yang sama di PostgreSQL (migration / sync belum jalan).'
-                                        : "These tables are defined in code but haven't been created in IndexedDB yet (Empty/Uninitialized)."}
+                                        ? 'Defined in code but no matching table exists in PostgreSQL yet (migrations or sync pending).'
+                                        : "Defined in code but not created in IndexedDB yet (empty / uninitialized)."}
                                 </p>
-                                <div className="flex flex-wrap gap-2">
-                                    {missingInDB.map(t => (
-                                        <span key={t} className="px-2 py-1 bg-slate-200 text-slate-600 rounded text-xs font-mono">{t}</span>
+                                <ul className="space-y-1.5">
+                                    {missingInDB.map((t) => (
+                                        <li
+                                            key={t}
+                                            className="rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800"
+                                        >
+                                            {t}
+                                        </li>
                                     ))}
-                                </div>
+                                </ul>
                             </div>
                         )}
 

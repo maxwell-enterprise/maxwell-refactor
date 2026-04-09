@@ -1,5 +1,6 @@
 import type { AutomationQueueItem } from '../types/automation';
 import type { AIUsageLog } from '../types/index';
+import type { Role } from '../types/security';
 import type { SecurityAuditLog } from '../types/security';
 import { APP_CONFIG } from './config';
 
@@ -58,6 +59,19 @@ export type SchemaOptimizationRow = {
   result: unknown;
 };
 
+export type DatabaseTableDefinitionRow = {
+  tableName: string;
+  rowCount: number;
+  columns: Array<{
+    name: string;
+    type: string;
+    isPk: boolean;
+    isFk: boolean;
+    fkTarget?: string;
+    isMandatory: boolean;
+  }>;
+};
+
 /** Nest `automation_trigger_definitions` — maps to `TriggerDefinition` on the client. */
 export type AutomationTriggerApiRow = {
   id: string;
@@ -76,6 +90,14 @@ export const systemApi = {
   postSecurityLog: (body: { actor: string; action: string; details?: string }) =>
     requestJson<SecurityAuditLog>('/system/security/logs', {
       method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getSecurityRoles: () => requestJson<Role[]>('/system/security/roles'),
+
+  putSecurityRole: (id: string, body: Role) =>
+    requestJson<Role>(`/system/security/roles/${encodeURIComponent(id)}`, {
+      method: 'PUT',
       body: JSON.stringify(body),
     }),
 
@@ -129,6 +151,16 @@ export const systemApi = {
   getPublicTablesMeta: () =>
     requestJson<{ name: string; rowEstimate: number }[]>(
       '/system/database/tables',
+    ),
+
+  getDatabaseTableDefinitions: () =>
+    requestJson<DatabaseTableDefinitionRow[]>(
+      '/system/database/table-definitions',
+    ),
+
+  getDatabaseTableRows: (tableName: string) =>
+    requestJson<Record<string, unknown>[]>(
+      `/system/database/tables/${encodeURIComponent(tableName)}/rows`,
     ),
 
   getPgActivity: () =>

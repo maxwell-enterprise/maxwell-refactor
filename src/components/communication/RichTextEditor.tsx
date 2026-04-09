@@ -49,7 +49,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange }) => {
     return (
         <div className="border border-slate-300 rounded-xl overflow-hidden flex flex-col bg-white shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 transition-all h-full">
             {/* Toolbar */}
-            <div className="bg-slate-50 border-b border-slate-200 p-2 flex flex-wrap gap-1 items-center shrink-0">
+            <div className="bg-slate-50 border-b border-slate-200 p-2 sm:p-2.5 flex flex-wrap gap-1.5 sm:gap-1 items-center shrink-0">
                 <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden mr-2">
                     <button onClick={() => execCmd('undo')} className="p-2 hover:bg-slate-100 text-slate-600" title="Undo"><Undo size={14}/></button>
                     <button onClick={() => execCmd('redo')} className="p-2 hover:bg-slate-100 text-slate-600" title="Redo"><Redo size={14}/></button>
@@ -72,8 +72,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange }) => {
                     <button onClick={handleImagePrompt} className="p-2 hover:bg-slate-100 text-slate-600"><ImageIcon size={14}/></button>
                 </div>
 
-                {/* NEW: Variable Inserter */}
-                <div className="ml-auto">
+                {/* Variable inserter: full row on narrow screens so toolbar doesn’t crush */}
+                <div className="w-full sm:w-auto sm:ml-auto flex justify-end pt-1 sm:pt-0 border-t border-slate-200/80 sm:border-0">
                     <VariableInserter onInsert={insertVariable} buttonLabel="Data Field" />
                 </div>
             </div>

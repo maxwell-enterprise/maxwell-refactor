@@ -1,6 +1,5 @@
 
 import React, { useMemo, useEffect, useState } from 'react';
-import { MONTH_ORDER } from '../constants';
 import { DataService } from '../services/dataService';
 import { Member, ViewState } from '../types/index';
 import { 
@@ -10,12 +9,29 @@ import {
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, AreaChart, Area, BarChart, Bar, Legend 
+  PieChart, Pie, Cell, AreaChart, Area, Legend 
 } from 'recharts';
 import StatCard from './molecules/StatCard';
 import { useAccess } from '../context/SecurityContext';
 
 type TimeRange = 'ALL' | 'LAST_30' | 'THIS_QUARTER' | 'YTD';
+type GrowthPoint = { name: string; members: number; cumulativeMembers: number };
+
+function parseJoinMonthToDate(joinMonth: string | undefined): Date | null {
+  if (!joinMonth || !/^\d{4}-\d{2}$/.test(joinMonth)) return null;
+  const d = new Date(`${joinMonth}-01T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function toMonthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function addMonths(date: Date, delta: number): Date {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + delta);
+  return next;
+}
 
 const Dashboard: React.FC = () => {
   const [members, setMembers] = useState<Member[]>([]);
@@ -78,24 +94,61 @@ const Dashboard: React.FC = () => {
     return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).sort((a,b) => b.value - a.value);
   }, [filteredMembers]);
 
-  const growthData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    filteredMembers.forEach(m => counts[m.joinMonth] = (counts[m.joinMonth] || 0) + 1);
-    // Sort by date logic handled by MONTH_ORDER or simple string sort for ISO YYYY-MM
-    const sortedKeys = Object.keys(counts).sort();
-    return sortedKeys.map(month => ({ name: month, members: counts[month] || 0 }));
+  const growthData = useMemo<GrowthPoint[]>(() => {
+    const monthCounts: Record<string, number> = {};
+    const joinDates: Date[] = [];
+
+    filteredMembers.forEach(member => {
+      const joinDate = parseJoinMonthToDate(member.joinMonth);
+      if (!joinDate) return;
+      const key = toMonthKey(joinDate);
+      monthCounts[key] = (monthCounts[key] || 0) + 1;
+      joinDates.push(joinDate);
+    });
+
+    const now = new Date();
+    let start = addMonths(now, -5);
+    let end = now;
+
+    if (joinDates.length > 0) {
+      joinDates.sort((a, b) => a.getTime() - b.getTime());
+      start = joinDates[0];
+      end = joinDates[joinDates.length - 1];
+      // Keep trajectory readable for small datasets.
+      if (start.getTime() === end.getTime()) {
+        start = addMonths(start, -2);
+        end = addMonths(end, 2);
+      }
+    }
+
+    const series: GrowthPoint[] = [];
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+    let running = 0;
+    while (cursor.getTime() <= endMonth.getTime()) {
+      const key = toMonthKey(cursor);
+      const monthly = monthCounts[key] || 0;
+      running += monthly;
+      series.push({ name: key, members: monthly, cumulativeMembers: running });
+      cursor = addMonths(cursor, 1);
+    }
+    return series;
   }, [filteredMembers]);
 
   // Strategic KPIs
-  const totalRevenueSimulated = filteredMembers.length * 15000000; 
+  const totalRevenueEstimate = filteredMembers.length * 15000000;
   const scholarshipCount = filteredMembers.filter(m => m.scholarship).length;
   
   // CLTV: Total Revenue / Total Unique Paying Customers (Simplified)
-  const avgLTV = filteredMembers.length > 0 ? totalRevenueSimulated / filteredMembers.length : 0;
+  const avgLTV = filteredMembers.length > 0 ? totalRevenueEstimate / filteredMembers.length : 0;
   
   // Retention: Active (Received N-Tag as proxy for active) / Total
   const activeMembers = filteredMembers.filter(m => m.nTagStatus === 'Received').length;
   const retentionRate = filteredMembers.length > 0 ? (activeMembers / filteredMembers.length) * 100 : 0;
+  const nonGuestMembers = filteredMembers.filter(m => m.lifecycleStage !== 'GUEST').length;
+  const engagementScore = filteredMembers.length > 0 ? (nonGuestMembers / filteredMembers.length) * 100 : 0;
+  const qualifiedMembers = filteredMembers.filter(m => (m.tags || []).includes('Qualified')).length;
+  const qualifiedRate = filteredMembers.length > 0 ? (qualifiedMembers / filteredMembers.length) * 100 : 0;
 
   const uniquePrograms = Array.from(new Set(members.map(m => m.program)));
   const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
@@ -105,13 +158,13 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8 animate-fade-in pb-20">
+    <div className="page-container space-y-6 sm:space-y-8 animate-fade-in pb-16 sm:pb-20">
       
       {/* 1. HEADER & CONTROL BAR */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4 mb-2">
-        <div>
-           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Executive Dashboard</h1>
-           <p className="text-slate-500 mt-1 flex items-center">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4 mb-2 min-w-0">
+        <div className="min-w-0">
+           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Executive Dashboard</h1>
+           <p className="text-slate-500 mt-1 flex flex-wrap items-center text-sm sm:text-base gap-x-1">
               <Activity size={16} className="mr-2 text-green-500"/> 
               System Status: <span className="font-bold text-slate-700 ml-1">Live & Healthy</span>
            </p>
@@ -189,18 +242,18 @@ const Dashboard: React.FC = () => {
         )}
 
         {canViewFinance('READ') ? (
-            <StatCard title="Revenue (Est)" value={formatIDR(totalRevenueSimulated)} change="+8.4%" isPositive={true} icon={<DollarSign className="text-emerald-600" size={24} />} color="bg-emerald-50" />
+            <StatCard title="Revenue (Est)" value={formatIDR(totalRevenueEstimate)} change={`${filteredMembers.length} members`} isPositive={true} icon={<DollarSign className="text-emerald-600" size={24} />} color="bg-emerald-50" />
         ) : (
             <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 border-dashed flex flex-col items-center justify-center text-slate-400"><Lock size={20} className="mb-2" /><span className="text-xs font-medium">Locked</span></div>
         )}
 
-        <StatCard title="Impact Scholarships" value={scholarshipCount} change={`${((scholarshipCount/filteredMembers.length || 0)*100).toFixed(1)}%`} icon={<Award className="text-purple-600" size={24} />} color="bg-purple-50" />
-        <StatCard title="Engagement Score" value="87%" change="-2%" isPositive={false} icon={<Activity className="text-amber-600" size={24} />} color="bg-amber-50" />
+        <StatCard title="Impact Scholarships" value={scholarshipCount} change={`${((scholarshipCount / filteredMembers.length || 0) * 100).toFixed(1)}%`} icon={<Award className="text-purple-600" size={24} />} color="bg-purple-50" />
+        <StatCard title="Engagement Score" value={`${engagementScore.toFixed(1)}%`} change={`${nonGuestMembers} active lifecycle`} isPositive={engagementScore >= 50} icon={<Activity className="text-amber-600" size={24} />} color="bg-amber-50" />
       </div>
 
       {/* 3. STRATEGIC INSIGHT CARDS (The "Future") */}
-      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center mt-8 mb-4">
-          <Zap size={14} className="mr-2 text-yellow-500"/> Strategic Health Indicators
+      <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2 mt-6 sm:mt-8 mb-3 sm:mb-4">
+          <Zap size={14} className="shrink-0 text-yellow-500"/> Strategic Health Indicators
       </h3>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -236,24 +289,24 @@ const Dashboard: React.FC = () => {
               </div>
           </div>
 
-          {/* CAC / EFFICIENCY (MOCK) */}
+          {/* Qualification Health (derived from real members data) */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign size={100} /></div>
               <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
                       <div className="p-2 bg-white/10 rounded-lg text-yellow-400"><Zap size={18}/></div>
-                      <span className="text-xs font-bold text-slate-300 uppercase">Marketing Efficiency</span>
+                      <span className="text-xs font-bold text-slate-300 uppercase">Qualification Health</span>
                   </div>
-                  <div className="text-2xl font-bold">4.2x ROAS</div>
-                  <p className="text-xs text-slate-400 mt-1">Return on Ad Spend (Simulated)</p>
+                  <div className="text-2xl font-bold">{qualifiedRate.toFixed(1)}%</div>
+                  <p className="text-xs text-slate-400 mt-1">Qualified tag ratio from filtered members</p>
                   <div className="mt-4 flex gap-2">
                       <div className="flex-1 bg-white/10 rounded px-2 py-1 text-center">
-                          <div className="text-[9px] text-slate-400 uppercase">CAC</div>
-                          <div className="text-xs font-bold">Rp 1.2jt</div>
+                          <div className="text-[9px] text-slate-400 uppercase">Qualified</div>
+                          <div className="text-xs font-bold">{qualifiedMembers}</div>
                       </div>
                       <div className="flex-1 bg-white/10 rounded px-2 py-1 text-center">
-                          <div className="text-[9px] text-slate-400 uppercase">Payback</div>
-                          <div className="text-xs font-bold">3 Mo</div>
+                          <div className="text-[9px] text-slate-400 uppercase">Total</div>
+                          <div className="text-xs font-bold">{filteredMembers.length}</div>
                       </div>
                   </div>
               </div>

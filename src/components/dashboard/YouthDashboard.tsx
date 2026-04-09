@@ -26,13 +26,13 @@ const YouthDashboard: React.FC = () => {
     const activeSchools = metrics.filter(m => m.status === 'PROGRAM_ACTIVE').length;
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-8 animate-fade-in">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <School className="mr-3 text-purple-600" /> Maxwell Youth Impact
+        <div className="page-container space-y-6 sm:space-y-8 animate-fade-in pb-8 min-w-0">
+            <div className="flex justify-between items-start min-w-0">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
+                        <School className="shrink-0 text-purple-600" /> <span className="leading-tight">Maxwell Youth Impact</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Tracking student engagement across Indonesia.</p>
+                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Tracking student engagement across Indonesia.</p>
                 </div>
             </div>
 
@@ -51,11 +51,12 @@ const YouthDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50 font-bold text-slate-700">
+            <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-100 bg-slate-50 p-3 font-bold text-slate-700 sm:p-4">
                     School Partnership Status
                 </div>
-                <table className="w-full text-left text-sm">
+                <div className="overflow-x-scroll-touch">
+                <table className="w-full min-w-[640px] text-left text-sm">
                     <thead className="bg-white text-slate-500 font-bold border-b border-slate-100">
                         <tr>
                             <th className="p-4">Institution</th>
@@ -100,6 +101,7 @@ const YouthDashboard: React.FC = () => {
                         ))}
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     );

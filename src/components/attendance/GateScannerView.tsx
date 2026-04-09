@@ -6,7 +6,6 @@ import { DataService } from '../../services/dataService';
 import { ScanResult } from '../../types/qr';
 import { Member, Event } from '../../types/index';
 import { GateDefinition, ScanValidationResult, EventGateConfig } from '../../types/attendance';
-import { ATTENDANCE_TEST_GATES } from '../../seeds/attendance_testing';
 import { Camera, X, CheckCircle, AlertTriangle, ShieldCheck, User, Calendar, ChevronDown, RefreshCw, LogIn, Lock } from 'lucide-react';
 import QRScanner from '../common/QRScanner';
 import UpsellPrompt from './UpsellPrompt'; 
@@ -60,15 +59,8 @@ const GateScannerView: React.FC = () => {
                   setSelectedGateId('');
               }
           } else {
-              // Fallback to static seed for legacy/testing events ONLY if they have no gates defined
-              // This is a safety catch, but primarily we rely on the event.gates
-              setAvailableGates(ATTENDANCE_TEST_GATES.map(g => ({
-                  id: g.id,
-                  name: g.label,
-                  allowedTiers: g.allowedTiers,
-                  assignedUserIds: [], // Public in test mode
-                  isActive: true
-              })));
+              setAvailableGates([]);
+              setSelectedGateId('');
           }
       }
   }, [selectedEventId, user, activeEvents]);
@@ -131,8 +123,7 @@ const GateScannerView: React.FC = () => {
 
     try {
         // SMART VALIDATION CALL
-        // Note: For dynamic gates, we pass the gateId. The service will need to look up 
-        // the event's specific gate config if it exists, or fall back to static seed.
+        // Dynamic gate id comes from DB-backed event.gates.
         const validation = await AttendanceService.validateGateEntry(
             result.message, 
             config.eventId, 
@@ -151,8 +142,8 @@ const GateScannerView: React.FC = () => {
   // --- RENDER: SETUP SCREEN ---
   if (!config) {
       return (
-        <div className="min-h-[calc(100vh-100px)] bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
-            <div className="max-w-md w-full space-y-8">
+        <div className="flex min-h-0 w-full flex-1 flex-col bg-slate-900 px-4 py-6 text-white sm:px-6">
+            <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center space-y-8 py-4">
                 <div className="text-center">
                     <div className="p-4 bg-blue-600/20 rounded-full w-20 h-20 flex items-center justify-center mx-auto border-2 border-blue-500/50 mb-6">
                         <ShieldCheck size={40} className="text-blue-400" />
@@ -163,7 +154,7 @@ const GateScannerView: React.FC = () => {
                     </p>
                 </div>
 
-                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
+                <div className="w-full space-y-6 rounded-2xl border border-slate-600 bg-slate-800/90 p-5 shadow-xl sm:p-6">
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Select Active Event</label>
                         <div className="relative">
@@ -230,18 +221,13 @@ const GateScannerView: React.FC = () => {
 
   // --- RENDER: ACTIVE SCANNER MODE ---
   const activeEvent = activeEvents.find(e => e.id === config.eventId);
-  const fallbackGate = availableGates.find((gate) => gate.id === config.gateId);
+  const selectedGate = availableGates.find((gate) => gate.id === config.gateId);
   
-  // Find gate info either from event.gates OR fallback seeds
   let activeGateName = config.gateId;
-  const gateFromEvent = activeEvent?.gates?.find(g => g.id === config.gateId);
-  const gateFromSeed = ATTENDANCE_TEST_GATES.find(g => g.id === config.gateId);
-  if (gateFromEvent) activeGateName = gateFromEvent.name;
-  else if (fallbackGate) activeGateName = fallbackGate.name;
-  else if (gateFromSeed) activeGateName = gateFromSeed.label;
+  if (selectedGate) activeGateName = selectedGate.name;
 
   return (
-    <div className="min-h-[calc(100vh-100px)] bg-black flex flex-col items-center justify-center p-6 text-white relative">
+    <div className="relative flex min-h-0 w-full flex-1 flex-col bg-black px-4 py-6 text-white sm:px-6">
       
       {/* Top Bar Info */}
       <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/90 to-transparent z-10">
@@ -259,7 +245,7 @@ const GateScannerView: React.FC = () => {
           </div>
       </div>
 
-      <div className="max-w-md w-full w-full flex-1 flex flex-col justify-center">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center pb-4">
         
         {validationResult ? (
             // RESULT CARD

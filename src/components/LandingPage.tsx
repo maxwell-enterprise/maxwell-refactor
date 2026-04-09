@@ -5,6 +5,7 @@ import { PUBLIC_PROGRAMS, PUBLIC_STORE, PUBLIC_ARTICLES, DISCOUNT_DATA } from '.
 import { Menu, X, ArrowRight, ShoppingBag, LogIn, Tag } from 'lucide-react';
 import MaxwellScoutWidget from './scout/MaxwellScoutWidget';
 import ModernLogin from './auth/ModernLogin';
+import { useToast } from '../context/ToastContext';
 
 interface LandingPageProps {
   onLogin: (role: UserRole, provider: 'google' | 'email') => void;
@@ -13,6 +14,7 @@ interface LandingPageProps {
 const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const { showToast } = useToast();
 
   // --- VARIABLE INJECTION STATE ---
   const [dynamicGreeting, setDynamicGreeting] = useState({
@@ -24,6 +26,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
       // Logic: If query params exist (simulating a personalized link click), inject variables
       const params = new URLSearchParams(window.location.search);
       const memberName = params.get('member_name') || params.get('name');
+      const authError = params.get('auth_error');
       
       if (memberName) {
           setDynamicGreeting({
@@ -31,7 +34,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
               subtitle: `We are ready to continue your growth journey. Check out the special offers curated just for you below.`
           });
       }
-  }, []);
+
+      if (authError) {
+        const message =
+          authError === 'invalid_or_expired_link'
+            ? 'Link login tidak valid atau sudah tidak berlaku. Silakan minta magic link baru.'
+            : 'Tautan login tidak lengkap. Silakan minta magic link baru.';
+        showToast(message, 'error');
+        setShowLoginModal(true);
+
+        const next = new URL(window.location.href);
+        next.searchParams.delete('auth_error');
+        window.history.replaceState({}, '', `${next.pathname}${next.search}${next.hash}`);
+      }
+  }, [showToast]);
 
   const featuredOffers = useMemo(() => {
       return DISCOUNT_DATA.filter(d => d.isFeatured);

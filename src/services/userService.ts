@@ -4,6 +4,8 @@ import { APP_CONFIG, assertExternalApiMode } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { DataService } from './dataService'; 
+import { apiRequest } from '../repositories/api/apiClient';
+import { parseAppRoleString } from '../lib/appRole';
 
 // INITIAL SEED DATA BASED ON ORG CHART
 const SEED_USERS: UserProfile[] = [
@@ -35,29 +37,25 @@ export const UserService = {
 
         if (APP_CONFIG.EXTERNAL_API_ONLY) {
             try {
-                // In API-only mode, internal users are frontend seeds,
-                // while member journey users come from external API.
-                const crmMembers = await DataService.getMembers();
-
-                const memberUsers: UserProfile[] = crmMembers.map(m => {
-                    let role = UserRole.MEMBER;
-                    if (m.lifecycleStage === 'FACILITATOR') role = UserRole.FACILITATOR;
-
-                    return {
-                        id: m.id,
-                        fullName: m.name,
-                        email: m.email,
-                        role,
-                        avatarUrl: `https://ui-avatars.com/api/?name=${m.name.replace(' ','+')}&background=random`,
-                        provider: 'email'
-                    };
-                });
-
-                const uniqueMembers = memberUsers.filter(m => !SEED_USERS.some(s => s.email === m.email));
-                return [...SEED_USERS, ...uniqueMembers];
+                const rows = await apiRequest<Array<{
+                    id: string;
+                    email: string;
+                    fullName: string;
+                    role: string;
+                    avatarUrl?: string | null;
+                    provider?: 'email' | 'google';
+                }>>('/admin/internal-users');
+                return rows.map((r) => ({
+                    id: r.id,
+                    email: r.email,
+                    fullName: r.fullName,
+                    role: parseAppRoleString(r.role),
+                    avatarUrl: r.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.fullName)}&background=random`,
+                    provider: r.provider ?? 'email',
+                }));
             } catch (e) {
                 console.error('UserService API-only fallback error', e);
-                return SEED_USERS;
+                return [];
             }
         }
 

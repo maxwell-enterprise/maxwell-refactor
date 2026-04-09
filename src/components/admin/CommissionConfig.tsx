@@ -185,15 +185,35 @@ const CommissionConfig: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col h-full bg-slate-50">
-            <div className="p-6 bg-white border-b border-slate-200 flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-slate-900 flex items-center"><Settings className="mr-3 text-slate-600" /> Master Commission Rules</h2>
-                <button onClick={handleNew} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-blue-700">
-                    <Plus size={16} className="mr-2"/> New Rule
-                </button>
+        <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
+            <div className="border-b border-slate-200 bg-white">
+                <div className="page-container flex flex-col gap-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:py-5">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                            <Settings className="h-5 w-5" strokeWidth={2} aria-hidden />
+                        </span>
+                        <div className="min-w-0 pt-0.5">
+                            <h2 className="text-xl font-bold leading-tight tracking-tight text-slate-900 sm:text-2xl">
+                                Master Commission Rules
+                            </h2>
+                            <p className="mt-1.5 max-w-2xl text-sm leading-normal text-slate-600 sm:text-[15px]">
+                                Set rates, eligible products, and payout recipients (sponsor, mentor, or sales).
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleNew}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-lg bg-blue-600 px-3.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700 sm:self-center"
+                    >
+                        <Plus className="h-4 w-4 shrink-0" aria-hidden />
+                        New Rule
+                    </button>
+                </div>
             </div>
             
-            <div className="flex-1 overflow-auto p-6">
+            <div className="min-h-0 flex-1 overflow-auto">
+                <div className="page-container py-4 sm:py-6">
                 {!loading && rules.length === 0 ? (
                     <div className="flex min-h-[260px] flex-col items-center justify-center px-6 py-10 text-center">
                         <div
@@ -213,7 +233,7 @@ const CommissionConfig: React.FC = () => {
                 ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {rules.map(rule => (
-                        <div key={rule.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+                        <div key={rule.id} className="bg-white p-5 rounded-xl border border-slate-300 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
                             <div>
                                 <div className="flex justify-between items-start mb-3">
                                     <div className={`p-2 rounded-lg ${rule.type === 'PERCENTAGE_ON_SALES' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
@@ -248,6 +268,7 @@ const CommissionConfig: React.FC = () => {
                     ))}
                 </div>
                 )}
+                </div>
             </div>
         </div>
     );

@@ -3,6 +3,7 @@ import { OpsService } from './opsService';
 import { SupportService } from './supportService';
 import { UserRole } from '../types/index';
 import { OpsChecklist } from '../types/ops';
+import { workspaceFetch } from '../lib/workspaceApi';
 
 export interface UnifiedTask {
     id: string;
@@ -18,7 +19,21 @@ export interface UnifiedTask {
         checklistId?: string;
         memberId?: string;
         memberName?: string;
+        /** Prisma `InboxNotification.id` when `source === 'SYSTEM'`. */
+        rbacInboxId?: string;
     };
+}
+
+/** RBAC rows are shaped on the server (`assignedRole` from DB, not from this argument). */
+async function fetchRbacTasksFromApi(): Promise<UnifiedTask[]> {
+    if (typeof window === 'undefined') return [];
+    try {
+        const res = await workspaceFetch('/me/rbac-tasks');
+        if (!res.ok) return [];
+        return (await res.json()) as UnifiedTask[];
+    } catch {
+        return [];
+    }
 }
 
 export const TaskService = {
@@ -27,6 +42,7 @@ export const TaskService = {
      * Filters by the user's role.
      */
     getMyTasks: async (userRole: UserRole): Promise<UnifiedTask[]> => {
+        const rbacTasks = await fetchRbacTasksFromApi();
         const tasks: UnifiedTask[] = [];
 
         // 1. Fetch Ops Tasks
@@ -82,7 +98,8 @@ export const TaskService = {
             });
         });
 
-        return tasks.sort((a, b) => {
+        const merged = [...rbacTasks, ...tasks];
+        return merged.sort((a, b) => {
             if (a.priority === 'HIGH' && b.priority !== 'HIGH') return -1;
             if (a.priority !== 'HIGH' && b.priority === 'HIGH') return 1;
             return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();

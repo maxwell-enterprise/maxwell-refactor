@@ -55,7 +55,16 @@ export const AutomationQueueService = {
     getPendingItems: async (): Promise<AutomationQueueItem[]> => {
         let items: AutomationQueueItem[] = [];
         if (isSystemApiMode()) {
-            items = await systemApi.getAutomationQueue();
+            try {
+                items = await systemApi.getAutomationQueue();
+            } catch (e) {
+                // Nest/DB down should not break the app or spam the Next.js error overlay
+                console.warn(
+                    '[AUTO-QUEUE] getAutomationQueue failed (best-effort, empty queue):',
+                    e instanceof Error ? e.message : e,
+                );
+                items = [];
+            }
         } else if (APP_CONFIG.USE_MOCK) {
             try {
                 if(await DevDatabase.isEmpty('system_background_jobs')) {
@@ -160,28 +169,44 @@ export const AutomationQueueService = {
 
     // 5. BACKGROUND WORKER PICKER (Atomic-like operation)
     processNextBackgroundTask: async (): Promise<boolean> => {
-        // A. Fetch Pending
-        const pending = await AutomationQueueService.getPendingItems();
-        if (pending.length === 0) return false;
+        try {
+            // A. Fetch Pending
+            const pending = await AutomationQueueService.getPendingItems();
+            if (pending.length === 0) return false;
 
-        // B. Pick Oldest
-        const task = pending[0];
+            // B. Pick Oldest
+            const task = pending[0];
 
-        // C. "Lock" it (Set to PROCESSING) - Crucial for avoiding race conditions in distributed systems
-        // In Mock/Local, this prevents the same browser loop from picking it twice if async takes time
-        const lockedTask: AutomationQueueItem = { ...task, status: 'PROCESSING' };
-        
-        if (isSystemApiMode()) {
-            await systemApi.putAutomationQueueItem(lockedTask.id, lockedTask);
-        } else if (APP_CONFIG.USE_MOCK) {
-            await DevDatabase.add('system_background_jobs', lockedTask);
-        } else if (supabase) {
-             await supabase.from('automation_queue').upsert(lockedTask);
+            // C. "Lock" it (Set to PROCESSING) - Crucial for avoiding race conditions in distributed systems
+            // In Mock/Local, this prevents the same browser loop from picking it twice if async takes time
+            const lockedTask: AutomationQueueItem = { ...task, status: 'PROCESSING' };
+
+            if (isSystemApiMode()) {
+                try {
+                    await systemApi.putAutomationQueueItem(lockedTask.id, lockedTask);
+                } catch (e) {
+                    console.warn(
+                        '[AUTO-QUEUE] lock task failed (skipping):',
+                        e instanceof Error ? e.message : e,
+                    );
+                    return false;
+                }
+            } else if (APP_CONFIG.USE_MOCK) {
+                await DevDatabase.add('system_background_jobs', lockedTask);
+            } else if (supabase) {
+                await supabase.from('automation_queue').upsert(lockedTask);
+            }
+
+            // D. Execute
+            // Note: processItem will set it to COMPLETED upon success
+            await AutomationQueueService.processItem(lockedTask);
+            return true;
+        } catch (e) {
+            console.warn(
+                '[AUTO-QUEUE] processNextBackgroundTask failed (best-effort):',
+                e instanceof Error ? e.message : e,
+            );
+            return false;
         }
-
-        // D. Execute
-        // Note: processItem will set it to COMPLETED upon success
-        await AutomationQueueService.processItem(lockedTask);
-        return true;
-    }
+    },
 };

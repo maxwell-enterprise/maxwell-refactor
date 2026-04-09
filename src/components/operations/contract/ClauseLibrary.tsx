@@ -189,12 +189,12 @@ const ClauseLibrary: React.FC = () => {
     };
 
     return (
-        <div className="flex h-full bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="flex min-h-[min(72vh,720px)] flex-col overflow-hidden rounded-xl border border-slate-300 bg-white md:h-full md:min-h-0 md:flex-row">
             
-            {/* LEFT SIDEBAR: TREE NAVIGATION */}
-            <div className="w-80 border-r border-slate-200 flex flex-col bg-slate-50/50 flex-shrink-0">
+            {/* TREE NAVIGATION — full width on mobile, sidebar on md+ */}
+            <div className="flex max-h-[min(42vh,380px)] w-full shrink-0 flex-col border-b border-slate-300 bg-slate-50/50 md:max-h-none md:w-80 md:border-b-0 md:border-r md:border-slate-300">
                 {/* Header Actions */}
-                <div className="p-4 border-b border-slate-100 bg-white">
+                <div className="border-b border-slate-200 bg-white p-4">
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Clause Explorer</h3>
                         <div className="flex gap-1">
@@ -273,19 +273,19 @@ const ClauseLibrary: React.FC = () => {
                 </div>
                 
                 {/* Footer Stats */}
-                <div className="p-3 border-t border-slate-200 bg-white text-[10px] text-slate-400 flex justify-between">
+                <div className="flex justify-between border-t border-slate-300 bg-white p-3 text-[10px] text-slate-400">
                     <span>{clauses.length} Total Items</span>
                     <span>{Object.keys(groupedClauses).length} Sections</span>
                 </div>
             </div>
 
-            {/* RIGHT PANEL: EDITOR */}
-            <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+            {/* EDITOR — stacks below explorer on mobile */}
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
                 {isEditing ? (
                     <>
                         {/* Editor Header */}
-                        <div className="h-14 border-b border-slate-200 flex justify-between items-center px-6 bg-white shrink-0">
-                            <div className="flex items-center gap-2">
+                        <div className="flex min-h-14 shrink-0 flex-col gap-3 border-b border-slate-300 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                            <div className="flex min-w-0 items-center gap-2">
                                 <div className="p-1.5 bg-blue-100 text-blue-600 rounded">
                                     <Edit3 size={16} />
                                 </div>
@@ -296,27 +296,29 @@ const ClauseLibrary: React.FC = () => {
                                     <p className="text-[10px] text-slate-500 font-mono">{editForm.id}</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2 sm:justify-end">
                                 {editForm.id && !editForm.id.includes('NEW') && (
                                     <button 
-                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        type="button"
+                                        className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
                                         title="Delete Clause"
                                     >
                                         <Trash2 size={16} />
                                     </button>
                                 )}
                                 <button 
+                                    type="button"
                                     onClick={handleSave}
-                                    className="flex items-center bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-800 shadow-sm"
+                                    className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 sm:w-auto"
                                 >
-                                    <Save size={14} className="mr-2"/> Save Changes
+                                    <Save size={14} className="shrink-0"/> Save Changes
                                 </button>
                             </div>
                         </div>
 
                         {/* Editor Inputs */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
+                        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Section Name</label>
                                     <input 
@@ -364,14 +366,15 @@ const ClauseLibrary: React.FC = () => {
                         </div>
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-300">
-                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                    <div className="flex min-h-[min(40vh,320px)] flex-col items-center justify-center px-4 py-10 text-slate-300 md:min-h-0 md:h-full">
+                        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-50">
                             <FileText size={40} />
                         </div>
-                        <p className="text-sm font-medium text-slate-400">Select a clause to edit or create a new one.</p>
+                        <p className="text-center text-sm font-medium text-slate-400">Select a clause to edit or create a new one.</p>
                         <button 
+                            type="button"
                             onClick={handleNewClause}
-                            className="mt-4 px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                            className="mt-4 min-h-[44px] rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
                         >
                             + Create New Clause
                         </button>

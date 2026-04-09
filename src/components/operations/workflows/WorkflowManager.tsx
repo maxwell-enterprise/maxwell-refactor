@@ -71,15 +71,15 @@ const WorkflowManager: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col bg-slate-50">
-            <div className="p-6 bg-white border-b border-slate-200 flex justify-between items-center">
-                <div>
+            <div className="flex flex-col gap-4 border-b border-slate-300 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div className="min-w-0">
                     <h2 className="text-xl font-bold text-slate-900 flex items-center">
-                        <GitMerge className="mr-3 text-blue-600" /> SOP Workflow Engine
+                        <GitMerge className="mr-3 shrink-0 text-blue-600" /> SOP Workflow Engine
                     </h2>
                     <p className="text-sm text-slate-500 mt-1">Automate task creation based on business events.</p>
                 </div>
-                <button onClick={handleCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center hover:bg-blue-700 shadow-sm">
-                    <Plus size={16} className="mr-2"/> Create Workflow
+                <button type="button" onClick={handleCreate} className="flex min-h-[44px] w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700 sm:w-auto whitespace-nowrap">
+                    <Plus size={16} className="shrink-0"/> Create Workflow
                 </button>
             </div>
 
@@ -99,7 +99,7 @@ const WorkflowManager: React.FC = () => {
                         <h3 className="font-bold text-slate-900 mb-1">{tpl.name}</h3>
                         <p className="text-xs text-slate-500 mb-4 line-clamp-2 min-h-[32px]">{tpl.description || 'No description provided.'}</p>
                         
-                        <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-3">
+                        <div className="flex items-center justify-between text-xs border-t border-slate-200 pt-3">
                             <div className="text-slate-600 font-medium">
                                 Trigger: <span className="text-slate-800 font-bold">{tpl.triggerType === 'SYSTEM_EVENT' ? tpl.triggerEventId : (tpl.triggerProductId === 'ALL' ? 'Any Product' : 'Specific Product')}</span>
                             </div>

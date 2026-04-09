@@ -1,10 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Mail, ArrowRight, Loader2, ShieldCheck, User, Users, Briefcase, Crown, Star, UserPlus, Search, KeyRound, X } from 'lucide-react';
 import { UserRole, UserProfile, Member } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import { UserService } from '../../services/userService'; 
 import { DataService } from '../../services/dataService'; 
 import { useToast } from '../../context/ToastContext';
+import { workspaceApiUrl } from '../../lib/workspaceApi';
+
+/** Nest `/fe/auth/*` — identity di backend, bukan Next/Prisma. */
+const USE_WORKSPACE =
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_WORKSPACE_AUTH !== 'false';
 
 interface ModernLoginProps {
   onLogin: (role: UserRole, provider: 'google' | 'email') => void;
@@ -15,7 +21,7 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
   const { showToast } = useToast();
   const { login } = useAuth(); // Use login from context to access the new signature
   const [email, setEmail] = useState('');
-  const [step, setStep] = useState<'INPUT' | 'OTP' | 'SENT' | 'DEV_SELECT'>('INPUT');
+  const [step, setStep] = useState<'INPUT' | 'OTP' | 'EMAIL_SENT' | 'SENT' | 'DEV_SELECT'>('INPUT');
   const [isLoading, setIsLoading] = useState(false);
   const [otp, setOtp] = useState('');
   
@@ -24,8 +30,10 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
   const [memberMap, setMemberMap] = useState<Record<string, Member>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'INTERNAL' | 'JOURNEY'>('INTERNAL');
+  const lastGoogleHintAt = useRef(0);
 
   useEffect(() => {
+      if (USE_WORKSPACE) return;
       const loadDevUsers = async () => {
           const [users, members] = await Promise.all([
               UserService.getAllUsers(),
@@ -36,17 +44,48 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
           members.forEach(m => map[m.id] = m);
           setMemberMap(map);
       };
-      loadDevUsers();
+      void loadDevUsers();
   }, []);
 
-  const handleMagicLink = (e: React.FormEvent) => {
+  const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+
+    if (USE_WORKSPACE) {
+      setIsLoading(true);
+      try {
+        const res = await fetch(workspaceApiUrl('/auth/email/send'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        if (!res.ok) {
+          let msg =
+            'Tidak dapat mengirim email. Periksa RESEND_API_KEY & EMAIL_FROM di Nest (.env), lalu restart Nest.';
+          try {
+            const data = (await res.json()) as {
+              message?: string | string[];
+            };
+            if (typeof data?.message === 'string') msg = data.message;
+            else if (Array.isArray(data?.message))
+              msg = data.message.join(', ');
+          } catch {
+            /* body bukan JSON */
+          }
+          showToast(msg, 'error');
+          return;
+        }
+        setStep('EMAIL_SENT');
+        showToast('Periksa inbox email Anda untuk tautan masuk.', 'success');
+      } catch {
+        showToast('Gagal mengirim tautan masuk.', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     setIsLoading(true);
-    
-    // Logic: Jika email adalah shadow user (penerima gift), langsung minta OTP
-    // Dalam simulasi ini, kita anggap semua email yang dimasukkan user 
-    // jika bukan dev user, maka dia melalui alur OTP
     setTimeout(() => {
       setIsLoading(false);
       setStep('OTP');
@@ -65,8 +104,24 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
       }
   };
 
-  const simulateMagicLinkClick = () => {
-      setStep('DEV_SELECT');
+  const handleGoogleOAuth = async () => {
+    if (process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === 'false') {
+      showToast('Google login is disabled (NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED=false).', 'info');
+      return;
+    }
+    if (!USE_WORKSPACE) {
+      const now = Date.now();
+      if (now - lastGoogleHintAt.current > 4000) {
+        lastGoogleHintAt.current = now;
+        showToast(
+          'Untuk Google: set GOOGLE_CLIENT_ID/SECRET & FRONTEND_URL di Nest, atau pakai email + OTP (demo: 12345).',
+          'info',
+        );
+      }
+      return;
+    }
+    setIsLoading(true);
+    window.location.href = workspaceApiUrl('/auth/google');
   };
 
   const handleDevSelect = async (user: UserProfile) => {
@@ -137,16 +192,29 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
             {step === 'INPUT' && (
                 <div className="space-y-6">
                     <div className="text-center">
-                        <h3 className="text-xl font-bold text-slate-900">Sign In to Continue</h3>
-                        <p className="text-slate-500 text-sm mt-1">Enter your registered email address.</p>
+                        <h3 className="text-xl font-bold text-slate-900">Sign in or register</h3>
+                        <p className="text-slate-500 text-sm mt-1">
+                          First visit with your email counts as sign-up. With Google, your name and profile photo can come from your Google account.
+                        </p>
                     </div>
-                    <button onClick={() => setStep('DEV_SELECT')} className="w-full flex items-center justify-center px-4 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm group">
-                        <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform" alt="Google" />
+                    <button
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => void handleGoogleOAuth()}
+                        className="w-full flex items-center justify-center px-4 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm group disabled:opacity-60"
+                    >
+                        <img
+                          src="https://www.svgrepo.com/show/475656/google-color.svg"
+                          className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform"
+                          alt=""
+                        />
                         <span className="text-slate-700 font-medium">Continue with Google</span>
                     </button>
                     <div className="relative flex py-2 items-center">
                         <div className="flex-grow border-t border-slate-200"></div>
-                        <span className="flex-shrink-0 mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-widest">Or Access with OTP</span>
+                        <span className="flex-shrink-0 mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                          {USE_WORKSPACE ? 'Or use email link' : 'Or email + OTP (demo)'}
+                        </span>
                         <div className="flex-grow border-t border-slate-200"></div>
                     </div>
                     <form onSubmit={handleMagicLink} className="space-y-4">
@@ -158,12 +226,57 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
                             </div>
                         </div>
                         <button type="submit" disabled={isLoading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center disabled:opacity-70">
-                            {isLoading ? <Loader2 className="animate-spin" /> : <>Log In with OTP <ArrowRight size={18} className="ml-2" /></>}
+                            {isLoading ? (
+                              <Loader2 className="animate-spin" />
+                            ) : (
+                              <>
+                                {USE_WORKSPACE ? 'Send sign-in link' : 'Log In with OTP'}{' '}
+                                <ArrowRight size={18} className="ml-2" />
+                              </>
+                            )}
                         </button>
                     </form>
+                    {!USE_WORKSPACE && (
+                      <p className="text-center pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setStep('DEV_SELECT')}
+                          className="text-[11px] font-medium text-slate-400 hover:text-indigo-600 underline decoration-slate-300 underline-offset-2"
+                        >
+                          Internal developer login (testing only)
+                        </button>
+                      </p>
+                    )}
                 </div>
             )}
             
+            {step === 'EMAIL_SENT' && USE_WORKSPACE && (
+                <div className="space-y-6 text-center animate-fade-in">
+                    <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner border border-emerald-100">
+                        <Mail size={32} />
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-900">Check your email</h3>
+                        <p className="text-slate-500 text-sm mt-2">
+                          We sent a sign-in link to <br />
+                          <b className="text-slate-800">{email}</b>
+                        </p>
+                        <p className="text-xs text-slate-400 mt-3 leading-relaxed">
+                          Open the message on this phone or another device, then tap <strong>Continue to app</strong>.
+                          Works on Wi‑Fi/LAN: use the same host as this site (e.g. <code className="text-[10px] bg-slate-100 px-1 rounded">http://192.168.x.x:3000</code>) in{' '}
+                          <code className="text-[10px] bg-slate-100 px-1 rounded">NEXTAUTH_URL</code>.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setStep('INPUT')}
+                        className="text-xs text-slate-400 hover:text-slate-600 font-bold uppercase tracking-wider"
+                    >
+                        Use a different email
+                    </button>
+                </div>
+            )}
+
             {step === 'OTP' && (
                 <div className="space-y-6 text-center animate-fade-in">
                     <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto shadow-inner border border-blue-100">

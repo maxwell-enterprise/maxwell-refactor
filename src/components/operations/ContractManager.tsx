@@ -165,79 +165,87 @@ const ContractManager: React.FC = () => {
     }
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in">
-            <div className="flex justify-between items-end mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <FileText className="mr-3 text-blue-600" /> Contract Center
-                    </h1>
-                    <p className="text-slate-500 mt-1">Manage legal agreements, templates, and clause library.</p>
+        <div className="page-container flex min-h-0 flex-col animate-fade-in pb-8 min-w-0">
+            <div className="mb-5 flex flex-col gap-4 lg:mb-6 lg:flex-row lg:items-end lg:justify-between min-w-0">
+                <div className="flex min-w-0 gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                        <FileText className="h-6 w-6" strokeWidth={2} />
+                    </span>
+                    <div className="min-w-0">
+                        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl leading-snug">Contract Center</h1>
+                        <p className="text-slate-500 mt-1 text-sm sm:text-base">Manage legal agreements, templates, and clause library.</p>
+                    </div>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setActiveTab('INSTANCES')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center ${activeTab === 'INSTANCES' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>
-                        <FileText size={14} className="mr-2"/> Agreements
+                <div className="w-full max-w-full shrink-0 overflow-x-scroll-touch rounded-lg bg-slate-100 p-1 lg:w-auto">
+                    <div className="inline-flex max-w-none flex-nowrap gap-1">
+                    <button type="button" onClick={() => setActiveTab('INSTANCES')} className={`shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-bold transition-all sm:px-4 ${activeTab === 'INSTANCES' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>
+                        <FileText size={14} className="shrink-0"/> Agreements
                     </button>
-                    <button onClick={() => setActiveTab('TEMPLATES')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center ${activeTab === 'TEMPLATES' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>
-                        <Layout size={14} className="mr-2"/> Templates
+                    <button type="button" onClick={() => setActiveTab('TEMPLATES')} className={`shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-bold transition-all sm:px-4 ${activeTab === 'TEMPLATES' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>
+                        <Layout size={14} className="shrink-0"/> Templates
                     </button>
-                    <button onClick={() => setActiveTab('LIBRARY')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center ${activeTab === 'LIBRARY' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>
-                        <Book size={14} className="mr-2"/> Library
+                    <button type="button" onClick={() => setActiveTab('LIBRARY')} className={`shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-bold transition-all sm:px-4 ${activeTab === 'LIBRARY' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>
+                        <Book size={14} className="shrink-0"/> Library
                     </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
                 {activeTab === 'LIBRARY' && <ClauseLibrary />}
                 
                 {activeTab === 'TEMPLATES' && (
-                    <div className="bg-white rounded-xl border border-slate-200 h-full flex flex-col overflow-hidden">
-                         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <div className="bg-white rounded-xl border border-slate-200 h-full min-h-[50vh] flex flex-col overflow-hidden min-w-0">
+                         <div className="p-3 border-b border-slate-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-slate-50 sm:p-4">
                             <h3 className="font-bold text-slate-800">Master Templates</h3>
-                            <button onClick={() => { setEditingTemplate(null); setShowTemplateBuilder(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
-                                <Layout size={16} className="mr-2"/> New Template
+                            <button type="button" onClick={() => { setEditingTemplate(null); setShowTemplateBuilder(true); }} className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 w-full sm:w-auto shrink-0">
+                                <Layout size={16} className="shrink-0"/> New Template
                             </button>
                         </div>
-                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto">
+                        <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto min-w-0">
                             {templates.map(tmpl => (
-                                <div key={tmpl.id} className="border border-slate-200 rounded-xl p-5 hover:shadow-lg transition-all bg-white group relative">
-                                    {/* Action Buttons */}
-                                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1 rounded-lg shadow-sm">
+                                <div key={tmpl.id} className="border border-slate-200 rounded-xl p-4 sm:p-5 hover:shadow-lg transition-all bg-white group relative min-w-0 max-w-full">
+                                    {/* Action Buttons — visible on touch / hover */}
+                                    <div className="mb-3 flex flex-wrap gap-2 sm:absolute sm:top-4 sm:right-4 sm:mb-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-slate-50 sm:bg-white/95 p-1 rounded-lg sm:shadow-sm">
                                         <button 
+                                            type="button"
                                             onClick={(e) => { e.stopPropagation(); handleDuplicateTemplate(tmpl); }}
-                                            className="p-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" 
+                                            className="p-2 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 touch-target sm:min-h-0 sm:min-w-0" 
                                             title="Duplicate Template"
                                         >
                                             <Copy size={16}/>
                                         </button>
                                         <button 
+                                            type="button"
                                             onClick={(e) => { e.stopPropagation(); handleEditTemplate(tmpl); }}
-                                            className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" 
+                                            className="p-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 touch-target sm:min-h-0 sm:min-w-0" 
                                             title="Edit Full Configuration"
                                         >
                                             <Edit3 size={16}/>
                                         </button>
                                         <button 
+                                            type="button"
                                             onClick={(e) => { e.stopPropagation(); setVisualEditingTemplate(tmpl); }}
-                                            className="p-1.5 bg-purple-50 text-purple-600 rounded hover:bg-purple-100" 
+                                            className="p-2 bg-purple-50 text-purple-600 rounded hover:bg-purple-100 touch-target sm:min-h-0 sm:min-w-0" 
                                             title="Visual Clause Editor"
                                         >
                                             <Layout size={16}/>
                                         </button>
                                     </div>
 
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
+                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                                             <Layout size={24} />
                                         </div>
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${tmpl.isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                                        <span className={`self-start sm:self-auto text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 ${tmpl.isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                                             {tmpl.isActive ? 'Active' : 'Draft'}
                                         </span>
                                     </div>
-                                    <h4 className="font-bold text-slate-900 text-lg mb-1">{tmpl.name}</h4>
-                                    <p className="text-xs text-slate-500">Product: {tmpl.productName}</p>
-                                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
-                                        <span>Ver {tmpl.version}</span>
-                                        <span>{(tmpl.rootNodes?.length || 0)} Sections</span>
+                                    <h4 className="font-bold text-slate-900 text-base sm:text-lg mb-1 break-words">{tmpl.name}</h4>
+                                    <p className="text-xs text-slate-500"><span className="text-slate-400">Product:</span> {tmpl.productName}</p>
+                                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:justify-between sm:items-center sm:gap-2">
+                                        <span>Version {tmpl.version}</span>
+                                        <span>{(tmpl.rootNodes?.length || 0)} sections</span>
                                     </div>
                                 </div>
                             ))}
@@ -254,21 +262,22 @@ const ContractManager: React.FC = () => {
                     <div className="flex flex-col h-full gap-4">
                         {/* ALERT FOR MISSING CONTRACTS */}
                         {missingContracts.length > 0 && (
-                            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex justify-between items-center animate-fade-in">
-                                <div className="flex items-center">
-                                    <div className="p-2 bg-amber-100 rounded-full mr-3 text-amber-700">
+                            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center animate-fade-in min-w-0">
+                                <div className="flex items-start gap-3 min-w-0">
+                                    <div className="p-2 bg-amber-100 rounded-full shrink-0 text-amber-700">
                                         <AlertCircle size={20} />
                                     </div>
-                                    <div>
+                                    <div className="min-w-0">
                                         <h4 className="font-bold text-amber-800">Missing Contracts Detected</h4>
-                                        <p className="text-xs text-amber-700">Found {missingContracts.length} active members without contracts.</p>
+                                        <p className="text-xs text-amber-700 mt-0.5">Found {missingContracts.length} active members without contracts.</p>
                                     </div>
                                 </div>
                                 <button 
+                                    type="button"
                                     onClick={handleBatchGenerate}
-                                    className="bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-amber-700 flex items-center shadow-sm"
+                                    className="bg-amber-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold hover:bg-amber-700 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto shrink-0"
                                 >
-                                    <Wand2 size={14} className="mr-2"/> Generate {missingContracts.length} Contracts
+                                    <Wand2 size={14} className="shrink-0"/> Generate {missingContracts.length} Contracts
                                 </button>
                             </div>
                         )}

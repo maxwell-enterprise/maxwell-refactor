@@ -37,29 +37,31 @@ const CommunicationHub: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in relative">
+        <div className="page-container flex flex-col animate-fade-in relative pb-8 min-h-0 min-w-0">
             
             {/* Page Header */}
-            <div className="flex justify-between items-end mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <Mail className="mr-3 text-blue-600" /> Communication Hub
+            <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-end mb-5 lg:mb-6 min-w-0">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
+                        <Mail className="shrink-0 text-blue-600" /> <span className="leading-tight">Communication Hub</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Marketing automation, newsletters, and system notifications.</p>
+                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Marketing automation, newsletters, and system notifications.</p>
                 </div>
                 
-                <div className="flex gap-3">
-                    <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto">
-                        <button onClick={() => setActiveTab('CAMPAIGNS')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeTab === 'CAMPAIGNS' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Campaigns</button>
-                        <button onClick={() => setActiveTab('WA_QUEUE')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center whitespace-nowrap ${activeTab === 'WA_QUEUE' ? 'bg-white shadow text-green-700' : 'text-slate-500'}`}>
-                            <MessageCircle size={14} className="mr-1.5"/> WA Queue
+                <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto min-w-0 items-stretch sm:items-center">
+                    <div className="overflow-x-scroll-touch rounded-lg bg-slate-100 p-1 order-2 sm:order-1">
+                        <div className="inline-flex max-w-none flex-nowrap gap-1">
+                        <button type="button" onClick={() => setActiveTab('CAMPAIGNS')} className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeTab === 'CAMPAIGNS' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Campaigns</button>
+                        <button type="button" onClick={() => setActiveTab('WA_QUEUE')} className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-bold rounded-md transition-all inline-flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'WA_QUEUE' ? 'bg-white shadow text-green-700' : 'text-slate-500'}`}>
+                            <MessageCircle size={14} className="shrink-0"/> WA Queue
                         </button>
-                        <button onClick={() => setActiveTab('WA_TEMPLATES')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center whitespace-nowrap ${activeTab === 'WA_TEMPLATES' ? 'bg-white shadow text-green-700' : 'text-slate-500'}`}>
-                            <FileCode size={14} className="mr-1.5"/> WA Master
+                        <button type="button" onClick={() => setActiveTab('WA_TEMPLATES')} className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-bold rounded-md transition-all inline-flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'WA_TEMPLATES' ? 'bg-white shadow text-green-700' : 'text-slate-500'}`}>
+                            <FileCode size={14} className="shrink-0"/> WA Master
                         </button>
-                        <button onClick={() => setActiveTab('LOGS')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeTab === 'LOGS' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Logs</button>
-                        <button onClick={() => setActiveTab('PDF_TEMPLATES')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeTab === 'PDF_TEMPLATES' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>PDF</button>
-                        <button onClick={() => setActiveTab('SETTINGS')} className={`px-3 py-2 rounded-md transition-all ${activeTab === 'SETTINGS' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}><Settings size={16}/></button>
+                        <button type="button" onClick={() => setActiveTab('LOGS')} className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeTab === 'LOGS' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Logs</button>
+                        <button type="button" onClick={() => setActiveTab('PDF_TEMPLATES')} className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeTab === 'PDF_TEMPLATES' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>PDF</button>
+                        <button type="button" onClick={() => setActiveTab('SETTINGS')} className={`shrink-0 px-3 py-2 rounded-md transition-all inline-flex items-center justify-center ${activeTab === 'SETTINGS' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`} aria-label="Settings"><Settings size={16}/></button>
+                        </div>
                     </div>
                     
                     {activeTab === 'CAMPAIGNS' && (
@@ -67,16 +69,16 @@ const CommunicationHub: React.FC = () => {
                             type="button"
                             onClick={() => setIsWizardOpen(true)}
                             disabled={isWizardOpen}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 flex items-center shadow-lg whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none"
+                            className="order-1 sm:order-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700 flex items-center justify-center gap-2 shadow-lg whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none shrink-0"
                         >
-                            <Plus size={18} className="mr-2"/> New Email
+                            <Plus size={18} className="shrink-0"/> New Email
                         </button>
                     )}
                 </div>
             </div>
 
-            {/* Content Area */}
-            <div className="flex-1 overflow-hidden bg-white rounded-xl border border-slate-200 shadow-sm relative">
+            {/* Content Area — min-w-0 so inner tables can scroll horizontally */}
+            <div className="relative flex min-h-[50vh] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:min-h-[420px]">
                 
                 {/* WHATSAPP QUEUE */}
                 {activeTab === 'WA_QUEUE' && (
@@ -85,15 +87,15 @@ const CommunicationHub: React.FC = () => {
 
                 {/* WHATSAPP TEMPLATES */}
                 {activeTab === 'WA_TEMPLATES' && (
-                    <div className="p-6 h-full">
+                    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col p-3 sm:p-6">
                         <WhatsAppTemplateManager />
                     </div>
                 )}
 
                 {/* CAMPAIGNS LIST */}
                 {activeTab === 'CAMPAIGNS' && (
-                    <div className="overflow-auto h-full">
-                        <table className="w-full text-left text-sm">
+                    <div className="overflow-x-scroll-touch">
+                        <table className="w-full min-w-[640px] text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                                 <tr>
                                     <th className="p-4">Campaign Name</th>
@@ -153,8 +155,8 @@ const CommunicationHub: React.FC = () => {
 
                 {/* LOGS LIST */}
                 {activeTab === 'LOGS' && (
-                     <div className="overflow-auto h-full">
-                        <table className="w-full text-left text-sm">
+                     <div className="overflow-x-scroll-touch">
+                        <table className="w-full min-w-[640px] text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                                 <tr>
                                     <th className="p-4">Timestamp</th>
@@ -218,7 +220,7 @@ const CommunicationHub: React.FC = () => {
 
                 {/* PDF DESIGNER */}
                 {activeTab === 'PDF_TEMPLATES' && (
-                    <div className="p-6 h-full">
+                    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-auto p-3 sm:p-6">
                         <PDFDesigner />
                     </div>
                 )}

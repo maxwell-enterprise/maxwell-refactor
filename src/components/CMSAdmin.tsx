@@ -89,58 +89,58 @@ const CMSAdmin: React.FC = () => {
     // --- VIEWS ---
 
     const renderList = () => (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <div className="relative w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input type="text" placeholder="Search content..." className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg outline-none focus:border-blue-500" />
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-w-0">
+            <div className="p-3 sm:p-4 border-b border-slate-100 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-slate-50">
+                <div className="relative w-full sm:max-w-md min-w-0">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                    <input type="text" placeholder="Search content..." className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20" />
                 </div>
-                <button onClick={handleNewPost} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
-                    <Plus size={16} className="mr-2" /> Create Content
+                <button type="button" onClick={handleNewPost} className="shrink-0 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-blue-700 w-full sm:w-auto">
+                    <Plus size={16} /> Create Content
                 </button>
             </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-slate-500 font-medium">
+            <div className="overflow-x-auto -mx-px">
+                <table className="w-full text-left text-sm min-w-[640px]">
+                    <thead className="bg-slate-50 text-slate-500 font-medium text-xs sm:text-sm">
                         <tr>
-                            <th className="px-6 py-4">Title</th>
-                            <th className="px-6 py-4">Type</th>
-                            <th className="px-6 py-4">Status</th>
-                            <th className="px-6 py-4">Schedule</th>
-                            <th className="px-6 py-4">Engagement</th>
-                            <th className="px-6 py-4 text-right">Actions</th>
+                            <th className="px-3 sm:px-5 py-3 sm:py-4">Title</th>
+                            <th className="px-3 sm:px-5 py-3 sm:py-4 whitespace-nowrap">Type</th>
+                            <th className="px-3 sm:px-5 py-3 sm:py-4 whitespace-nowrap">Status</th>
+                            <th className="px-3 sm:px-5 py-3 sm:py-4 whitespace-nowrap">Schedule</th>
+                            <th className="px-3 sm:px-5 py-3 sm:py-4 whitespace-nowrap">Engagement</th>
+                            <th className="px-3 sm:px-5 py-3 sm:py-4 text-right whitespace-nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {posts.map(post => (
                             <tr key={post.id} className="hover:bg-slate-50">
-                                <td className="px-6 py-4">
-                                    <div className="font-bold text-slate-900">{post.title}</div>
-                                    <div className="text-xs text-slate-500 truncate max-w-[200px]">{post.slug}</div>
+                                <td className="px-3 sm:px-5 py-3 sm:py-4 max-w-[220px] sm:max-w-xs">
+                                    <div className="font-bold text-slate-900 text-sm break-words">{post.title}</div>
+                                    <div className="text-xs text-slate-500 mt-0.5 break-all line-clamp-2">{post.slug}</div>
                                 </td>
-                                <td className="px-6 py-4">
-                                    <span className={`text-[10px] font-bold px-2 py-1 rounded ${post.type === 'ADVERTISEMENT' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                <td className="px-3 sm:px-5 py-3 sm:py-4 align-top">
+                                    <span className={`inline-block text-xs font-bold px-2 py-1 rounded ${post.type === 'ADVERTISEMENT' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                                         {post.type}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4">
+                                <td className="px-3 sm:px-5 py-3 sm:py-4 align-top">
                                     <span className={`flex items-center gap-1.5 text-xs font-medium ${post.status === 'PUBLISHED' ? 'text-green-600' : 'text-slate-500'}`}>
-                                        <span className={`w-2 h-2 rounded-full ${post.status === 'PUBLISHED' ? 'bg-green-500' : 'bg-slate-400'}`}></span>
+                                        <span className={`w-2 h-2 rounded-full shrink-0 ${post.status === 'PUBLISHED' ? 'bg-green-500' : 'bg-slate-400'}`}></span>
                                         {post.status}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 text-xs text-slate-500">
+                                <td className="px-3 sm:px-5 py-3 sm:py-4 text-xs text-slate-500 whitespace-nowrap">
                                     {new Date(post.publishDate).toLocaleDateString()}
                                 </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex gap-3 text-xs">
+                                <td className="px-3 sm:px-5 py-3 sm:py-4 align-top">
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                                         <span title="Views">👁️ {post.stats.views}</span>
                                         <span title="Clicks">🖱️ {post.stats.clicks}</span>
                                         <span title="Sales" className="text-green-600 font-bold">💲 {post.stats.conversions}</span>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 text-right">
-                                    <button onClick={() => handleEditPost(post)} className="text-blue-600 hover:bg-blue-50 p-2 rounded transition-colors"><Edit3 size={16}/></button>
+                                <td className="px-3 sm:px-5 py-3 sm:py-4 text-right align-top">
+                                    <button type="button" onClick={() => handleEditPost(post)} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors inline-flex touch-target sm:min-h-0 sm:min-w-0"><Edit3 size={18}/></button>
                                 </td>
                             </tr>
                         ))}
@@ -151,16 +151,16 @@ const CMSAdmin: React.FC = () => {
     );
 
     const renderEditor = () => (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
-            {/* Left: Input */}
-            <div className="lg:col-span-2 flex flex-col gap-4 overflow-hidden">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-full">
-                    <div className="space-y-4 mb-4 flex-shrink-0">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 w-full items-start">
+            {/* Left: on lg, bounded height so rich text scrolls inside; on mobile, page scrolls via <main> */}
+            <div className="lg:col-span-2 flex flex-col gap-4 min-w-0 w-full">
+                <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-[22rem] w-full lg:h-[min(44rem,calc(100dvh-13rem))]">
+                    <div className="space-y-4 mb-4 flex-shrink-0 min-w-0">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Headline</label>
                             <input 
                                 type="text" 
-                                className="w-full text-xl font-bold p-2 border-b-2 border-slate-200 focus:border-blue-500 outline-none placeholder:text-slate-300"
+                                className="w-full min-w-0 text-lg sm:text-xl font-bold p-2 border-b-2 border-slate-200 focus:border-blue-500 outline-none placeholder:text-slate-300"
                                 placeholder="Enter catchy headline..."
                                 value={editingPost.title}
                                 onChange={e => setEditingPost({...editingPost, title: e.target.value})}
@@ -168,27 +168,28 @@ const CMSAdmin: React.FC = () => {
                         </div>
                         
                         {/* AI Prompt Area */}
-                        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 flex gap-2 items-center">
-                            <Sparkles className="text-indigo-600 shrink-0" size={20} />
+                        <div className="bg-indigo-50 p-3 sm:p-4 rounded-xl border border-indigo-100 flex flex-col sm:flex-row gap-3 sm:gap-2 sm:items-stretch">
+                            <Sparkles className="text-indigo-600 shrink-0 hidden sm:block" size={20} />
                             <input 
                                 type="text" 
-                                className="flex-1 bg-white border border-indigo-200 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300"
-                                placeholder="AI Co-Pilot: Describe what you want to write about..."
+                                className="min-w-0 w-full flex-1 bg-white border border-indigo-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300"
+                                placeholder="AI Co-Pilot: describe the article you want…"
                                 value={aiPrompt}
                                 onChange={e => setAiPrompt(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleAiGenerate()}
                             />
                             <button 
+                                type="button"
                                 onClick={handleAiGenerate}
                                 disabled={isAiGenerating || !aiPrompt}
-                                className="bg-indigo-600 text-white px-4 py-2 rounded text-xs font-bold hover:bg-indigo-700 disabled:opacity-50"
+                                className="shrink-0 bg-indigo-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 w-full sm:w-auto"
                             >
                                 {isAiGenerating ? 'Writing...' : 'Generate'}
                             </button>
                         </div>
                     </div>
 
-                    <div className="flex-1 min-h-0 border border-slate-200 rounded-lg overflow-hidden">
+                    <div className="flex-1 min-h-[260px] lg:min-h-0 border border-slate-200 rounded-lg overflow-hidden flex flex-col">
                         {/* RICH TEXT EDITOR INTEGRATION */}
                         <RichTextEditor 
                             value={editingPost.body || ''}
@@ -199,8 +200,8 @@ const CMSAdmin: React.FC = () => {
                 </div>
             </div>
 
-            {/* Right: Settings */}
-            <div className="space-y-4 overflow-y-auto">
+            {/* Right: Settings — internal scroll on wide screens if tall; mobile uses page scroll */}
+            <div className="space-y-4 min-w-0 w-full lg:max-h-[min(44rem,calc(100dvh-13rem))] lg:overflow-y-auto lg:pr-1">
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
                     <h3 className="font-bold text-slate-800 border-b border-slate-100 pb-2">Publishing</h3>
                     
@@ -281,10 +282,11 @@ const CMSAdmin: React.FC = () => {
                             {['ARTICLE', 'ADVERTISEMENT', 'NEWS'].map(t => (
                                 <button 
                                     key={t}
+                                    type="button"
                                     onClick={() => setEditingPost({...editingPost, type: t as ContentType})}
-                                    className={`flex-1 py-1 text-[10px] font-bold rounded border ${editingPost.type === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}
+                                    className={`flex-1 py-2 px-1 text-xs font-bold rounded-lg border ${editingPost.type === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}
                                 >
-                                    {t.substring(0,3)}
+                                    {t === 'ADVERTISEMENT' ? 'Ad' : t === 'ARTICLE' ? 'Article' : 'News'}
                                 </button>
                             ))}
                         </div>
@@ -364,28 +366,29 @@ const CMSAdmin: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in relative">
-            <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <LayoutTemplate className="mr-3 text-blue-600" /> Content Intelligence
+        <div className="page-container flex flex-col animate-fade-in relative min-w-0 pb-8">
+            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end mb-5 sm:mb-6 gap-4 min-w-0">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
+                        <LayoutTemplate className="shrink-0 text-blue-600" size={28} /> 
+                        <span className="leading-tight">Content Intelligence</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Manage public portal, ads, and track content ROI.</p>
+                    <p className="text-slate-500 mt-1.5 text-sm sm:text-base">Manage public portal, ads, and track content ROI.</p>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setActiveTab('LIST')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center ${activeTab === 'LIST' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>
-                        <LayoutTemplate size={16} className="mr-2"/> All Content
+                <div className="flex flex-wrap gap-2 bg-slate-100 p-1 rounded-xl w-full lg:w-auto">
+                    <button type="button" onClick={() => setActiveTab('LIST')} className={`flex-1 min-w-[100px] sm:flex-none px-3 sm:px-4 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'LIST' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>
+                        <LayoutTemplate size={16} className="shrink-0"/> All Content
                     </button>
-                    <button onClick={() => setActiveTab('EDITOR')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center ${activeTab === 'EDITOR' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>
-                        <PenTool size={16} className="mr-2"/> Editor
+                    <button type="button" onClick={() => setActiveTab('EDITOR')} className={`flex-1 min-w-[100px] sm:flex-none px-3 sm:px-4 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'EDITOR' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>
+                        <PenTool size={16} className="shrink-0"/> Editor
                     </button>
-                    <button onClick={() => setActiveTab('STATS')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center ${activeTab === 'STATS' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>
-                        <BarChart3 size={16} className="mr-2"/> Analytics
+                    <button type="button" onClick={() => setActiveTab('STATS')} className={`flex-1 min-w-[100px] sm:flex-none px-3 sm:px-4 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'STATS' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>
+                        <BarChart3 size={16} className="shrink-0"/> Analytics
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-hidden">
+            <div className="min-w-0 w-full">
                 {activeTab === 'LIST' && renderList()}
                 {activeTab === 'EDITOR' && renderEditor()}
                 {activeTab === 'STATS' && renderStats()}

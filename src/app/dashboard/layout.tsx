@@ -9,6 +9,10 @@ export default function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
-  return <div className="min-h-screen bg-slate-50">{children}</div>;
+  return (
+    <div className="min-h-screen w-full min-w-0 max-w-full overflow-x-clip bg-slate-50">
+      {children}
+    </div>
+  );
 }
 

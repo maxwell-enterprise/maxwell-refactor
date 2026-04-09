@@ -24,7 +24,11 @@ export const CartService = {
             status: 'ACTIVE'
         };
 
-        await RepositoryFactory.getCartRepository().syncCart(entry);
+        try {
+            await RepositoryFactory.getCartRepository().syncCart(entry);
+        } catch {
+            /* Cart sync is best-effort; DB/network outages must not break the storefront UI. */
+        }
     },
 
     getCarts: async (): Promise<ActiveCart[]> => {

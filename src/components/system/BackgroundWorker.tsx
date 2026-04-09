@@ -44,7 +44,8 @@ const BackgroundWorker: React.FC = () => {
                     isProcessingRef.current = false;
                 }
             } catch (error) {
-                console.error('[WORKER] Error processing queue', error);
+                // Unexpected only — queue fetch/lock failures are handled in AutomationQueueService
+                console.warn('[WORKER] Queue tick failed', error);
                 isProcessingRef.current = false;
             }
         };

@@ -285,45 +285,51 @@ const TagManagement: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <Tag className="mr-3 text-indigo-600" /> Credit Tag Master
-                    </h1>
-                    <p className="text-slate-500 mt-1">Manage access tokens, validity, and holders.</p>
+        <div className="page-container flex min-h-0 flex-col animate-fade-in pb-8 min-w-0">
+            <div className="mb-5 flex flex-col gap-4 lg:mb-6 lg:flex-row lg:items-start lg:justify-between min-w-0">
+                <div className="flex min-w-0 gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                        <Tag className="h-6 w-6" strokeWidth={2} />
+                    </span>
+                    <div className="min-w-0">
+                        <h1 className="text-xl font-bold leading-snug text-slate-900 sm:text-2xl">Credit Tag Master</h1>
+                        <p className="mt-1 text-sm text-slate-500 sm:text-base">Manage access tokens, validity, and holders.</p>
+                    </div>
                 </div>
                 
-                {/* TAB SWITCHER */}
-                <div className="flex bg-slate-100 p-1 rounded-lg">
+                <div className="w-full max-w-full shrink-0 overflow-x-scroll-touch rounded-lg bg-slate-100 p-1 lg:w-auto">
+                    <div className="inline-flex max-w-none flex-nowrap gap-1">
                     <button 
+                        type="button"
                         onClick={() => setActiveTab('MASTER')} 
-                        className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'MASTER' ? 'bg-white shadow text-indigo-700' : 'text-slate-500'}`}
+                        className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2.5 text-center text-sm font-bold transition-all sm:min-h-[44px] sm:px-4 ${activeTab === 'MASTER' ? 'bg-white shadow text-indigo-700' : 'text-slate-500'}`}
                     >
                         Master List
                     </button>
                     <button 
+                        type="button"
                         onClick={() => setActiveTab('ASSIGNMENT')} 
-                        className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'ASSIGNMENT' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}
+                        className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2.5 text-center text-sm font-bold leading-snug transition-all sm:min-h-[44px] sm:px-4 ${activeTab === 'ASSIGNMENT' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}
                     >
-                        Tag Usage & Assignment
+                        Tag Usage &amp; Assignment
                     </button>
+                    </div>
                 </div>
             </div>
 
             {/* TAB CONTENT CONTAINER */}
-            <div className="flex-1 overflow-hidden bg-white rounded-xl border border-slate-200 shadow-sm relative">
+            <div className="relative flex min-h-[50vh] flex-1 flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm sm:min-h-[480px]">
                 
                 {/* 1. MASTER LIST TAB (Existing Functionality) */}
                 {activeTab === 'MASTER' && (
                     <div className="h-full flex flex-col">
-                        <div className="p-4 border-b border-slate-100 flex justify-end">
+                        <div className="p-4 border-b border-slate-300 flex justify-end">
                             <button onClick={handleCreate} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center hover:bg-indigo-700 shadow-sm">
                                 <Plus size={16} className="mr-2"/> New Tag
                             </button>
                         </div>
-                        <div className="flex-1 overflow-auto">
-                            <table className="w-full text-left text-sm">
+                        <div className="flex-1 overflow-auto overflow-x-scroll-touch">
+                            <table className="w-full min-w-[640px] text-left text-sm">
                                 <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0 z-10">
                                     <tr>
                                         <th className="p-4">Tag Code (ID)</th>
@@ -334,7 +340,7 @@ const TagManagement: React.FC = () => {
                                         <th className="p-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className="divide-y divide-slate-300">
                                     {loading ? (
                                         <tr><td colSpan={6} className="p-8 text-center text-slate-400">Loading tags...</td></tr>
                                     ) : tags.length === 0 ? (
@@ -377,20 +383,20 @@ const TagManagement: React.FC = () => {
 
                 {/* 2. ASSIGNMENT TAB (The Master-Detail View) */}
                 {activeTab === 'ASSIGNMENT' && (
-                    <div className="h-full flex">
+                    <div className="flex h-full min-h-0 flex-col md:flex-row">
                         {/* Left: Master Selector */}
-                        <div className="w-80 border-r border-slate-200 bg-slate-50 flex flex-col overflow-hidden">
-                            <div className="p-4 border-b border-slate-200 bg-white">
+                        <div className="flex max-h-[min(42vh,360px)] w-full shrink-0 flex-col overflow-hidden border-b border-slate-300 bg-slate-50 md:max-h-none md:w-80 md:border-b-0 md:border-r">
+                            <div className="border-b border-slate-300 bg-white p-4">
                                 <h3 className="font-bold text-xs text-slate-500 uppercase tracking-wider">Select Tag to Manage</h3>
                             </div>
-                            <div className="flex-1 overflow-y-auto">
+                            <div className="min-h-0 flex-1 overflow-y-auto">
                                 {tags.map(tag => {
                                     const orphans = orphanCounts[tag.id] || 0;
                                     return (
                                         <button
                                             key={tag.id}
                                             onClick={() => handleTagSelect(tag)}
-                                            className={`w-full text-left p-4 border-b border-slate-100 hover:bg-blue-50 transition-colors ${selectedTagForAssignment?.id === tag.id ? 'bg-white border-l-4 border-l-blue-600 shadow-sm' : 'border-l-4 border-l-transparent'}`}
+                                            className={`w-full text-left p-4 border-b border-slate-300 hover:bg-blue-50 transition-colors ${selectedTagForAssignment?.id === tag.id ? 'bg-white border-l-4 border-l-blue-600 shadow-sm' : 'border-l-4 border-l-transparent'}`}
                                         >
                                             <div className="flex justify-between items-start">
                                                 <div className="font-bold text-sm text-slate-800">{tag.name}</div>
@@ -408,7 +414,7 @@ const TagManagement: React.FC = () => {
                         </div>
 
                         {/* Right: Detail & Assignment */}
-                        <div className="flex-1 overflow-hidden flex flex-col bg-white">
+                        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
                             {!selectedTagForAssignment ? (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-300">
                                     <Link size={48} className="mb-4 opacity-20"/>
@@ -417,7 +423,7 @@ const TagManagement: React.FC = () => {
                             ) : (
                                 <>
                                     {/* Tag Header Summary */}
-                                    <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                                    <div className="border-b border-slate-300 bg-slate-50/50 p-6">
                                         <div className="flex items-center justify-between mb-2">
                                             <h2 className="text-xl font-bold text-slate-900">{selectedTagForAssignment.name}</h2>
                                             <span className={`text-xs font-bold px-2 py-1 rounded border ${selectedTagForAssignment.type === 'UNLIMITED_ACCESS' ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
@@ -539,7 +545,7 @@ const TagManagement: React.FC = () => {
                                                         </div>
                                                     ) : (
                                                         grantedByTiers.map((item, idx) => (
-                                                            <div key={`${item.event.id}-${idx}`} className="p-4 border-b border-slate-100 last:border-0 flex justify-between items-center hover:bg-green-50/10 transition-colors">
+                                                            <div key={`${item.event.id}-${idx}`} className="p-4 border-b border-slate-300 last:border-0 flex justify-between items-center hover:bg-green-50/10 transition-colors">
                                                                 <div>
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="font-bold text-sm text-slate-800">{item.event.name}</span>
@@ -596,7 +602,7 @@ const TagManagement: React.FC = () => {
                                                             const isOrphaned = !evt.tiers?.some(t => t.grantTagIds?.includes(selectedTagForAssignment.code));
 
                                                             return (
-                                                                <div key={evt.id} className="p-4 border-b border-slate-100 last:border-0 flex justify-between items-center hover:bg-slate-50 transition-colors group">
+                                                                <div key={evt.id} className="p-4 border-b border-slate-300 last:border-0 flex justify-between items-center hover:bg-slate-50 transition-colors group">
                                                                     <div className="flex items-center gap-3">
                                                                         <div className="p-2 bg-blue-100 rounded text-blue-600"><CheckCircle2 size={16}/></div>
                                                                         <div>
@@ -704,7 +710,7 @@ const TagManagement: React.FC = () => {
             {isEditing && (
                 <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl overflow-hidden animate-scale-in">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-indigo-50">
+                        <div className="flex justify-between items-center border-b border-slate-300 bg-indigo-50 p-6">
                             <h3 className="font-bold text-indigo-900 flex items-center">
                                 <Zap className="mr-2" size={20}/> {editForm.id?.startsWith('TAG-') ? 'Edit Tag' : 'New Tag'}
                             </h3>
@@ -784,7 +790,7 @@ const TagManagement: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+                        <div className="flex justify-end gap-3 border-t border-slate-300 bg-slate-50 p-6">
                             <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg text-sm">Cancel</button>
                             <button onClick={handleSave} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-lg flex items-center text-sm">
                                 <Save size={16} className="mr-2"/> Save Tag

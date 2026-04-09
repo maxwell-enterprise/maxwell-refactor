@@ -31,6 +31,8 @@ import { PricingRule } from '../../types/pricing';
 import { UserEntitlements } from '../../types/access'; 
 import { collectEventIdsFromProducts } from '../../utils/productEventRefs';
 import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
+import { CampaignService } from '../../services/campaignService';
+import { CampaignAttributionService } from '../../services/campaignAttributionService';
 
 const PAGE_SIZE = 18;
 
@@ -90,6 +92,33 @@ const Storefront: React.FC = () => {
         const t = window.setTimeout(() => setDebouncedSearch(searchTerm), 350);
         return () => window.clearTimeout(t);
     }, [searchTerm]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const querySource = params.get('source');
+        const queryDiscount = params.get('discount');
+
+        if (queryDiscount) {
+            setAutoAppliedDiscount(queryDiscount.trim().toUpperCase());
+        }
+
+        const sourceFromStorage = CampaignAttributionService.getSource();
+        if (!querySource) {
+            setAttributionSource(sourceFromStorage);
+            return;
+        }
+
+        const normalizedSource = CampaignAttributionService.saveSource(querySource);
+        setAttributionSource(normalizedSource || sourceFromStorage);
+
+        if (!normalizedSource || !CampaignAttributionService.shouldTrackClick(normalizedSource)) {
+            return;
+        }
+
+        CampaignService.trackClick(normalizedSource).catch((error) => {
+            console.warn('[Campaign] Failed to track click:', error);
+        });
+    }, []);
 
     const buildListQuery = useCallback(
         (pageNum: number) => ({
@@ -424,32 +453,34 @@ const Storefront: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-            <div className="p-4 bg-white border-b border-slate-200 flex flex-col md:flex-row gap-4 justify-between items-center sticky top-0 z-10">
-                <div className="relative w-full md:w-96">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input type="text" placeholder="Search products..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        <div className="flex min-h-[min(70vh,560px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 min-w-0 sm:min-h-0 sm:h-full">
+            <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-slate-200 bg-white p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:p-4 min-w-0">
+                <div className="relative min-w-0 w-full sm:max-w-md sm:flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" aria-hidden />
+                    <input type="search" placeholder="Search products…" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} aria-label="Search products" />
                 </div>
                 
-                <div className="flex gap-2 w-full md:w-auto overflow-x-auto items-center">
-                    {categories.map(cat => (
-                        <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{cat}</button>
-                    ))}
-                    
+                <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:max-w-[55%] md:max-w-none">
+                    <div className="min-w-0 flex-1 overflow-x-scroll-touch rounded-full bg-slate-100/80 py-1 pl-1 pr-0.5">
+                        <div className="inline-flex flex-nowrap gap-1.5">
+                            {categories.map(cat => (
+                                <button key={cat} type="button" onClick={() => setSelectedCategory(cat)} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200/80 hover:bg-slate-50'}`}>{cat}</button>
+                            ))}
+                        </div>
+                    </div>
                     {canManageStore && (
-                        <button onClick={handleCreateProduct} className="ml-2 flex items-center px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-bold shadow-md hover:bg-blue-700 whitespace-nowrap">
-                            <Plus size={16} className="mr-1" /> Add Product
+                        <button type="button" onClick={handleCreateProduct} className="touch-target flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-md hover:bg-blue-700 sm:px-4 sm:text-sm" aria-label="Add product">
+                            <Plus size={16} className="shrink-0" aria-hidden /><span className="hidden sm:inline">Add product</span>
                         </button>
                     )}
+                    <button type="button" onClick={() => cart.length > 0 ? setIsPaymentModalOpen(true) : showToast('Cart empty', 'info')} className="touch-target relative shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-700 shadow-sm hover:bg-slate-50" aria-label={`Cart, ${cartCount} items`}>
+                        <ShoppingCart size={20} />
+                        {cartCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">{cartCount}</span>}
+                    </button>
                 </div>
-
-                <button onClick={() => cart.length > 0 ? setIsPaymentModalOpen(true) : showToast('Cart empty', 'info')} className="relative p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 ml-2 shadow-sm">
-                    <ShoppingCart size={20} />
-                    {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center animate-bounce">{cartCount}</span>}
-                </button>
             </div>
 
-            <div className="flex-1 overflow-auto p-6" ref={scrollRootRef}>
+            <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6" ref={scrollRootRef}>
                 {listLoading ? (
                     <div className="flex min-h-[160px] items-center justify-center py-16">
                         <p className="text-center text-sm text-slate-400">Loading products…</p>
@@ -490,25 +521,31 @@ const Storefront: React.FC = () => {
                                 onClick={() => setViewingProduct(product)}
                             >
                                 {canManageStore && (
-                                    <div className="absolute top-2 left-2 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="absolute top-2 left-2 z-20 flex gap-1.5 rounded-lg border border-slate-200/80 bg-white/95 p-1 shadow-sm backdrop-blur-sm sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                                          <button 
+                                            type="button"
                                             onClick={(e) => { e.stopPropagation(); handleEditProduct(product); }}
-                                            className="bg-white/90 backdrop-blur p-1.5 rounded-lg text-blue-600 shadow-sm border border-slate-200 hover:bg-blue-50"
+                                            className="touch-target flex items-center justify-center rounded-md p-1.5 text-blue-600 hover:bg-blue-50 sm:p-1.5"
                                             title="Edit"
+                                            aria-label="Edit product"
                                         >
                                             <Pencil size={14} />
                                         </button>
                                         <button 
+                                            type="button"
                                             onClick={(e) => { e.stopPropagation(); handleToggleActive(product); }}
-                                            className={`bg-white/90 backdrop-blur p-1.5 rounded-lg shadow-sm border border-slate-200 ${isActive ? 'text-green-600 hover:bg-green-50' : 'text-slate-400 hover:bg-slate-50'}`}
+                                            className={`touch-target flex items-center justify-center rounded-md p-1.5 sm:p-1.5 ${isActive ? 'text-green-600 hover:bg-green-50' : 'text-slate-400 hover:bg-slate-50'}`}
                                             title={isActive ? "Deactivate" : "Activate"}
+                                            aria-label={isActive ? 'Deactivate product' : 'Activate product'}
                                         >
                                             {isActive ? <ToggleRight size={14}/> : <ToggleLeft size={14}/>}
                                         </button>
                                         <button 
+                                            type="button"
                                             onClick={(e) => { e.stopPropagation(); handleDeleteProduct(product.id); }}
-                                            className="bg-white/90 backdrop-blur p-1.5 rounded-lg text-red-600 shadow-sm border border-slate-200 hover:bg-red-50"
+                                            className="touch-target flex items-center justify-center rounded-md p-1.5 text-red-600 hover:bg-red-50 sm:p-1.5"
                                             title="Delete"
+                                            aria-label="Delete product"
                                         >
                                             <Trash2 size={14} />
                                         </button>
@@ -584,31 +621,34 @@ const Storefront: React.FC = () => {
 
                                     <p className="text-slate-500 text-sm mb-6 line-clamp-2 flex-1">{product.description}</p>
                                     
-                                    <div className="mt-auto pt-6 border-t border-slate-100 flex items-center justify-between">
-                                        <div>
-                                            <div className="flex items-baseline gap-2">
-                                                <div className={`text-lg font-bold ${expired ? 'text-slate-400' : 'text-slate-900'}`}>{formatIDR(price)}</div>
+                                    <div className="mt-auto flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between sm:pt-6">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-baseline gap-2">
+                                                <div className={`text-lg font-bold tabular-nums ${expired ? 'text-slate-400' : 'text-slate-900'}`}>{formatIDR(price)}</div>
                                                 {displayComparePrice && <div className="text-xs text-slate-400 line-through">{formatIDR(displayComparePrice)}</div>}
                                             </div>
                                         </div>
                                         {expired ? (
                                             <button 
+                                                type="button"
                                                 disabled
-                                                className="px-4 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed"
+                                                className="w-full shrink-0 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed sm:w-auto"
                                             >
                                                 Expired
                                             </button>
                                         ) : !isActive ? (
                                              <button 
+                                                type="button"
                                                 disabled
-                                                className="px-4 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed"
+                                                className="w-full shrink-0 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed sm:w-auto"
                                             >
                                                 Inactive
                                             </button>
                                         ) : (
                                             <button 
+                                                type="button"
                                                 onClick={(e) => { e.stopPropagation(); addToCart(product); }} 
-                                                className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 active:scale-95"
+                                                className="w-full shrink-0 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition-colors hover:bg-blue-700 active:scale-[0.98] sm:w-auto"
                                             >
                                                 Add to Cart
                                             </button>

@@ -76,6 +76,9 @@ export const PermissionService = {
 
   // --- ROLE PERSISTENCE ---
   getRoles: async (): Promise<Role[]> => {
+      if (isSystemApiMode()) {
+          return systemApi.getSecurityRoles();
+      }
       if (APP_CONFIG.USE_MOCK) {
           try {
               if (await DevDatabase.isEmpty('auth_roles')) {
@@ -92,6 +95,10 @@ export const PermissionService = {
   },
 
   saveRole: async (role: Role): Promise<void> => {
+      if (isSystemApiMode()) {
+          await systemApi.putSecurityRole(role.id, role);
+          return;
+      }
       if (APP_CONFIG.USE_MOCK) {
           await DevDatabase.add('auth_roles', role);
           return;

@@ -45,30 +45,39 @@ const QueueMonitor = () => {
     };
 
     return (
-        <div className="h-full flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 flex items-center">
-                    <RotateCw size={16} className={`mr-2 ${processing ? 'animate-spin' : ''}`}/> Background Job Queue
+        <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <h3 className="flex min-w-0 items-center text-sm font-bold text-slate-800 sm:text-base">
+                    <RotateCw size={16} className={`mr-2 shrink-0 ${processing ? 'animate-spin' : ''}`} aria-hidden />
+                    <span className="leading-snug">Background Job Queue</span>
                 </h3>
-                <div className="flex gap-2">
-                    <button onClick={loadQueue} className="text-xs text-slate-500 hover:text-slate-800 underline">Refresh</button>
-                    <button 
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2">
+                    <button
+                        type="button"
+                        onClick={loadQueue}
+                        className="min-h-[40px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-100 sm:min-h-0 sm:w-auto sm:border-0 sm:bg-transparent sm:px-2 sm:py-1 sm:text-right sm:underline"
+                    >
+                        Refresh
+                    </button>
+                    <button
+                        type="button"
                         onClick={handleProcessBatch}
                         disabled={processing || queue.length === 0}
-                        className="bg-slate-900 text-white px-3 py-1 text-xs rounded font-bold hover:bg-slate-800 disabled:opacity-50"
+                        className="min-h-[44px] w-full shrink-0 rounded-lg bg-slate-900 px-3 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-50 sm:min-h-0 sm:w-auto sm:py-2"
                     >
-                        {processing ? 'Processing...' : `Run Batch (${queue.length})`}
+                        {processing ? 'Processing…' : `Run Batch (${queue.length})`}
                     </button>
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-0">
+            <div className="min-h-0 flex-1 overflow-y-auto p-0">
                 {queue.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-sm">
-                        <CheckCircle2 size={24} className="mx-auto mb-2 text-green-300"/>
+                    <div className="p-6 text-center text-sm text-slate-400 sm:p-8">
+                        <CheckCircle2 size={24} className="mx-auto mb-2 text-green-300" aria-hidden />
                         All systems operational. Queue empty.
                     </div>
                 ) : (
-                    <table className="w-full text-left text-xs">
+                    <div className="overflow-x-scroll-touch">
+                    <table className="w-full min-w-[300px] text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                             <tr>
                                 <th className="p-3">Trigger</th>
@@ -90,6 +99,7 @@ const QueueMonitor = () => {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 )}
             </div>
         </div>
@@ -238,37 +248,53 @@ const AutomationCenter: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in relative">
+        <div className="page-container relative flex min-h-0 flex-1 flex-col animate-fade-in min-w-0 pb-8">
             
             {/* Header */}
-            <div className="flex justify-between items-end mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-                        <Activity className="mr-3 text-blue-600" /> Automation Center
+            <div className="mb-4 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-end lg:justify-between">
+                <div className="min-w-0">
+                    <h1 className="flex items-center text-xl font-bold leading-tight text-slate-900 sm:text-2xl">
+                        <Activity className="mr-2 h-7 w-7 shrink-0 text-blue-600 sm:mr-3" strokeWidth={2} aria-hidden />
+                        Automation Center
                     </h1>
-                    <p className="text-slate-500 mt-1">The Central Nervous System. Manage triggers, workflows, and reactions.</p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-500 sm:text-[15px]">
+                        The central nervous system: triggers, workflows, and reactions.
+                    </p>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setActiveTab('REGISTRY')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'REGISTRY' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Event Registry</button>
-                    <button onClick={() => setActiveTab('SIMULATOR')} className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'SIMULATOR' ? 'bg-white shadow text-purple-700' : 'text-slate-500'}`}>Dev Simulator</button>
+                <div className="max-w-full overflow-x-scroll-touch rounded-xl bg-slate-100 p-1 shadow-inner">
+                    <div className="inline-flex flex-nowrap gap-0.5">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('REGISTRY')}
+                            className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'REGISTRY' ? 'bg-white text-blue-700 shadow' : 'text-slate-500'}`}
+                        >
+                            Event Registry
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('SIMULATOR')}
+                            className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'SIMULATOR' ? 'bg-white text-purple-700 shadow' : 'text-slate-500'}`}
+                        >
+                            Dev Simulator
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex-1 flex gap-6 overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden lg:flex-row">
                 
-                {/* LEFT: MAIN CONTENT */}
-                <div className="flex-1 overflow-y-auto pr-2">
+                {/* MAIN CONTENT — below queue on mobile (order-2), left column on desktop */}
+                <div className="order-2 min-h-0 min-w-0 flex-1 overflow-y-auto lg:order-1 lg:pr-2">
                     
                     {activeTab === 'REGISTRY' && (
                         <div className="space-y-4">
                             {MASTER_EVENT_REGISTRY.map(event => {
                                 const { wa, ops, game } = getConnections(event.id);
-                                const hasConnection = wa || ops || game;
 
                                 return (
-                                    <div key={event.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="flex items-center gap-4">
+                                    <div key={event.id} className="group rounded-xl border border-slate-300 bg-white p-4 shadow-sm transition-all hover:shadow-md sm:p-5">
+                                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                                                 <div className={`p-3 rounded-xl ${
                                                     event.category === 'FINANCE' ? 'bg-emerald-50 text-emerald-600' :
                                                     event.category === 'CRM' ? 'bg-blue-50 text-blue-600' :
@@ -277,9 +303,9 @@ const AutomationCenter: React.FC = () => {
                                                 }`}>
                                                     {React.createElement(event.icon, { size: 24 })}
                                                 </div>
-                                                <div>
-                                                    <h3 className="font-bold text-lg text-slate-900">{event.label}</h3>
-                                                    <div className="flex items-center gap-2 mt-1">
+                                                <div className="min-w-0">
+                                                    <h3 className="text-base font-bold leading-snug text-slate-900 sm:text-lg">{event.label}</h3>
+                                                    <div className="mt-1 flex flex-wrap items-center gap-2">
                                                         <span className="text-xs font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{event.id}</span>
                                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{event.category}</span>
                                                     </div>
@@ -288,7 +314,7 @@ const AutomationCenter: React.FC = () => {
                                         </div>
 
                                         {/* Connection Map */}
-                                        <div className="grid grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                             {/* WA */}
                                             <div className={`p-3 rounded-lg border text-xs flex flex-col justify-between h-24 ${wa ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
                                                 <div className="flex items-center text-green-700 font-bold mb-1">
@@ -345,19 +371,21 @@ const AutomationCenter: React.FC = () => {
                             <div className="max-w-md w-full text-center text-slate-400">
                                 <Activity size={64} className="mx-auto mb-4 opacity-20"/>
                                 <h3 className="text-lg font-bold text-slate-600">Developer Mode Active</h3>
-                                <p className="text-sm">Use the panel on the right to simulate events.</p>
+                                <p className="text-sm text-slate-500">
+                                    Use the simulator panel below (desktop: right) to fire test events.
+                                </p>
                             </div>
                         </div>
                     )}
                 </div>
 
-                {/* RIGHT: SIDEBAR (Contextual) */}
-                <div className="w-80 flex flex-col gap-6 shrink-0">
+                {/* SIDEBAR: queue / simulator — top on mobile, right column on desktop */}
+                <div className="order-1 flex w-full shrink-0 flex-col gap-6 lg:order-2 lg:w-80 lg:min-w-[18rem]">
                     
                     {activeTab === 'SIMULATOR' ? (
                         <EventSimulator />
                     ) : (
-                         <div className="h-full">
+                         <div className="min-h-[280px] lg:h-full lg:min-h-[320px]">
                             <QueueMonitor />
                         </div>
                     )}

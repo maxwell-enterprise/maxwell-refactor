@@ -1,6 +1,6 @@
 import { ActiveCart } from '../../services/cartService';
 import { ICartRepository } from '../contracts';
-import { apiRequest } from './apiClient';
+import { ApiRequestError, apiRequest } from './apiClient';
 
 export class ApiCartRepository implements ICartRepository {
   async syncCart(cart: ActiveCart): Promise<void> {
@@ -18,7 +18,7 @@ export class ApiCartRepository implements ICartRepository {
     try {
       return await apiRequest<ActiveCart>(`/carts/${encodeURIComponent(sessionId)}`);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('404')) {
+      if (error instanceof ApiRequestError && error.status === 404) {
         return null;
       }
 

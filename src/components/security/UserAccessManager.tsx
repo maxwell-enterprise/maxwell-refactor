@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { UserService } from '../../services/userService';
 import { Search, UserCog, Check, XCircle, Mail, Key, UserPlus, Loader2 } from 'lucide-react';
 import MemberLookup from '../common/MemberLookup'; // NEW IMPORT
+import { workspaceFetch } from '../../lib/workspaceApi';
 
 const UserAccessManager: React.FC = () => {
   const { showToast } = useToast();
@@ -13,6 +14,15 @@ const UserAccessManager: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
+
+  const INTERNAL_STAFF_ROLES = new Set<UserRole>([
+    UserRole.SUPER_ADMIN,
+    UserRole.FINANCE,
+    UserRole.OPERATIONS,
+    UserRole.MARKETING,
+    UserRole.SALES,
+    UserRole.GATE_KEEPER,
+  ]);
 
   // Load from Service
   useEffect(() => {
@@ -26,39 +36,101 @@ const UserAccessManager: React.FC = () => {
       setLoading(false);
   };
 
-  const handleRoleChange = async (userId: string, newRole: UserRole) => {
-    await UserService.updateUserRole(userId, newRole);
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
-    showToast(`User role updated to ${newRole}`, 'success');
+  const handleRoleChange = async (user: UserProfile, newRole: UserRole) => {
+    const email = user.email?.trim().toLowerCase();
+    if (!email) {
+      showToast('Selected user has no email address.', 'error');
+      return;
+    }
+
+    try {
+      const res = await workspaceFetch('/admin/role-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, targetRole: newRole }),
+      });
+      if (!res.ok) {
+        let msg = `Failed to update role to ${newRole}.`;
+        try {
+          const data = (await res.json()) as { message?: string | string[] };
+          if (typeof data?.message === 'string') msg = data.message;
+          else if (Array.isArray(data?.message)) msg = data.message.join(', ');
+        } catch {
+          /* ignore */
+        }
+        showToast(msg, 'error');
+        return;
+      }
+
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+      showToast(`User role updated to ${newRole}`, 'success');
+    } catch {
+      showToast('Network error while updating role.', 'error');
+    }
   };
 
   const handlePromoteMember = async (member: Member) => {
+      const email = member.email?.trim().toLowerCase();
+      if (!email) {
+          showToast('Selected member has no email address.', 'error');
+          return;
+      }
+
       // Check duplicate
-      if (users.some(u => u.email === member.email)) {
+      if (
+        users.some(
+          (u) =>
+            u.email?.trim().toLowerCase() === email &&
+            INTERNAL_STAFF_ROLES.has(u.role),
+        )
+      ) {
           showToast('This member is already an internal user.', 'error');
           return;
       }
 
-      const newStaff: UserProfile = {
-          id: member.id, 
-          email: member.email || `user.${member.id}@maxwell.com`,
-          fullName: member.name,
-          role: UserRole.GUEST,
-          avatarUrl: `https://ui-avatars.com/api/?name=${member.name.replace(' ', '+')}&background=random`,
-          provider: 'email'
-      };
-      
-      await UserService.addUser(newStaff);
-      await loadUsers(); 
-      
-      showToast(`${member.name} promoted to Staff (Guest Role)`, 'success');
-      setIsPromoteModalOpen(false);
+      try {
+          // External API mode: promote via Nest RBAC endpoint.
+          const res = await workspaceFetch('/admin/role-invites', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, targetRole: UserRole.GUEST }),
+          });
+          if (!res.ok) {
+              let msg = 'Failed to promote member.';
+              try {
+                  const data = (await res.json()) as { message?: string | string[] };
+                  if (typeof data?.message === 'string') msg = data.message;
+                  else if (Array.isArray(data?.message)) msg = data.message.join(', ');
+              } catch {
+                  /* ignore */
+              }
+              showToast(msg, 'error');
+              return;
+          }
+
+          await loadUsers();
+          showToast(`${member.name} promoted to Staff (Guest role).`, 'success');
+          setIsPromoteModalOpen(false);
+      } catch {
+          showToast('Network error while promoting member.', 'error');
+      }
   };
 
-  const filteredUsers = users.filter(u => 
-    u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = users.filter((u) => {
+    if (!INTERNAL_STAFF_ROLES.has(u.role)) return false;
+    const q = searchTerm.toLowerCase();
+    return (
+      u.fullName.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q)
+    );
+  });
+
+  const handleRevokeAccess = async (user: UserProfile) => {
+    if (user.role === UserRole.MEMBER) return;
+    const ok = window.confirm(`Revoke staff access for ${user.fullName}? This user will be changed to MEMBER and removed from Internal Staff list.`);
+    if (!ok) return;
+    await handleRoleChange(user, UserRole.MEMBER);
+  };
 
   const getRoleColor = (role: UserRole) => {
       switch(role) {
@@ -132,7 +204,7 @@ const UserAccessManager: React.FC = () => {
                                     <select 
                                         className={`text-xs font-bold py-1.5 pl-2 pr-8 rounded-lg border appearance-none cursor-pointer outline-none focus:ring-2 focus:ring-blue-500/20 transition-all ${getRoleColor(user.role)}`}
                                         value={user.role}
-                                        onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
+                                        onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
                                     >
                                         {Object.values(UserRole).map(role => (
                                             <option key={role} value={role} className="bg-white text-slate-700">
@@ -148,10 +220,19 @@ const UserAccessManager: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                                        <button className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg" title="Reset Password">
+                                        <button
+                                            disabled
+                                            aria-disabled="true"
+                                            className="p-2 text-slate-300 rounded-lg cursor-not-allowed"
+                                            title="Reset Password (disabled)"
+                                        >
                                             <Key size={16} />
                                         </button>
-                                        <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Revoke Access">
+                                        <button
+                                            onClick={() => handleRevokeAccess(user)}
+                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                            title="Revoke staff access (set role to MEMBER)"
+                                        >
                                             <XCircle size={16} />
                                         </button>
                                     </div>

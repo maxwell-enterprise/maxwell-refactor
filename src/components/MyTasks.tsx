@@ -6,15 +6,16 @@ import { SupportService } from '../services/supportService';
 import { OpsTask, OpsTaskStatus } from '../types/ops';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { markRbacInboxRead } from '../lib/rbacInboxClient';
 import { 
-    ClipboardList, LifeBuoy, CheckCircle2, 
+    ClipboardList, LifeBuoy, CheckCircle2, Bell,
     RefreshCw, Search, ChevronRight
 } from 'lucide-react';
 import TaskActionModal from './ops/TaskActionModal';
 import TicketResolutionModal from './support/TicketResolutionModal';
 
 const MyTasks: React.FC = () => {
-  const { userRole } = useAuth();
+  const { userRole, logout } = useAuth();
   const { showToast } = useToast();
   const [tasks, setTasks] = useState<UnifiedTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +43,16 @@ const MyTasks: React.FC = () => {
   }, [userRole]);
 
   const handleTaskClick = async (task: UnifiedTask) => {
+      const inboxId = task.metadata?.rbacInboxId;
+      if (task.source === 'SYSTEM' && inboxId) {
+          await markRbacInboxRead(inboxId);
+          showToast(
+              'Akun Anda diarahkan ke RBAC: kami mengeluarkan sesi ini supaya login berikutnya memuat role baru.',
+              'info',
+          );
+          await logout();
+          return;
+      }
       if (task.source === 'OPS' && task.metadata?.checklistId) {
           const checklist = await OpsService.getChecklistById(task.metadata.checklistId);
           if (checklist) {
@@ -81,6 +92,7 @@ const MyTasks: React.FC = () => {
       switch(source) {
           case 'OPS': return 'bg-blue-50 text-blue-600 border-blue-100';
           case 'SUPPORT': return 'bg-amber-50 text-amber-600 border-amber-100';
+          case 'SYSTEM': return 'bg-violet-50 text-violet-700 border-violet-100';
           default: return 'bg-slate-50 text-slate-600 border-slate-100';
       }
   };
@@ -131,7 +143,9 @@ const MyTasks: React.FC = () => {
                     >
                         <div className="flex justify-between items-start mb-4">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border ${getSourceStyle(task.source)}`}>
-                                {task.source === 'OPS' ? <ClipboardList size={12} className="mr-1"/> : <LifeBuoy size={12} className="mr-1"/>}
+                                {task.source === 'OPS' && <ClipboardList size={12} className="mr-1"/>}
+                                {task.source === 'SUPPORT' && <LifeBuoy size={12} className="mr-1"/>}
+                                {task.source === 'SYSTEM' && <Bell size={12} className="mr-1"/>}
                                 {task.source}
                             </span>
                             <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${task.priority === 'HIGH' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>

@@ -132,36 +132,37 @@ const DiscountManager: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-            <div className="p-4 bg-white border-b border-slate-200 flex flex-col md:flex-row gap-4 justify-between items-center">
-                <h2 className="font-bold text-slate-900 flex items-center"><Ticket className="mr-2 text-blue-600" size={20}/> Active Vouchers</h2>
+        <div className="flex min-h-[min(70vh,560px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 min-w-0 sm:min-h-0 sm:h-full">
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-white p-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:p-4">
+                <h2 className="flex shrink-0 items-center font-bold text-slate-900"><Ticket className="mr-2 shrink-0 text-blue-600" size={20}/> Active Vouchers</h2>
                 
-                <div className="flex items-center gap-2 w-full md:w-auto">
+                <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                     {can('WRITE') && (
                         <>
                             <input type="file" ref={fileInputRef} hidden onChange={handleImport} accept=".xlsx,.xls"/>
-                            <div className="flex bg-slate-100 rounded-lg p-1">
-                                <button onClick={handleDownloadTemplate} className="p-2 text-slate-500 hover:bg-white hover:shadow-sm rounded-md" title="Template"><FileSpreadsheet size={16}/></button>
-                                <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:bg-white hover:shadow-sm rounded-md" title="Import"><Upload size={16}/></button>
+                            <div className="flex rounded-lg bg-slate-100 p-1">
+                                <button type="button" onClick={handleDownloadTemplate} className="touch-target rounded-md p-2 text-slate-500 hover:bg-white hover:shadow-sm" title="Template" aria-label="Download template"><FileSpreadsheet size={16}/></button>
+                                <button type="button" onClick={() => fileInputRef.current?.click()} className="touch-target rounded-md p-2 text-slate-500 hover:bg-white hover:shadow-sm" title="Import" aria-label="Import vouchers"><Upload size={16}/></button>
                             </div>
-                            <button onClick={handleCreate} className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 shadow-sm ml-2">
-                                <Plus size={16} className="mr-2"/> New Voucher
+                            <button type="button" onClick={handleCreate} className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-purple-700 sm:w-auto">
+                                <Plus size={16} className="shrink-0"/> New Voucher
                             </button>
                         </>
                     )}
-                    <button onClick={handleExport} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg" title="Export"><Download size={18}/></button>
+                    <button type="button" onClick={handleExport} className="touch-target self-start rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:self-auto" title="Export" aria-label="Export vouchers"><Download size={18}/></button>
 
-                    <div className="relative w-64 ml-2">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <div className="relative min-w-0 w-full sm:max-w-xs sm:flex-1 lg:max-w-sm">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
                         <input 
-                            type="text" placeholder="Search codes..." className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 outline-none"
+                            type="search" placeholder="Search codes…" className="w-full rounded-lg border border-slate-200 py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                             value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                            aria-label="Search vouchers"
                         />
                     </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-auto p-4">
+            <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
                 {loading ? (
                     <div className="flex min-h-[200px] items-center justify-center text-sm text-slate-400">
                         Loading…
@@ -187,17 +188,20 @@ const DiscountManager: React.FC = () => {
                             </div>
                             
                             {can('WRITE') && (
-                                <div className="absolute top-10 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="absolute top-10 right-2 z-10 flex flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/95 p-1 shadow-sm backdrop-blur-sm sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                                     <button 
+                                        type="button"
                                         onClick={() => handleEdit(discount)}
-                                        className="p-1.5 text-slate-400 hover:text-blue-600 bg-white/80 rounded hover:bg-blue-50"
+                                        className="touch-target rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+                                        aria-label="Edit voucher"
                                     >
                                         <Edit3 size={16}/>
                                     </button>
-                                    {/* Added Delete Button using Global Dialog */}
                                     <button 
+                                        type="button"
                                         onClick={() => handleDelete(discount)}
-                                        className="p-1.5 text-slate-400 hover:text-red-600 bg-white/80 rounded hover:bg-red-50"
+                                        className="touch-target rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                        aria-label="Delete voucher"
                                     >
                                         <Trash2 size={16}/>
                                     </button>

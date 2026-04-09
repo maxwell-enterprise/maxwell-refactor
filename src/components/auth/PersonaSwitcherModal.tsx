@@ -6,7 +6,7 @@ import { UserService } from '../../services/userService';
 import { DataService } from '../../services/dataService';
 import { 
     X, Search, ShieldCheck, Users, Briefcase, Crown, 
-    Star, User, UserPlus, CheckCircle2, LogOut, RefreshCw 
+    Star, User, UserPlus, CheckCircle2, RefreshCw 
 } from 'lucide-react';
 
 interface PersonaSwitcherModalProps {
@@ -14,7 +14,7 @@ interface PersonaSwitcherModalProps {
 }
 
 const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) => {
-    const { user: currentUser, login } = useAuth();
+    const { user: currentUser } = useAuth();
     const [activeTab, setActiveTab] = useState<'INTERNAL' | 'JOURNEY'>('INTERNAL');
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -65,15 +65,6 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
         } finally {
             setLoading(false);
         }
-    };
-
-    const handleSwitch = async (targetUser: UserProfile) => {
-        // Trigger login with the specific email. 
-        // The AuthService will look up this email in the DB and return the full profile.
-        await login(targetUser.role, targetUser.email, 'email');
-        onClose();
-        // Force reload to ensure UI context updates completely
-        window.location.reload(); 
     };
 
     const getLifecycleIcon = (stage: string) => {
@@ -190,6 +181,9 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                 autoFocus
                             />
                         </div>
+                        <span className="ml-4 text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full">
+                            Read-only (active session)
+                        </span>
                         <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-900 rounded-full transition-colors ml-4">
                             <X size={20} />
                         </button>
@@ -207,10 +201,9 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                 {activeTab === 'INTERNAL' && (
                                     <div className="grid grid-cols-2 gap-3">
                                         {filteredUsers.map(user => (
-                                            <button
+                                            <div
                                                 key={user.id}
-                                                onClick={() => handleSwitch(user)}
-                                                className={`flex items-center p-3 rounded-xl border text-left transition-all hover:shadow-md group ${currentUser?.id === user.id ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-300'}`}
+                                                className={`flex items-center p-3 rounded-xl border text-left transition-all group ${currentUser?.id === user.id ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200'}`}
                                             >
                                                 <img src={user.avatarUrl} alt={user.fullName} className="w-10 h-10 rounded-full border border-slate-100 mr-3" />
                                                 <div className="flex-1 min-w-0">
@@ -223,7 +216,7 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                                         {currentUser?.id === user.id && <span className="ml-2 text-[10px] font-bold text-indigo-600 flex items-center"><CheckCircle2 size={10} className="mr-1"/> Active</span>}
                                                     </div>
                                                 </div>
-                                            </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -240,10 +233,9 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                                     </h4>
                                                     <div className="grid grid-cols-2 gap-3">
                                                         {users.map(user => (
-                                                            <button
+                                                            <div
                                                                 key={user.id}
-                                                                onClick={() => handleSwitch(user)}
-                                                                className={`flex items-center p-3 rounded-xl border text-left transition-all hover:shadow-md group ${currentUser?.id === user.id ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-300'}`}
+                                                                className={`flex items-center p-3 rounded-xl border text-left transition-all group ${currentUser?.id === user.id ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200'}`}
                                                             >
                                                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs mr-3 border-2 border-white shadow-sm
                                                                     ${stage === 'GUEST' ? 'bg-slate-400' : 
@@ -258,7 +250,7 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                                                     <p className="text-xs text-slate-500 truncate">{user.email}</p>
                                                                     {currentUser?.id === user.id && <span className="text-[10px] font-bold text-indigo-600 flex items-center mt-1"><CheckCircle2 size={10} className="mr-1"/> You are here</span>}
                                                                 </div>
-                                                            </button>
+                                                            </div>
                                                         ))}
                                                     </div>
                                                 </div>
