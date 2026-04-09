@@ -6,6 +6,9 @@ import { DataService } from '../services/dataService';
 import { DiscountService } from '../services/discountService';
 import { useToast } from '../context/ToastContext';
 import { useAccess } from '../context/SecurityContext'; 
+import { useAuth } from '../context/AuthContext';
+import { getWorkspaceToken } from '../lib/workspaceAuthToken';
+import { ApiRequestError } from '../repositories/api/apiClient';
 import { 
   Link, QrCode, Copy, BarChart3, Plus, ExternalLink, 
   Target, TrendingUp, DollarSign, MousePointer2, Pencil, Save, X, PieChart as PieIcon, Tag, CheckCircle, Upload, Download, FileSpreadsheet, Filter, Search
@@ -20,6 +23,7 @@ import { ExcelHelper } from '../utils/excelHelper';
 const Marketing: React.FC = () => {
   const { can: canManageCampaigns } = useAccess('mkt_campaigns');
   const { showToast } = useToast();
+  const { isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'create' | 'analytics'>('create');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -33,6 +37,7 @@ const Marketing: React.FC = () => {
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [hasShownAuthWarning, setHasShownAuthWarning] = useState(false);
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,9 +51,10 @@ const Marketing: React.FC = () => {
 
   useEffect(() => {
       loadCampaignContext();
-  }, []);
+  }, [isAuthenticated, isLoading]);
 
   useEffect(() => {
+      if (!isAuthenticated || !getWorkspaceToken()) return;
       const interval = window.setInterval(async () => {
           try {
               const campaignData = await CampaignService.getCampaigns();
@@ -58,9 +64,42 @@ const Marketing: React.FC = () => {
           }
       }, 8000);
       return () => window.clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
+
+  const toReadableError = (error: unknown): string => {
+      if (error instanceof ApiRequestError && error.status === 401) {
+          return 'Sesi login tidak valid. Silakan login ulang.';
+      }
+      if (error instanceof Error) {
+          const raw = error.message?.trim();
+          if (raw.startsWith('{') && raw.endsWith('}')) {
+              try {
+                  const parsed = JSON.parse(raw) as { message?: string | string[] };
+                  if (Array.isArray(parsed.message)) return parsed.message.join('; ');
+                  if (typeof parsed.message === 'string' && parsed.message.trim()) return parsed.message.trim();
+              } catch {
+                  // noop
+              }
+          }
+          return raw || 'Failed to load campaign data';
+      }
+      return 'Failed to load campaign data';
+  };
 
   const loadCampaignContext = async () => {
+      if (isLoading) return;
+      const token = getWorkspaceToken();
+      if (!isAuthenticated || !token) {
+          setCampaigns([]);
+          setProducts([]);
+          setDiscounts([]);
+          if (!hasShownAuthWarning) {
+              showToast('Sesi login belum siap. Silakan login ulang.', 'error');
+              setHasShownAuthWarning(true);
+          }
+          return;
+      }
+
       setLoading(true);
       try {
           const [campaignData, productData, discountData] = await Promise.all([
@@ -71,8 +110,9 @@ const Marketing: React.FC = () => {
           setCampaigns(campaignData);
           setProducts(productData);
           setDiscounts(discountData);
+          if (hasShownAuthWarning) setHasShownAuthWarning(false);
       } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to load campaign data';
+          const message = toReadableError(error);
           showToast(message, 'error');
       } finally {
           setLoading(false);
