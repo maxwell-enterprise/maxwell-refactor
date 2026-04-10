@@ -20,13 +20,45 @@ function toFeatureSlug(view: ViewState): string {
 
 function fromFeatureSlug(slug: string): ViewState | null {
   const normalized = slug.trim().toUpperCase().replace(/-/g, '_');
+  if (normalized === 'STORE') {
+    return ViewState.STORE_CATALOG;
+  }
   const values = Object.values(ViewState) as string[];
   return values.includes(normalized) ? (normalized as ViewState) : null;
 }
 
+/** Sync with `?view=` on first paint so campaign `/dashboard?view=store&product=…` does not flash the wrong tab. */
+function readInitialViewFromUrlOrStorage(): ViewState {
+  if (typeof window === 'undefined') return ViewState.DASHBOARD;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view');
+    if (viewParam) {
+      const parsed = fromFeatureSlug(viewParam);
+      if (parsed) return parsed;
+    }
+    const raw = sessionStorage.getItem(VIEW_STORAGE_KEY);
+    if (raw && (Object.values(ViewState) as string[]).includes(raw)) {
+      return raw as ViewState;
+    }
+  } catch {
+    /* ignore */
+  }
+  return ViewState.DASHBOARD;
+}
+
+const CAMPAIGN_QUERY_KEYS = [
+  'product',
+  'productId',
+  'discount',
+  'source',
+  'checkout',
+  'autocheckout',
+] as const;
+
 const App: React.FC = () => {
   const { user, userRole, isAuthenticated, isLoading, login } = useAuth();
-  const [currentView, setCurrentViewState] = useState<ViewState>(ViewState.DASHBOARD);
+  const [currentView, setCurrentViewState] = useState<ViewState>(readInitialViewFromUrlOrStorage);
   const [redirectingGuestFromDashboard, setRedirectingGuestFromDashboard] =
     useState(false);
 
@@ -52,18 +84,18 @@ const App: React.FC = () => {
     });
   }, []);
 
+  /** URL `?view=` wins over sessionStorage so bookmarks/deep links are correct; otherwise restore last screen. */
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const viewParam = params.get('view');
-    if (!viewParam) return;
-    const parsed = fromFeatureSlug(viewParam);
-    if (parsed) {
-      setCurrentViewState(parsed);
+    if (viewParam) {
+      const parsed = fromFeatureSlug(viewParam);
+      if (parsed) {
+        setCurrentViewState(parsed);
+      }
+      return;
     }
-  }, []);
-
-  useEffect(() => {
     try {
       const raw = sessionStorage.getItem(VIEW_STORAGE_KEY);
       if (raw && (Object.values(ViewState) as string[]).includes(raw)) {
@@ -94,12 +126,27 @@ const App: React.FC = () => {
     if (!window.location.pathname.startsWith('/dashboard')) return;
 
     const url = new URL(window.location.href);
+    const prev = new URLSearchParams(window.location.search);
+
     url.searchParams.set('view', toFeatureSlug(currentView));
     if (user?.fullName?.trim()) {
       url.searchParams.set('user', user.fullName.trim());
     } else {
       url.searchParams.delete('user');
     }
+
+    // Keep Storefront deep links (campaign checkout) — previously this effect dropped `product` / `discount` / `checkout`.
+    if (currentView === ViewState.STORE_CATALOG) {
+      for (const key of CAMPAIGN_QUERY_KEYS) {
+        const v = prev.get(key);
+        if (v != null && v !== '') url.searchParams.set(key, v);
+      }
+    } else {
+      for (const key of CAMPAIGN_QUERY_KEYS) {
+        url.searchParams.delete(key);
+      }
+    }
+
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
   }, [isAuthenticated, currentView, user?.fullName]);
 

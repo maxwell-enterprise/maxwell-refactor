@@ -3,7 +3,11 @@ import { Member, Event, Transaction, Product } from '../types/index';
 import { PaymentService } from './paymentService';
 import { RepositoryFactory } from './repositories/index';
 import { DataUtils } from '../utils/dataUtils';
-import { TransactionQueryParams, ProductListQuery } from './repositories/types';
+import {
+  TransactionQueryParams,
+  ProductListQuery,
+  ProductUpsertOptions,
+} from './repositories/types';
 
 /**
  * INTELLIGENT DATA SERVICE
@@ -41,8 +45,18 @@ export const DataService = {
       return await RepositoryFactory.getProductRepository().listProducts(query);
   },
 
-  upsertProduct: async (product: Product): Promise<void> => {
-      return await RepositoryFactory.getProductRepository().upsert(product);
+  getProductById: async (id: string): Promise<Product | null> => {
+      return await RepositoryFactory.getProductRepository().getById(id);
+  },
+
+  upsertProduct: async (
+      product: Product,
+      options?: ProductUpsertOptions,
+  ): Promise<Product> => {
+      return await RepositoryFactory.getProductRepository().upsert(
+          product,
+          options,
+      );
   },
 
   deleteProduct: async (id: string): Promise<void> => {

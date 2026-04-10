@@ -7,6 +7,7 @@ export class ApiCartRepository implements ICartRepository {
     await apiRequest<void>('/carts/sync', {
       method: 'POST',
       body: JSON.stringify(cart),
+      skipBackendFailureTracking: true,
     });
   }
 

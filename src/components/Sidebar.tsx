@@ -31,13 +31,10 @@ const WORKSPACE_ROLES = [
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, toggleSidebar, userRole, isPersonalZone, onToggleZone }) => {
-  const { user, logout } = useAuth();
-  
-  const isStaffIdentity = 
-    user?.email?.includes('maxwell.com') || 
-    user?.email?.includes('admin') || 
-    user?.email?.includes('corp') ||
-    WORKSPACE_ROLES.includes(userRole);
+  const { logout } = useAuth();
+
+  /** Promoted / internal staff: any role except Member sees Workspace ↔ My Zone. Pure members only see the user sidebar. */
+  const showWorkspaceMyZoneToggle = userRole !== UserRole.MEMBER;
 
   const handleSwitchContext = (targetZone: 'WORKSPACE' | 'MY_ZONE') => {
       onToggleZone(targetZone === 'MY_ZONE');
@@ -93,7 +90,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
   ];
 
   const hasAccess = (allowedRoles: UserRole[]) => {
-    return allowedRoles.includes(userRole) || userRole === UserRole.SUPER_ADMIN;
+    if (userRole === UserRole.SUPER_ADMIN) return true;
+    if (allowedRoles.includes(userRole)) return true;
+    // Entry staff promoted as Guest: same workspace nav slice as Sales where Sales is allowed.
+    if (userRole === UserRole.GUEST && allowedRoles.includes(UserRole.SALES)) return true;
+    return false;
   };
 
   const isMemberMode = isPersonalZone || userRole === UserRole.MEMBER;
@@ -131,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
                 </div>
              </div>
 
-             {isStaffIdentity && (
+             {showWorkspaceMyZoneToggle && (
                  <div className="bg-slate-800 p-1 rounded-xl flex shadow-inner border border-slate-700/50 relative overflow-hidden">
                      <div 
                         className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-slate-700 rounded-lg shadow-sm transition-all duration-300 ease-out ${isMemberMode ? 'translate-x-[calc(100%+4px)]' : 'translate-x-1'}`}

@@ -2,6 +2,14 @@ import { UserRole } from '../types/index';
 
 const ROLE_VALUES = new Set(Object.values(UserRole));
 
+function normalizeRoleKey(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
 /**
  * Comma-separated bootstrap admin emails → Super Admin (Nest DB) and mock `resolveUserFromEmail`.
  * - `APP_ADMIN_EMAILS`: server-only (preferred for production).
@@ -33,6 +41,9 @@ export function defaultAppRoleForNewUser(email: string): string {
     : UserRole.MEMBER;
 }
 
+/**
+ * Maps API/DB `appRole` strings to `UserRole`. Tolerates casing, underscores, spaces.
+ */
 export function parseAppRoleString(
   value: string | null | undefined,
 ): UserRole {
@@ -40,6 +51,21 @@ export function parseAppRoleString(
   if (ROLE_VALUES.has(v as UserRole)) {
     return v as UserRole;
   }
+
+  const key = normalizeRoleKey(v);
+  for (const canonical of Object.values(UserRole)) {
+    if (normalizeRoleKey(canonical) === key) {
+      return canonical;
+    }
+  }
+
+  if (key === 'admin' || key === 'superadmin' || key === 'super admin') {
+    return UserRole.SUPER_ADMIN;
+  }
+  if (key === 'gatekeeper' || key === 'gate keeper') {
+    return UserRole.GATE_KEEPER;
+  }
+
   return UserRole.MEMBER;
 }
 

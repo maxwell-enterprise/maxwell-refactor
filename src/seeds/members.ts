@@ -68,7 +68,7 @@ export const MEMBER_DATA_SEED: Member[] = [
       nTagStatus: "Not yet",
       platform: "Digital",
       regInUS: false,
-      lifecycleStage: 'GUEST', // Key: Lifecycle Guest
+      lifecycleStage: 'IDENTIFIED', // Ada email => minimal IDENTIFIED (bukan GUEST CRM)
       company: 'Jakarta Daily News',
       jobTitle: 'Senior Editor',
       tags: ['Media', 'Press']

@@ -7,6 +7,7 @@ import { DataService } from '../../services/dataService';
 import { useToast } from '../../context/ToastContext';
 import { workspaceApiUrl } from '../../lib/workspaceApi';
 import { setWorkspaceToken } from '../../lib/workspaceAuthToken';
+import { stashOAuthReturnSearch } from '../../lib/postAuthNavigation';
 
 /** Nest `/fe/auth/*` — identity di backend, bukan Next/Prisma. */
 const USE_WORKSPACE =
@@ -64,25 +65,30 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
         });
         if (!res.ok) {
           let msg =
-            'Tidak dapat mengirim email. Periksa RESEND_API_KEY & EMAIL_FROM di Nest (.env), lalu restart Nest.';
-          try {
-            const data = (await res.json()) as {
-              message?: string | string[];
-            };
-            if (typeof data?.message === 'string') msg = data.message;
-            else if (Array.isArray(data?.message))
-              msg = data.message.join(', ');
-          } catch {
-            /* body bukan JSON */
+            'Could not send email. Check RESEND_API_KEY and EMAIL_FROM in the API .env, then restart the server.';
+          if (res.status === 503) {
+            msg =
+              'The API could not reach the email provider (network). Fix server internet/DNS or try again later.';
+          } else {
+            try {
+              const data = (await res.json()) as {
+                message?: string | string[];
+              };
+              if (typeof data?.message === 'string') msg = data.message;
+              else if (Array.isArray(data?.message))
+                msg = data.message.join(', ');
+            } catch {
+              /* non-JSON body */
+            }
           }
           showToast(msg, 'error');
           return;
         }
         setStep('EMAIL_SENT');
-        showToast('Periksa inbox email Anda untuk tautan masuk.', 'success');
+        showToast('Check your inbox for the sign-in link.', 'success');
       } catch {
         showToast(
-          'Auth backend tidak terjangkau. Jalankan backend di :3002 dulu, lalu coba lagi.',
+          'Cannot reach the auth API. Start the Nest server (e.g. port 3002) and try again.',
           'error',
         );
       } finally {
@@ -120,7 +126,7 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
       if (now - lastGoogleHintAt.current > 4000) {
         lastGoogleHintAt.current = now;
         showToast(
-          'Untuk Google: set GOOGLE_CLIENT_ID/SECRET & FRONTEND_URL di Nest, atau pakai email + OTP (demo: 12345).',
+          'For Google: set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and FRONTEND_URL on the API, or use email + OTP (demo: 12345).',
           'info',
         );
       }
@@ -136,15 +142,16 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
       });
       if (!health.ok) {
         showToast(
-          'Auth backend belum siap. Cek server :3002, lalu coba Google login lagi.',
+          'Auth API is not ready. Start the Nest server (e.g. :3002), then try Google again.',
           'error',
         );
         return;
       }
+      stashOAuthReturnSearch(window.location.search || '');
       window.location.href = workspaceApiUrl('/auth/google');
     } catch {
       showToast(
-        'Auth backend tidak terjangkau. Jalankan backend di :3002 dulu.',
+        'Cannot reach the auth API. Start the Nest server (e.g. :3002).',
         'error',
       );
     } finally {
@@ -200,7 +207,7 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[110] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
       <div className={`bg-white w-full ${step === 'DEV_SELECT' ? 'max-w-4xl' : 'max-w-md'} rounded-3xl shadow-2xl overflow-hidden flex flex-col relative animate-scale-in transition-all duration-300`}>
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 z-10 p-2 bg-white/50 rounded-full transition-colors">
             <X size={20} />

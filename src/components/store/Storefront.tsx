@@ -13,7 +13,6 @@ import {
     ShoppingCart,
     Plus,
     Zap,
-    ChevronDown,
     Trash2,
     ToggleRight,
     ToggleLeft,
@@ -34,11 +33,13 @@ import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 import { CampaignService } from '../../services/campaignService';
 import { CampaignAttributionService } from '../../services/campaignAttributionService';
 import { UserVoucherService } from '../../services/userVoucherService';
+import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
+import { formatStorePriceIdr } from '../../utils/formatStorePrice';
 
 const PAGE_SIZE = 18;
 
 const Storefront: React.FC = () => {
-    const { user, userRole } = useAuth();
+    const { user, userRole, refreshSession } = useAuth();
     const { showToast } = useToast();
     const { can } = useAccess('ops_inventory'); 
     
@@ -62,7 +63,7 @@ const Storefront: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
-    const [categories] = useState<string[]>(['All', 'Packages', 'Certification', 'Upgrade', 'Merchandise', 'Digital']);
+    const [categories] = useState<string[]>(['All', 'Packages', 'Certification', 'Upgrade', 'Merchandise', 'Digital', 'Token']);
     
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [attributionSource, setAttributionSource] = useState<string | undefined>(undefined); 
@@ -85,6 +86,7 @@ const Storefront: React.FC = () => {
     const [listLoading, setListLoading] = useState(true);
     /** Set when pricing rules / products / entitlements fetch fails (e.g. API 500 from DB timeout). */
     const [listLoadError, setListLoadError] = useState<string | null>(null);
+    const cartHydratedRef = useRef(false);
 
     const scrollRootRef = useRef<HTMLDivElement>(null);
     const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
@@ -100,12 +102,15 @@ const Storefront: React.FC = () => {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const querySource = params.get('source');
-        const queryDiscount = params.get('discount');
         const queryProductId = params.get('productId') || params.get('product') || null;
-        const queryAutoCheckout = params.get('checkout') === '1' || params.get('autocheckout') === '1';
+        const queryDiscountTrim = params.get('discount')?.trim();
+        const queryAutoCheckout =
+            params.get('checkout') === '1' ||
+            params.get('autocheckout') === '1' ||
+            (Boolean(queryProductId) && Boolean(queryDiscountTrim));
 
-        if (queryDiscount) {
-            setAutoAppliedDiscount(queryDiscount.trim().toUpperCase());
+        if (queryDiscountTrim) {
+            setAutoAppliedDiscount(queryDiscountTrim.toUpperCase());
         }
         if (queryProductId) {
           setAutoCheckoutProductId(queryProductId.trim());
@@ -264,8 +269,7 @@ const Storefront: React.FC = () => {
           // ignore
         }
       })();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, autoAppliedDiscount]);
+    }, [user?.id, autoAppliedDiscount, autoCheckoutProductId]);
 
     useEffect(() => {
         setActiveVariantSelections((prev) => {
@@ -278,6 +282,29 @@ const Storefront: React.FC = () => {
             return next;
         });
     }, [products]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const active = await CartService.getActiveCart(user?.id);
+                if (cancelled) return;
+                if (cartHydratedRef.current) return;
+                if (active?.status !== 'ACTIVE') return;
+                if (!Array.isArray(active.items) || active.items.length === 0) return;
+
+                setCart((prev) => (prev.length > 0 ? prev : active.items));
+                cartHydratedRef.current = true;
+            } catch {
+                // Ignore restore failures; cart is still usable in-memory.
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
 
     const loadMore = useCallback(async () => {
         if (loadingMore || !hasMore) return;
@@ -306,10 +333,12 @@ const Storefront: React.FC = () => {
             setPage(nextPage);
             setHasMore(mergedLength < t);
             await mergeEventsForProducts(data);
+        } catch {
+            showToast('Could not load more products', 'error');
         } finally {
             setLoadingMore(false);
         }
-    }, [loadingMore, hasMore, buildListQuery, mergeEventsForProducts]);
+    }, [loadingMore, hasMore, buildListQuery, mergeEventsForProducts, showToast]);
 
     useEffect(() => {
         const root = scrollRootRef.current;
@@ -328,6 +357,7 @@ const Storefront: React.FC = () => {
         return () => obs.disconnect();
     }, [loadMore]);
 
+    /** Debounced: `products` refetches (pagination, save) must not spam POST /carts/sync. */
     useEffect(() => {
         const totalValue = cart.reduce((sum, item) => {
             const p = products.find((prod) => prod.id === item.productId);
@@ -341,7 +371,11 @@ const Storefront: React.FC = () => {
             return sum + price * item.quantity;
         }, 0);
 
-        CartService.syncCart(user?.id, cart, totalValue);
+        const tid = window.setTimeout(() => {
+            void CartService.syncCart(user?.id, cart, totalValue);
+        }, 450);
+
+        return () => window.clearTimeout(tid);
     }, [cart, user, products]);
 
     const isProductExpired = useCallback(
@@ -410,6 +444,16 @@ const Storefront: React.FC = () => {
     };
 
     const addToCart = (product: Product, specificVariantId?: string) => {
+        if (product.category === 'Token' && !getWorkspaceToken()) {
+            if (user) {
+                showToast('Menyambungkan sesi pembayaran…', 'info');
+                void refreshSession();
+            } else {
+                showToast('Silakan login untuk melanjutkan pembelian token.', 'info');
+                window.location.assign('/');
+            }
+            return;
+        }
         if (product.isActive === false) {
             showToast('This product is currently inactive.', 'error');
             return;
@@ -448,16 +492,21 @@ const Storefront: React.FC = () => {
         );
     };
 
-    const updateCartQuantity = (productId: string, delta: number) =>
+    const lineKey = (productId: string, variantId?: string) =>
+        `${productId}\0${variantId ?? ''}`;
+
+    const updateCartQuantity = (productId: string, variantId: string | undefined, delta: number) =>
         setCart((prev) =>
             prev.map((item) =>
-                item.productId === productId
+                lineKey(item.productId, item.variantId) === lineKey(productId, variantId)
                     ? { ...item, quantity: Math.max(1, item.quantity + delta) }
                     : item,
             ),
         );
-    const removeFromCart = (productId: string) =>
-        setCart((prev) => prev.filter((item) => item.productId !== productId));
+    const removeFromCart = (productId: string, variantId: string | undefined) =>
+        setCart((prev) =>
+            prev.filter((item) => lineKey(item.productId, item.variantId) !== lineKey(productId, variantId)),
+        );
     const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
     const refetchFirstPage = useCallback(async () => {
@@ -500,7 +549,20 @@ const Storefront: React.FC = () => {
     };
 
     const handleSaveProduct = async (product: Product) => {
-        await DataService.upsertProduct(product);
+        const saved = await DataService.upsertProduct(
+            product,
+            editingProduct ? undefined : { intent: 'create' },
+        );
+        if (saved.id !== product.id) {
+            setActiveVariantSelections((prev) => {
+                const v = prev[product.id];
+                if (v === undefined) return prev;
+                const next = { ...prev };
+                delete next[product.id];
+                next[saved.id] = v;
+                return next;
+            });
+        }
         showToast(editingProduct ? 'Product updated' : 'Product created', 'success');
         setIsProductModalOpen(false);
         await refetchFirstPage();
@@ -554,7 +616,7 @@ const Storefront: React.FC = () => {
                         }
                     />
                 ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-3">
                     {filteredProducts.map((product) => {
                         const selectedVariantId = activeVariantSelections[product.id];
                         const { price, original, appliedRules } = getProductPricing(product, selectedVariantId);
@@ -571,15 +633,15 @@ const Storefront: React.FC = () => {
                         return (
                             <div 
                                 key={product.id} 
-                                className={`bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col h-full group relative cursor-pointer ${expired || !isActive ? 'opacity-75 grayscale hover:grayscale-0' : ''}`}
+                                className={`group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-all duration-300 hover:shadow-xl ${expired || !isActive ? 'opacity-75 grayscale hover:grayscale-0' : ''}`}
                                 onClick={() => setViewingProduct(product)}
                             >
                                 {canManageStore && (
-                                    <div className="absolute top-2 left-2 z-20 flex gap-1.5 rounded-lg border border-slate-200/80 bg-white/95 p-1 shadow-sm backdrop-blur-sm sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
+                                    <div className="absolute top-2 left-2 z-20 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                                          <button 
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); handleEditProduct(product); }}
-                                            className="touch-target flex items-center justify-center rounded-md p-1.5 text-blue-600 hover:bg-blue-50 sm:p-1.5"
+                                            className="touch-target rounded-lg border border-slate-200 bg-white/90 p-1.5 text-blue-600 shadow-sm backdrop-blur hover:bg-blue-50"
                                             title="Edit"
                                             aria-label="Edit product"
                                         >
@@ -588,7 +650,7 @@ const Storefront: React.FC = () => {
                                         <button 
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); handleToggleActive(product); }}
-                                            className={`touch-target flex items-center justify-center rounded-md p-1.5 sm:p-1.5 ${isActive ? 'text-green-600 hover:bg-green-50' : 'text-slate-400 hover:bg-slate-50'}`}
+                                            className={`touch-target rounded-lg border border-slate-200 bg-white/90 p-1.5 shadow-sm backdrop-blur ${isActive ? 'text-green-600 hover:bg-green-50' : 'text-slate-400 hover:bg-slate-50'}`}
                                             title={isActive ? "Deactivate" : "Activate"}
                                             aria-label={isActive ? 'Deactivate product' : 'Activate product'}
                                         >
@@ -597,7 +659,7 @@ const Storefront: React.FC = () => {
                                         <button 
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); handleDeleteProduct(product.id); }}
-                                            className="touch-target flex items-center justify-center rounded-md p-1.5 text-red-600 hover:bg-red-50 sm:p-1.5"
+                                            className="touch-target rounded-lg border border-slate-200 bg-white/90 p-1.5 text-red-600 shadow-sm backdrop-blur hover:bg-red-50"
                                             title="Delete"
                                             aria-label="Delete product"
                                         >
@@ -617,12 +679,12 @@ const Storefront: React.FC = () => {
                                     </div>
                                 )}
 
-                                <div className="h-48 overflow-hidden relative bg-slate-100 group/image">
+                                <div className="group/image relative h-48 overflow-hidden bg-slate-100">
                                     {product.imageUrl ? (
                                         <img 
                                             src={product.imageUrl} 
                                             alt={product.title} 
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
                                             onError={(e) => {
                                                 e.currentTarget.style.display = 'none';
                                                 e.currentTarget.parentElement?.querySelector('.fallback-img')?.classList.remove('hidden');
@@ -631,11 +693,18 @@ const Storefront: React.FC = () => {
                                     ) : null}
                                     
                                     <div className={`fallback-img absolute inset-0 flex items-center justify-center bg-slate-100 text-slate-300 ${product.imageUrl ? 'hidden' : ''}`}>
-                                        <ImageIcon size={48} />
+                                        <ImageIcon size={48} strokeWidth={2} />
                                     </div>
 
-                                    <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
-                                        <div className="bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-slate-900 shadow-sm">{product.category}</div>
+                                    <div className="absolute right-4 top-4 flex flex-col items-end gap-2">
+                                        <div className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-slate-900 shadow-sm backdrop-blur">
+                                            {product.category === 'Token' ? 'TOKEN' : product.category}
+                                        </div>
+                                        {product.category === 'Token' && displayComparePrice && !expired && isActive && (
+                                            <div className="bg-emerald-600 text-white px-3 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wide">
+                                                Potongan harga
+                                            </div>
+                                        )}
                                         {discountPercent > 0 && !expired && isActive && (
                                             <div className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm flex items-center">
                                                 <Percent size={10} className="mr-1"/> Save {discountPercent}%
@@ -653,32 +722,15 @@ const Storefront: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
-                                <div className="p-6 flex-1 flex flex-col">
-                                    <h3 className="text-xl font-bold text-slate-900 mb-2 leading-tight">{product.title}</h3>
-                                    
-                                    {product.hasVariants && product.variants && (
-                                        <div className="mb-3" onClick={e => e.stopPropagation()}>
-                                            <div className="relative">
-                                                <select 
-                                                    className="w-full p-2 pl-3 bg-slate-50 border border-slate-200 rounded-lg text-sm appearance-none outline-none font-medium text-slate-700 cursor-pointer hover:border-blue-300 transition-colors"
-                                                    value={selectedVariantId || ''}
-                                                    onChange={(e) => setActiveVariantSelections({...activeVariantSelections, [product.id]: e.target.value})}
-                                                >
-                                                    {product.variants.map(v => (
-                                                        <option key={v.id} value={v.id}>{v.name}</option>
-                                                    ))}
-                                                </select>
-                                                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
-                                            </div>
-                                        </div>
-                                    )}
+                                <div className="flex flex-1 flex-col p-6">
+                                    <h3 className="mb-2 line-clamp-2 text-xl font-bold leading-tight text-slate-900">{product.title}</h3>
 
-                                    <p className="text-slate-500 text-sm mb-6 line-clamp-2 flex-1">{product.description}</p>
+                                    <p className="mb-6 line-clamp-2 flex-1 text-sm text-slate-500">{product.description}</p>
                                     
-                                    <div className="mt-auto flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between sm:pt-6">
+                                    <div className="mt-auto flex flex-row flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-6">
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-baseline gap-2">
-                                                <div className={`text-lg font-bold tabular-nums ${expired ? 'text-slate-400' : 'text-slate-900'}`}>{formatIDR(price)}</div>
+                                                <div className={`text-lg font-bold tabular-nums ${expired ? 'text-slate-400' : 'text-slate-900'}`}>{formatStorePriceIdr(price)}</div>
                                                 {displayComparePrice && <div className="text-xs text-slate-400 line-through">{formatIDR(displayComparePrice)}</div>}
                                             </div>
                                         </div>
@@ -686,7 +738,7 @@ const Storefront: React.FC = () => {
                                             <button 
                                                 type="button"
                                                 disabled
-                                                className="w-full shrink-0 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed sm:w-auto"
+                                                className="shrink-0 cursor-not-allowed rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400 sm:text-sm"
                                             >
                                                 Expired
                                             </button>
@@ -694,7 +746,7 @@ const Storefront: React.FC = () => {
                                              <button 
                                                 type="button"
                                                 disabled
-                                                className="w-full shrink-0 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed sm:w-auto"
+                                                className="shrink-0 cursor-not-allowed rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400 sm:text-sm"
                                             >
                                                 Inactive
                                             </button>
@@ -702,7 +754,7 @@ const Storefront: React.FC = () => {
                                             <button 
                                                 type="button"
                                                 onClick={(e) => { e.stopPropagation(); addToCart(product); }} 
-                                                className="w-full shrink-0 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition-colors hover:bg-blue-700 active:scale-[0.98] sm:w-auto"
+                                                className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition-colors hover:bg-blue-700 active:scale-95"
                                             >
                                                 Add to Cart
                                             </button>

@@ -57,6 +57,12 @@ export const CampaignService = {
     });
   },
 
+  deleteCampaign: async (id: string): Promise<{ ok: boolean }> => {
+    return await apiRequest<{ ok: boolean }>(`/campaigns/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+
   trackClick: async (source: string) => {
       await apiRequest<{ success: boolean }>('/campaigns/track-click', {
         method: 'POST',

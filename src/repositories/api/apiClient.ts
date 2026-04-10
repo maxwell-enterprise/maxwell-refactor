@@ -48,30 +48,45 @@ export class ApiRequestError extends Error {
   }
 }
 
+/** Same as `RequestInit` plus flags that must not be passed to `fetch`. */
+export type ApiRequestOptions = RequestInit & {
+  /**
+   * When true, HTTP failures do not increment the global “backend down → logout” counter.
+   * Use for best-effort calls (e.g. cart sync) so optional features do not evict the session.
+   */
+  skipBackendFailureTracking?: boolean;
+};
+
 export async function apiRequest<T>(
   path: string,
-  init: RequestInit = {},
+  init: ApiRequestOptions = {},
 ): Promise<T> {
+  const { skipBackendFailureTracking, ...fetchInit } = init;
   const url = buildUrl(path);
   let response: Response;
   try {
     const token = getWorkspaceToken();
     response = await fetch(url, {
-      ...init,
+      ...fetchInit,
       headers: {
         'Content-Type': 'application/json',
-        ...(init.headers ?? {}),
+        ...(fetchInit.headers ?? {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       cache: 'no-store',
     });
-    if (token && [500, 502, 503, 504].includes(response.status)) {
+    // 503 is often temporary (overload, upstream); do not clear JWT on a few 503s.
+    if (
+      !skipBackendFailureTracking &&
+      token &&
+      [500, 502, 504].includes(response.status)
+    ) {
       registerBackendFailureAndMaybeLogout();
     } else {
       markBackendHealthy();
     }
   } catch (err) {
-    if (getWorkspaceToken()) {
+    if (!skipBackendFailureTracking && getWorkspaceToken()) {
       registerBackendFailureAndMaybeLogout();
     }
     const base = APP_CONFIG.API_BASE_URL;

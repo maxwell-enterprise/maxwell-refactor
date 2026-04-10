@@ -1,10 +1,11 @@
+"use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import CommandPalette from '../components/common/CommandPalette'; 
 import { ViewState, UserRole } from '../types/index';
 import { Menu, Search, UserCircle, ChevronDown, CheckCircle, RefreshCw } from 'lucide-react';
-import { BellIcon } from '@/components/ui/bell';
+import { BellIcon } from '../components/ui/bell';
 import { useAuth } from '../context/AuthContext';
 import { TaskService, UnifiedTask } from '../services/taskService';
 import PersonaSwitcherModal from '../components/auth/PersonaSwitcherModal'; // NEW IMPORT
@@ -33,7 +34,21 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   // Notification State
   const [showNotifications, setShowNotifications] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<UnifiedTask[]>([]);
+  /** Digest of tasks last marked "seen" in the bell; new/changed tasks bring the badge back. */
+  const [notificationsSeenDigest, setNotificationsSeenDigest] = useState<string | null>(null);
   const [isHeaderAvatarBroken, setIsHeaderAvatarBroken] = useState(false);
+
+  const tasksDigest = useMemo(
+    () => pendingTasks.map((t) => t.id).sort().join('|'),
+    [pendingTasks],
+  );
+
+  const hasUnreadNotifications =
+    pendingTasks.length > 0 && notificationsSeenDigest !== tasksDigest;
+
+  const markNotificationsAsSeen = useCallback(() => {
+    setNotificationsSeenDigest(tasksDigest);
+  }, [tasksDigest]);
 
   // Hotkey Listener for Cmd+K / Ctrl+K
   useEffect(() => {
@@ -59,6 +74,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   const highPriorityCount = pendingTasks.filter(t => t.priority === 'HIGH').length;
 
   const handleNotificationItemClick = async (task: UnifiedTask) => {
+    markNotificationsAsSeen();
     const inboxId = task.metadata?.rbacInboxId;
     if (task.source === 'SYSTEM' && inboxId) {
       setShowNotifications(false);
@@ -220,12 +236,32 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                     {/* Notification Bell */}
                     <div className="relative">
                         <button 
-                            onClick={() => setShowNotifications(!showNotifications)}
-                            className={`relative p-2.5 rounded-full transition-all duration-200 ${showNotifications ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}`}
+                            type="button"
+                            aria-label={hasUnreadNotifications ? 'Notifications, unread' : 'Notifications'}
+                            onClick={() => {
+                              setShowNotifications((open) => !open);
+                              markNotificationsAsSeen();
+                            }}
+                            className={`relative p-2.5 rounded-full transition-all duration-200 ${
+                              showNotifications
+                                ? 'bg-blue-50 text-blue-600'
+                                : hasUnreadNotifications
+                                  ? 'bg-blue-50/90 text-blue-600 shadow-sm ring-1 ring-blue-100'
+                                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                            }`}
                         >
-                            <BellIcon size={20} />
-                            {pendingTasks.length > 0 && (
-                                <span className={`absolute top-2 right-2.5 h-2 w-2 rounded-full ring-2 ring-white ${highPriorityCount > 0 ? 'bg-red-500' : 'bg-blue-500'}`}></span>
+                            <BellIcon
+                              size={20}
+                              className="shrink-0"
+                              aria-hidden
+                              alertLoop={hasUnreadNotifications}
+                            />
+                            {hasUnreadNotifications && (
+                                <span
+                                  className={`absolute top-2 right-2.5 h-2 w-2 rounded-full ring-2 ring-white ${
+                                    highPriorityCount > 0 ? 'bg-red-500' : 'bg-blue-500'
+                                  }`}
+                                />
                             )}
                         </button>
 
@@ -262,7 +298,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                                 </div>
                                 <div className="p-2 border-t border-slate-100 bg-slate-50">
                                     <button 
-                                        onClick={() => { onNavigate(ViewState.MY_TASKS); setShowNotifications(false); }}
+                                        type="button"
+                                        onClick={() => {
+                                          markNotificationsAsSeen();
+                                          onNavigate(ViewState.MY_TASKS);
+                                          setShowNotifications(false);
+                                        }}
                                         className="w-full py-2 text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                                     >
                                         View Action Center

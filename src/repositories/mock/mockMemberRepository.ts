@@ -4,6 +4,7 @@ import { Member } from '../../types/index';
 import { DevDatabase } from '../../utils/devDatabase';
 import { MEMBER_DATA } from '../../constants';
 import { DataUtils } from '../../utils/dataUtils';
+import { normalizeLifecycleStageForStoredEmail } from '../../lib/memberLifecycleViews';
 
 export class MockMemberRepository implements IMemberRepository {
     async getAll(): Promise<Member[]> {
@@ -29,6 +30,10 @@ export class MockMemberRepository implements IMemberRepository {
 
     async create(member: Member): Promise<void> {
         const newMember = { ...member };
+        newMember.lifecycleStage = normalizeLifecycleStageForStoredEmail(
+            newMember.lifecycleStage,
+            newMember.email,
+        );
 
         // Ensure ID is present (UUID preferred)
         if (!newMember.id) {
@@ -46,10 +51,19 @@ export class MockMemberRepository implements IMemberRepository {
     async update(id: string, data: Partial<Member>): Promise<void> {
         const member = await this.getById(id);
         if (member) {
+            const nextEmail = data.email !== undefined ? data.email : member.email;
+            const nextStage =
+                data.lifecycleStage !== undefined
+                    ? data.lifecycleStage
+                    : member.lifecycleStage;
             const updatedMember = {
                 ...member,
                 ...data,
-                updatedAt: DataUtils.nowISO()
+                lifecycleStage: normalizeLifecycleStageForStoredEmail(
+                    nextStage,
+                    nextEmail,
+                ),
+                updatedAt: DataUtils.nowISO(),
             };
             await DevDatabase.add('members', updatedMember);
         }

@@ -62,7 +62,7 @@ export const LEAD_DATA_SEED: Member[] = [
         nTagStatus: "Not yet",
         platform: "Digital",
         regInUS: false,
-        lifecycleStage: "GUEST",
+        lifecycleStage: "IDENTIFIED",
         tags: [],
         address: {}
     },

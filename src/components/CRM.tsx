@@ -17,6 +17,7 @@ import { useToast } from '../context/ToastContext';
 import MemberFilterPanel, { FilterCriteria } from './crm/MemberFilterPanel'; 
 import InviteMembersModal from './crm/InviteMembersModal'; 
 import MemberProfilingModal from './crm/MemberProfilingModal'; // NEW
+import { isMemberDatabaseLifecycle } from '../lib/memberLifecycleViews';
 
 const CRM: React.FC = () => {
     const { can } = useAccess('crm_members');
@@ -69,6 +70,9 @@ const CRM: React.FC = () => {
     // --- REFACTORED ROBUST FILTER LOGIC ---
     const filteredMembers = useMemo(() => {
         return members.filter(m => {
+            // Member Database: hanya ekosistem berbayar / certified / facilitator (satu tabel, filter by lifecycle)
+            if (!isMemberDatabaseLifecycle(m.lifecycleStage)) return false;
+
             // 0. Qualified Filter
             if (showQualifiedOnly) {
                 if (!m.tags?.includes('Qualified')) return false;

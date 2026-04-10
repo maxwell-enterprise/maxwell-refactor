@@ -307,7 +307,43 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
         onSave(productToSave);
     };
 
-    const uploadProductImage = async (file: File): Promise<string> => {
+    /** Fits Nest `imageUrl` max length when Storage is unavailable (local dev). */
+    const MAX_PRODUCT_IMAGE_DATA_URL_CHARS = 190_000;
+
+    const fileToJpegDataUrlUnderCap = async (file: File): Promise<string> => {
+        const bitmap = await createImageBitmap(file);
+        let w = bitmap.width;
+        let h = bitmap.height;
+        const maxSide = 1600;
+        if (w > maxSide || h > maxSide) {
+            const r = Math.min(maxSide / w, maxSide / h);
+            w = Math.round(w * r);
+            h = Math.round(h * r);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas is not supported');
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        bitmap.close();
+        let q = 0.82;
+        for (let i = 0; i < 10; i += 1) {
+            const dataUrl = canvas.toDataURL('image/jpeg', q);
+            if (dataUrl.length <= MAX_PRODUCT_IMAGE_DATA_URL_CHARS) {
+                return dataUrl;
+            }
+            q -= 0.07;
+            if (q < 0.35) break;
+        }
+        throw new Error(
+            'Image is still too large after compression. Use a smaller file or configure Supabase Storage in server-maxwell/.env.',
+        );
+    };
+
+    const uploadProductImage = async (
+        file: File,
+    ): Promise<{ url: string; usedDevInline: boolean }> => {
         const form = new FormData();
         form.append('file', file);
 
@@ -321,16 +357,38 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
             body: form,
         });
 
-        if (!res.ok) {
-            const detail = await res.text();
-            throw new Error(`Upload gagal: ${detail || res.statusText}`);
+        if (res.ok) {
+            const payload = (await res.json()) as { url?: string };
+            if (!payload.url) {
+                throw new Error('Upload failed: image URL was not returned by the server.');
+            }
+            return { url: payload.url, usedDevInline: false };
         }
 
-        const payload = (await res.json()) as { url?: string };
-        if (!payload.url) {
-            throw new Error('Upload gagal: URL gambar tidak diterima dari backend.');
+        const raw = await res.text();
+        let detail = raw;
+        try {
+            const j = JSON.parse(raw) as { message?: string | string[] };
+            const m = j.message;
+            detail = Array.isArray(m) ? m.join(' ') : (m ?? raw);
+        } catch {
+            /* keep raw */
         }
-        return payload.url;
+
+        if (
+            res.status === 400 &&
+            typeof detail === 'string' &&
+            /supabase storage is not configured/i.test(detail)
+        ) {
+            const url = await fileToJpegDataUrlUnderCap(file);
+            return { url, usedDevInline: true };
+        }
+
+        throw new Error(
+            typeof detail === 'string' && detail.trim()
+                ? `Upload failed: ${detail}`
+                : `Upload failed (${res.status})`,
+        );
     };
 
     const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -338,23 +396,28 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
         if (!file) return;
 
         if (!file.type.startsWith('image/')) {
-            showToast('File harus berupa gambar.', 'error');
+            showToast('File must be an image.', 'error');
             return;
         }
 
         const maxBytes = 2 * 1024 * 1024; // align with bucket 2MB limit
         if (file.size > maxBytes) {
-            showToast('Ukuran gambar maksimal 2MB.', 'error');
+            showToast('Image size must be at most 2MB.', 'error');
             return;
         }
 
         setIsUploadingImage(true);
         try {
-            const publicUrl = await uploadProductImage(file);
+            const { url: publicUrl, usedDevInline } = await uploadProductImage(file);
             setFormData((prev) => ({ ...prev, imageUrl: publicUrl }));
-            showToast('Gambar berhasil diupload.', 'success');
+            showToast(
+                usedDevInline
+                    ? 'Image embedded for this session. Add Supabase keys to server-maxwell/.env for hosted URLs.'
+                    : 'Image uploaded successfully.',
+                usedDevInline ? 'info' : 'success',
+            );
         } catch (e) {
-            showToast(e instanceof Error ? e.message : 'Upload gambar gagal.', 'error');
+            showToast(e instanceof Error ? e.message : 'Image upload failed.', 'error');
         } finally {
             setIsUploadingImage(false);
             if (imageInputRef.current) imageInputRef.current.value = '';
@@ -378,53 +441,56 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     };
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-6xl h-[85vh] rounded-2xl shadow-2xl overflow-hidden animate-scale-in flex flex-col">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+            <div className="flex max-h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl animate-scale-in sm:h-[85vh] sm:max-h-[min(85vh,100dvh)] sm:rounded-2xl">
                 
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-lg text-blue-600 shadow-sm"><Box size={20}/></div>
-                        <div>
-                            <h3 className="font-bold text-slate-900">{initialData ? 'Edit Product' : 'New Product'}</h3>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Store Catalog</p>
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-6 sm:py-4">
+                    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                        <div className="shrink-0 rounded-lg bg-white p-2 text-blue-600 shadow-sm"><Box size={20}/></div>
+                        <div className="min-w-0">
+                            <h3 className="truncate text-base font-bold text-slate-900 sm:text-lg">{initialData ? 'Edit Product' : 'New Product'}</h3>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Store Catalog</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-2 rounded-full hover:bg-white/50 transition-all"><X size={20}/></button>
+                    <button type="button" onClick={onClose} className="shrink-0 rounded-full p-2 text-slate-400 transition-all hover:bg-white/50 hover:text-slate-700" aria-label="Close"><X size={20}/></button>
                 </div>
 
-                <div className="flex flex-1 overflow-hidden">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
                     
-                    {/* LEFT SIDEBAR NAVIGATION */}
-                    <div className="w-56 bg-slate-50 border-r border-slate-200 flex flex-col p-4 gap-2 shrink-0">
+                    {/* Tab nav: horizontal scroll on mobile, sidebar on lg+ */}
+                    <div className="flex shrink-0 flex-row gap-1.5 overflow-x-auto border-b border-slate-200 bg-slate-50 p-2 sm:gap-2 lg:w-56 lg:flex-col lg:gap-2 lg:overflow-x-visible lg:border-b-0 lg:border-r lg:p-4">
                         <button 
+                            type="button"
                             onClick={() => setActiveTab('MARKETING')} 
-                            className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center transition-all ${activeTab === 'MARKETING' ? 'bg-white shadow-sm text-blue-700 ring-1 ring-blue-100' : 'text-slate-500 hover:bg-slate-100'}`}
+                            className={`flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm lg:w-full lg:justify-start ${activeTab === 'MARKETING' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-blue-100' : 'text-slate-500 hover:bg-slate-100'}`}
                         >
-                            <Tag size={16} className="mr-3"/> Marketing
+                            <Tag size={16} className="shrink-0 lg:mr-1"/> <span>Marketing</span>
                         </button>
                         <button 
+                            type="button"
                             onClick={() => setActiveTab('ITEMS')} 
-                            className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center transition-all ${activeTab === 'ITEMS' ? 'bg-white shadow-sm text-blue-700 ring-1 ring-blue-100' : 'text-slate-500 hover:bg-slate-100'}`}
+                            className={`flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm lg:w-full lg:justify-start ${activeTab === 'ITEMS' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-blue-100' : 'text-slate-500 hover:bg-slate-100'}`}
                         >
-                            <Package size={16} className="mr-3"/> Items & Bundle
+                            <Package size={16} className="shrink-0 lg:mr-1"/> <span>Items &amp; Bundle</span>
                         </button>
                         {canManageRoyalties && (
                             <button 
+                                type="button"
                                 onClick={() => setActiveTab('ROYALTIES')} 
-                                className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center transition-all ${activeTab === 'ROYALTIES' ? 'bg-white shadow-sm text-blue-700 ring-1 ring-blue-100' : 'text-slate-500 hover:bg-slate-100'}`}
+                                className={`flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:text-sm lg:w-full lg:justify-start ${activeTab === 'ROYALTIES' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-blue-100' : 'text-slate-500 hover:bg-slate-100'}`}
                             >
-                                <Percent size={16} className="mr-3"/> Royalties
+                                <Percent size={16} className="shrink-0 lg:mr-1"/> <span>Royalties</span>
                             </button>
                         )}
                     </div>
 
-                    {/* RIGHT CONTENT AREA */}
-                    <div className="flex-1 overflow-y-auto bg-white p-8">
+                    {/* Main form / tab content */}
+                    <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-white p-4 sm:p-6 lg:p-8">
                     
                     {/* 1. MARKETING TAB */}
                     {activeTab === 'MARKETING' && (
-                         <div className="max-w-2xl mx-auto space-y-6">
+                         <div className="mx-auto w-full max-w-2xl min-w-0 space-y-6">
                             <form id="productForm" onSubmit={handleSubmit} className="space-y-6">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Product Title</label>
@@ -481,8 +547,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div>
+                                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                    <div className="min-w-0">
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center"><Tag size={12} className="mr-1"/> Category</label>
                                         <select 
                                             className="w-full p-3 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
@@ -494,9 +560,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                             <option value="Upgrade">Upgrade</option>
                                             <option value="Merchandise">Merchandise</option>
                                             <option value="Digital">Digital</option>
+                                            <option value="Token">Token</option>
                                         </select>
                                     </div>
-                                    <div>
+                                    <div className="min-w-0">
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center"><Image size={12} className="mr-1"/> Product Image</label>
                                         <input
                                             ref={imageInputRef}
@@ -539,8 +606,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                     />
                                 </div>
                                 
-                                <div className="flex items-center gap-3 border-t border-slate-100 pt-4">
-                                     <div className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                                <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:gap-3">
+                                     <div className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                                         <input 
                                             type="checkbox" 
                                             className="w-4 h-4 text-blue-600 rounded cursor-pointer"
@@ -549,7 +616,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                         />
                                         <span className="text-sm font-bold text-slate-700">Product Active</span>
                                      </div>
-                                     <span className="text-xs text-slate-400">If unchecked, product will be hidden from the store.</span>
+                                     <span className="text-xs leading-snug text-slate-400 sm:flex-1">If unchecked, product will be hidden from the store.</span>
                                 </div>
 
                                 <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
@@ -583,7 +650,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                     </label>
                                     
                                     {formData.installmentConfig?.enabled && (
-                                        <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                                        <div className="grid grid-cols-1 gap-4 animate-fade-in sm:grid-cols-2">
                                             <div>
                                                 <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Min DP (%)</label>
                                                 <input 
@@ -617,7 +684,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
 
                     {/* 2. ITEMS TAB (Split Layout) */}
                     {activeTab === 'ITEMS' && (
-                        <div className="flex h-full flex-col">
+                        <div className="flex min-h-0 flex-1 flex-col">
                              {/* VARIANT SELECTOR */}
                             {formData.hasVariants && (
                                 <div className="flex gap-2 overflow-x-auto mb-4 pb-2 shrink-0 border-b border-slate-100">
@@ -646,8 +713,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                             </button>
                                         )}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div className="min-w-0">
                                             <label className="block text-[10px] text-slate-400 font-bold mb-1">Variant Name</label>
                                             <input 
                                                 type="text" className="w-full p-2 border border-slate-200 rounded text-sm font-bold"
@@ -655,7 +722,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                                 onChange={e => updateVariant(activeVariantIndex, 'name', e.target.value)}
                                             />
                                         </div>
-                                        <div>
+                                        <div className="min-w-0">
                                             <label className="block text-[10px] text-slate-400 font-bold mb-1">Price (IDR)</label>
                                             <input 
                                                 type="text" inputMode="numeric"
@@ -696,10 +763,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                 </div>
                             )}
                             
-                            {/* SPLIT LAYOUT: BUILDER vs LIST */}
-                            <div className="flex flex-1 gap-6 overflow-hidden">
+                            {/* SPLIT LAYOUT: BUILDER vs LIST — stack on small screens */}
+                            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden lg:flex-row">
                                 {/* LEFT: BUILDER */}
-                                <div className="w-1/2 flex flex-col gap-4 overflow-y-auto pr-2">
+                                <div className="flex min-h-0 min-w-0 w-full flex-col gap-4 overflow-y-auto pr-0 lg:w-1/2 lg:pr-2">
                                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-3">1. Select Item Type</label>
                                         <div className="grid grid-cols-2 gap-2 mb-4">
@@ -797,7 +864,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                 </div>
 
                                 {/* RIGHT: LIST */}
-                                <div className="w-1/2 flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden">
+                                <div className="flex min-h-[220px] min-w-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white lg:min-h-0 lg:w-1/2 lg:flex-none">
                                     <div className="p-3 bg-slate-50 border-b border-slate-200">
                                         <h4 className="text-xs font-bold text-slate-600 uppercase">Current Items ({activeItemsList.length})</h4>
                                     </div>
@@ -812,8 +879,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                         {activeItemsList.map((item, idx) => {
                                             const isExpired = checkItemExpiry(item);
                                             return (
-                                                <div key={idx} className={`flex items-center justify-between p-3 rounded-lg group transition-colors shadow-sm ${isExpired ? 'bg-red-50 border border-red-200' : 'bg-white border border-slate-200 hover:border-blue-300'}`}>
-                                                    <div className="flex items-center gap-3">
+                                                <div key={idx} className={`flex flex-col gap-2 rounded-lg border p-3 shadow-sm transition-colors group sm:flex-row sm:items-center sm:justify-between ${isExpired ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
+                                                    <div className="flex min-w-0 items-center gap-3">
                                                         <div className={`p-2 rounded-lg ${isExpired ? 'bg-red-100 text-red-600' : (item.type === 'PHYSICAL' ? 'bg-slate-100 text-slate-600' : item.type === 'TICKET' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600')}`}>
                                                             {isExpired ? <AlertTriangle size={16}/> : (item.type === 'PHYSICAL' ? <Package size={16}/> : item.type === 'TICKET' ? <Ticket size={16}/> : <Zap size={16}/>)}
                                                         </div>
@@ -825,9 +892,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                                             <div className="text-[10px] text-slate-500 font-mono">{item.type} {item.meta?.targetTier ? `[${item.meta.targetTier}]` : ''}</div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-4">
+                                                    <div className="flex shrink-0 items-center justify-end gap-4 sm:justify-start">
                                                         <span className="text-sm font-bold text-slate-600">x{item.quantity}</span>
-                                                        <button onClick={() => handleRemoveItem(idx)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                                        <button type="button" onClick={() => handleRemoveItem(idx)} className="text-slate-300 transition-colors hover:text-red-500"><Trash2 size={16}/></button>
                                                     </div>
                                                 </div>
                                             );
@@ -840,7 +907,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
 
                     {/* 3. ROYALTIES TAB */}
                     {activeTab === 'ROYALTIES' && (
-                        <div className="flex-1 overflow-y-auto p-8 bg-amber-50/30">
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-amber-50/30 p-4 sm:p-8">
                             {!formData.id ? (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
                                     <Save size={48} className="mb-4 opacity-20"/>
@@ -848,13 +915,13 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                     <p className="text-sm">You must save this product before adding royalty rules.</p>
                                 </div>
                             ) : (
-                                <div className="max-w-2xl mx-auto space-y-6">
-                                    <div className="bg-white p-6 rounded-xl border border-amber-200 shadow-sm">
-                                        <h4 className="text-sm font-bold text-amber-800 uppercase mb-4 flex items-center">
+                                <div className="mx-auto max-w-2xl min-w-0 space-y-6">
+                                    <div className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm sm:p-6">
+                                        <h4 className="mb-4 flex items-center text-sm font-bold uppercase text-amber-800">
                                             <Percent size={14} className="mr-2"/> Revenue Split Rules
                                         </h4>
-                                        <div className="grid grid-cols-12 gap-3 mb-4 items-end">
-                                            <div className="col-span-5">
+                                        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end">
+                                            <div className="min-w-0 sm:col-span-5">
                                                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Beneficiary (User)</label>
                                                 <select 
                                                     className="w-full p-2 border border-slate-200 rounded text-sm bg-white"
@@ -865,7 +932,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                                     {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                                                 </select>
                                             </div>
-                                            <div className="col-span-3">
+                                            <div className="min-w-0 sm:col-span-3">
                                                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Role</label>
                                                 <select 
                                                     className="w-full p-2 border border-slate-200 rounded text-sm bg-white"
@@ -877,7 +944,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                                     <option value="REFERRER">Referrer</option>
                                                 </select>
                                             </div>
-                                            <div className="col-span-2">
+                                            <div className="min-w-0 sm:col-span-2">
                                                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Cut (%)</label>
                                                 <input 
                                                     type="number" min="1" max="100"
@@ -886,8 +953,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                                     onChange={e => setNewContract({...newContract, percentage: Number(e.target.value)})}
                                                 />
                                             </div>
-                                            <div className="col-span-2">
-                                                <button onClick={handleAddRoyalty} className="w-full p-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center justify-center font-bold text-sm shadow-sm">
+                                            <div className="sm:col-span-2">
+                                                <button type="button" onClick={handleAddRoyalty} className="flex w-full items-center justify-center rounded-lg bg-amber-600 p-2.5 text-sm font-bold text-white shadow-sm hover:bg-amber-700 sm:p-2">
                                                     Add
                                                 </button>
                                             </div>
@@ -897,7 +964,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                             {royaltyContracts.map(contract => {
                                                 const userName = users.find(u => u.id === contract.beneficiaryId)?.name || contract.beneficiaryId;
                                                 return (
-                                                    <div key={contract.id} className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                                                    <div key={contract.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
                                                         <div className="flex items-center gap-3">
                                                             <div className="p-2 bg-white rounded-full border border-slate-200"><User size={14} className="text-slate-400"/></div>
                                                             <div>
@@ -927,10 +994,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                 </div>
             </div>
 
-                <div className="px-6 py-4 border-t border-slate-100 bg-white flex justify-end gap-3 z-10">
-                    <button type="button" onClick={onClose} className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors text-sm">Cancel</button>
-                    <button onClick={handleSubmit} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg flex items-center justify-center transition-all text-sm">
-                        <Save size={18} className="mr-2"/> Save Product
+                <div className="z-10 flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:gap-3 sm:px-6 sm:py-4">
+                    <button type="button" onClick={onClose} className="rounded-xl px-5 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-100 sm:px-6">Cancel</button>
+                    <button type="button" onClick={handleSubmit} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:bg-blue-700 sm:px-8">
+                        <Save size={18} className="shrink-0"/> Save Product
                     </button>
                 </div>
             </div>

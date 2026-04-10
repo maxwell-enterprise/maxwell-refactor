@@ -33,5 +33,10 @@ export const CartService = {
 
     getCarts: async (): Promise<ActiveCart[]> => {
         return await RepositoryFactory.getCartRepository().getCarts();
-    }
+    },
+
+    getActiveCart: async (userId?: string): Promise<ActiveCart | null> => {
+        const sessionId = userId ? `sess_${userId}` : `sess_anon_guest`;
+        return RepositoryFactory.getCartRepository().getCartBySession(sessionId);
+    },
 };

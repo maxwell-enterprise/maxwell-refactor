@@ -36,10 +36,26 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
       }
 
       if (authError) {
+        const messages: Record<string, string> = {
+          invalid_or_expired_link:
+            'That sign-in link is invalid or has expired. Request a new email link.',
+          missing_email_or_token:
+            'The sign-in link was incomplete. Request a new email link.',
+          google_unreachable:
+            'The API server could not reach Google (oauth2.googleapis.com). This is not your browser — fix outbound HTTPS on the machine running Nest (VPN/firewall/DNS), or test: curl -I https://oauth2.googleapis.com. You can still sign in with the email link below.',
+          google_unauthorized:
+            'Google sign-in was rejected or misconfigured. Check GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URI on the API server.',
+          google_auth_failed: 'Google sign-in failed. Try again or use email link.',
+          google_access_denied: 'Google sign-in was cancelled.',
+          google_oauth_error: 'Google returned an error. Try again.',
+          missing_code: 'Google did not return a sign-in code. Try again.',
+          callback_timeout: 'Sign-in timed out. Close this tab and try again.',
+          backend_unreachable:
+            'The app lost contact with the server. Check that the API is running, then sign in again.',
+        };
         const message =
-          authError === 'invalid_or_expired_link'
-            ? 'Link login tidak valid atau sudah tidak berlaku. Silakan minta magic link baru.'
-            : 'Tautan login tidak lengkap. Silakan minta magic link baru.';
+          messages[authError] ??
+          'Sign-in did not complete. Try email link or Google again.';
         showToast(message, 'error');
         setShowLoginModal(true);
 

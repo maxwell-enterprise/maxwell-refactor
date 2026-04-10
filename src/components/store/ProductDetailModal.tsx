@@ -5,15 +5,36 @@ import { DataService } from '../../services/dataService';
 import { CreditTagService } from '../../services/creditTagService';
 import { X, Calendar, MapPin, Tag, Package, ShoppingCart, Info, Check, Zap, Layers, Ticket, ChevronDown, ChevronUp, Clock, AlertTriangle } from 'lucide-react';
 import { CreditTagMaster } from '../../types/access';
+import { formatStorePriceIdr } from '../../utils/formatStorePrice';
 
 interface ProductDetailModalProps {
     product: Product;
     onClose: () => void;
     onAddToCart: (product: Product, variantId?: string) => void;
     initialVariantId?: string;
+    /** When set (e.g. campaign deep link), overrides variant price for display + CTA. */
+    displayPriceOverride?: { current: number; compare?: number; voucherCode?: string };
+    /** Replace default "Add to Cart" CTA label (e.g. login gate). */
+    primaryCtaLabel?: string;
+    /** Smaller second line under primary CTA (e.g. price) — keeps the button compact. */
+    primaryCtaHint?: string;
+    /** Default true. Set false when CTA opens login overlay and the modal should stay open. */
+    closeOnAddToCart?: boolean;
+    /** Optional `source` query from campaign links — one subtle line under pricing. */
+    campaignSource?: string;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, onAddToCart, initialVariantId }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
+    product,
+    onClose,
+    onAddToCart,
+    initialVariantId,
+    displayPriceOverride,
+    primaryCtaLabel,
+    primaryCtaHint,
+    closeOnAddToCart = true,
+    campaignSource,
+}) => {
     const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'COMPONENTS'>('OVERVIEW');
     const [selectedVariantId, setSelectedVariantId] = useState<string>(initialData(product));
     const [loading, setLoading] = useState(true);
@@ -101,6 +122,17 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
         : product.items;
 
     const displayPrice = currentVariant ? currentVariant.priceIdr : product.priceIdr;
+    const shownPrice = displayPriceOverride?.current ?? displayPrice;
+    const compareForHeader =
+        displayPriceOverride != null
+            ? (displayPriceOverride.compare ?? displayPrice)
+            : product.compareAtPriceIdr;
+
+    const isTokenListing = product.category === 'Token';
+    const showTokenDiscount =
+        isTokenListing &&
+        compareForHeader != null &&
+        compareForHeader > shownPrice;
 
     const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
@@ -231,73 +263,127 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     };
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-4xl h-[85vh] md:h-auto md:max-h-[85vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden animate-scale-in">
-                
-                {/* LEFT: IMAGE & PREVIEW */}
-                <div className="w-full md:w-5/12 bg-slate-100 relative h-48 md:h-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+            <div
+                className="flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-scale-in md:h-auto md:max-h-[85vh] md:flex-row"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="product-detail-title"
+            >
+                {/* LEFT: IMAGE */}
+                <div className="relative h-48 w-full shrink-0 bg-slate-100 md:h-auto md:w-5/12">
                     {product.imageUrl ? (
                         <img
                             src={product.imageUrl}
                             alt={product.title}
-                            className={`absolute inset-0 w-full h-full object-cover ${
+                            className={`absolute inset-0 h-full w-full object-cover ${
                                 isExpired ? 'grayscale' : ''
                             }`}
                         />
                     ) : (
                         <div
-                            className={`absolute inset-0 w-full h-full object-cover bg-slate-200 ${
+                            className={`absolute inset-0 h-full w-full bg-slate-200 ${
                                 isExpired ? 'grayscale' : ''
                             }`}
                         />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-4 left-4 text-white">
-                        <span className="bg-white/20 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase mb-2 inline-block border border-white/30">
-                            {product.category}
-                        </span>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                    <div className="absolute bottom-4 left-4 flex max-w-[85%] flex-wrap gap-2 text-white">
+                        {isTokenListing ? (
+                            <>
+                                <span className="inline-block rounded border border-white/30 bg-amber-500/90 px-2 py-1 text-[10px] font-bold uppercase backdrop-blur">
+                                    Token
+                                </span>
+                                {showTokenDiscount && (
+                                    <span className="inline-block rounded border border-white/30 bg-emerald-600/90 px-2 py-1 text-[10px] font-bold uppercase backdrop-blur">
+                                        Potongan harga
+                                    </span>
+                                )}
+                            </>
+                        ) : (
+                            <span className="inline-block rounded border border-white/30 bg-white/20 px-2 py-1 text-[10px] font-bold uppercase backdrop-blur">
+                                {product.category}
+                            </span>
+                        )}
                     </div>
                     {isExpired && (
-                        <div className="absolute top-0 left-0 right-0 bg-red-600/90 text-white text-center text-xs font-bold py-2 shadow-sm">
+                        <div className="absolute left-0 right-0 top-0 bg-red-600/90 py-2 text-center text-xs font-bold text-white shadow-sm">
                             PRODUCT CONTAINS EXPIRED ITEMS
                         </div>
                     )}
-                    <button onClick={onClose} className="absolute top-4 left-4 bg-white/20 backdrop-blur p-2 rounded-full text-white hover:bg-white/40 md:hidden">
-                        <X size={20}/>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="absolute left-4 top-4 rounded-full bg-white/20 p-2 text-white backdrop-blur hover:bg-white/40 md:hidden"
+                        aria-label="Tutup"
+                    >
+                        <X size={20} />
                     </button>
                 </div>
 
                 {/* RIGHT: DETAILS */}
-                <div className="flex-1 flex flex-col h-full bg-white relative">
-                    <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 hidden md:block">
-                        <X size={24}/>
+                <div className="relative flex h-full min-h-0 flex-1 flex-col bg-white">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="absolute right-4 top-4 hidden text-slate-400 hover:text-slate-700 md:block"
+                        aria-label="Tutup"
+                    >
+                        <X size={24} />
                     </button>
 
-                    <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
-                        <h2 className="text-2xl font-bold text-slate-900 mb-2 leading-tight pr-8">{product.title}</h2>
-                        
-                        <div className="flex items-baseline gap-2 mb-6">
-                            <span className="text-xl font-bold text-blue-600">{formatIDR(displayPrice)}</span>
-                            {product.compareAtPriceIdr && (
-                                <span className="text-sm text-slate-400 line-through decoration-slate-400">
-                                    {formatIDR(product.compareAtPriceIdr)}
-                                </span>
+                    <div className="custom-scrollbar flex-1 overflow-y-auto p-6 md:p-8">
+                        <h2
+                            id="product-detail-title"
+                            className="mb-2 pr-8 text-2xl font-bold leading-tight text-slate-900"
+                        >
+                            {product.title}
+                        </h2>
+
+                        <div className="mb-6">
+                            <div className="flex flex-wrap items-baseline gap-2">
+                                {displayPriceOverride?.voucherCode && (
+                                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+                                        {displayPriceOverride.voucherCode}
+                                    </span>
+                                )}
+                                <span className="text-xl font-bold text-blue-600">{formatStorePriceIdr(shownPrice)}</span>
+                                {compareForHeader != null && compareForHeader > shownPrice && (
+                                    <span className="text-sm text-slate-400 line-through decoration-slate-400">
+                                        {formatIDR(compareForHeader)}
+                                    </span>
+                                )}
+                            </div>
+                            {showTokenDiscount && (
+                                <p className="mt-1.5 text-[11px] font-semibold text-emerald-700">
+                                    Potongan harga
+                                </p>
                             )}
                         </div>
 
-                        {/* Variants */}
+                        {campaignSource ? (
+                            <p className="-mt-2 mb-4 text-[11px] text-slate-400">
+                                <span className="font-semibold text-slate-500">Ref</span>
+                                <span className="mx-1 text-slate-300">·</span>
+                                {campaignSource}
+                            </p>
+                        ) : null}
+
                         {product.hasVariants && product.variants && (
                             <div className="mb-6">
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Option</label>
+                                <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
+                                    Select Option
+                                </label>
                                 <div className="flex flex-wrap gap-2">
-                                    {product.variants.map(v => (
+                                    {product.variants.map((v) => (
                                         <button
                                             key={v.id}
+                                            type="button"
                                             onClick={() => setSelectedVariantId(v.id)}
-                                            className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${
-                                                selectedVariantId === v.id 
-                                                ? 'bg-slate-900 text-white border-slate-900' 
-                                                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                                            className={`rounded-lg border px-4 py-2 text-xs font-bold transition-all ${
+                                                selectedVariantId === v.id
+                                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
                                             }`}
                                         >
                                             {v.name}
@@ -307,25 +393,34 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                             </div>
                         )}
 
-                        {/* Tabs */}
-                        <div className="border-b border-slate-200 mb-4 flex gap-6">
-                            <button 
+                        <div className="mb-4 flex gap-6 border-b border-slate-200">
+                            <button
+                                type="button"
                                 onClick={() => setActiveTab('OVERVIEW')}
-                                className={`pb-2 text-sm font-bold transition-colors ${activeTab === 'OVERVIEW' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                className={`pb-2 text-sm font-bold transition-colors ${
+                                    activeTab === 'OVERVIEW'
+                                        ? 'border-b-2 border-blue-600 text-blue-600'
+                                        : 'text-slate-400 hover:text-slate-600'
+                                }`}
                             >
                                 Overview
                             </button>
-                            <button 
+                            <button
+                                type="button"
                                 onClick={() => setActiveTab('COMPONENTS')}
-                                className={`pb-2 text-sm font-bold transition-colors ${activeTab === 'COMPONENTS' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                className={`pb-2 text-sm font-bold transition-colors ${
+                                    activeTab === 'COMPONENTS'
+                                        ? 'border-b-2 border-blue-600 text-blue-600'
+                                        : 'text-slate-400 hover:text-slate-600'
+                                }`}
                             >
-                                What's Inside ({currentItems.length})
+                                What&apos;s Inside ({currentItems.length})
                             </button>
                         </div>
 
                         <div className="min-h-[200px]">
                             {activeTab === 'OVERVIEW' && (
-                                <div className="prose prose-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                                <div className="prose prose-sm max-w-none whitespace-pre-line text-slate-600 leading-relaxed prose-headings:text-slate-900 line-clamp-4">
                                     {product.description}
                                 </div>
                             )}
@@ -333,41 +428,79 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                             {activeTab === 'COMPONENTS' && (
                                 <div className="space-y-3 animate-fade-in">
                                     {loading ? (
-                                        <div className="text-center py-8 text-slate-400 text-xs">Resolving items...</div>
+                                        <div className="py-8 text-center text-xs text-slate-400">
+                                            Resolving items...
+                                        </div>
                                     ) : (
                                         currentItems.map((item, idx) => (
                                             <div key={idx}>{renderItemDetail(item, idx)}</div>
                                         ))
                                     )}
-                                    {currentItems.length === 0 && <p className="text-xs text-slate-400 italic">No specific sub-items listed.</p>}
+                                    {currentItems.length === 0 && (
+                                        <p className="text-xs italic text-slate-400">
+                                            No specific sub-items listed.
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Footer CTA */}
-                    <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-                        <div className="text-xs text-slate-500 hidden md:block">
+                    <div className="flex shrink-0 items-center justify-between border-t border-slate-100 bg-slate-50 p-6">
+                        <div className="hidden text-xs text-slate-500 md:block">
                             {product.installmentConfig?.enabled ? (
-                                <span className="flex items-center text-indigo-600 font-bold"><Zap size={12} className="mr-1"/> Installments Available</span>
+                                <span className="flex items-center font-bold text-indigo-600">
+                                    <Zap size={12} className="mr-1" /> Installments Available
+                                </span>
                             ) : (
                                 <span>Instant Confirmation</span>
                             )}
                         </div>
-                        
+
                         {isExpired ? (
-                             <button 
+                            <button
+                                type="button"
                                 disabled
-                                className="w-full md:w-auto px-8 py-3 bg-red-100 text-red-400 rounded-xl font-bold cursor-not-allowed flex items-center justify-center"
+                                className="mx-auto flex w-full max-w-[14rem] cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-red-100 px-4 py-2.5 text-sm font-semibold text-red-400 md:mx-0 md:ml-auto md:w-auto md:max-w-none"
                             >
-                                <AlertTriangle size={18} className="mr-2"/> Not Available
+                                <AlertTriangle size={16} className="shrink-0" /> Not Available
                             </button>
                         ) : (
-                            <button 
-                                onClick={() => { onAddToCart(product, selectedVariantId); onClose(); }}
-                                className="w-full md:w-auto px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg flex items-center justify-center transition-transform active:scale-95"
+                            <button
+                                type="button"
+                                title={
+                                    primaryCtaHint
+                                        ? `${primaryCtaLabel ?? 'Add to Cart'} ${primaryCtaHint}`
+                                        : undefined
+                                }
+                                onClick={() => {
+                                    onAddToCart(product, selectedVariantId);
+                                    if (closeOnAddToCart) onClose();
+                                }}
+                                className={`mx-auto flex items-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-transform hover:bg-blue-700 active:scale-95 md:ml-auto md:px-5 ${
+                                    primaryCtaHint
+                                        ? 'w-full max-w-md justify-start gap-3 md:min-w-[19rem]'
+                                        : 'justify-center gap-2 w-full max-w-[min(100%,15rem)] sm:max-w-[17rem] md:w-auto md:max-w-xs'
+                                }`}
                             >
-                                <ShoppingCart size={18} className="mr-2"/> Add to Cart - {formatIDR(displayPrice)}
+                                <ShoppingCart size={16} className="shrink-0" />
+                                {primaryCtaHint ? (
+                                    <span className="flex min-w-0 flex-1 items-center justify-between gap-3 leading-tight">
+                                        <span className="min-w-0 truncate pr-1 text-left">
+                                            {primaryCtaLabel ?? `Add to Cart`}
+                                        </span>
+                                        <span className="flex shrink-0 items-center gap-1.5 tabular-nums font-medium text-blue-50">
+                                            <span className="text-blue-200/90" aria-hidden>
+                                                ·
+                                            </span>
+                                            {primaryCtaHint}
+                                        </span>
+                                    </span>
+                                ) : (
+                                    <span className="whitespace-normal text-center leading-tight">
+                                        {primaryCtaLabel ?? `Add to Cart — ${formatStorePriceIdr(shownPrice)}`}
+                                    </span>
+                                )}
                             </button>
                         )}
                     </div>

@@ -20,15 +20,20 @@ const SEED_USERS: UserProfile[] = [
   
   // --- GATE KEEPERS (Scanners) ---
   // Matches IDs used in Event Gate Config
-  { id: 'gate-1', fullName: 'Petugas Pintu Depan', email: 'gate1@maxwell.com', role: UserRole.GATE_KEEPER, avatarUrl: 'https://ui-avatars.com/api/?name=Gate+One&background=6366f1&color=fff', provider: 'email' },
-  { id: 'gate-2', fullName: 'Petugas Pintu Media', email: 'gate2@maxwell.com', role: UserRole.GATE_KEEPER, avatarUrl: 'https://ui-avatars.com/api/?name=Gate+Two&background=8b5cf6&color=fff', provider: 'email' },
+  { id: 'gate-1', fullName: 'Front Gate Scanner', email: 'gate1@maxwell.com', role: UserRole.GATE_KEEPER, avatarUrl: 'https://ui-avatars.com/api/?name=Gate+One&background=6366f1&color=fff', provider: 'email' },
+  { id: 'gate-2', fullName: 'Media Gate Scanner', email: 'gate2@maxwell.com', role: UserRole.GATE_KEEPER, avatarUrl: 'https://ui-avatars.com/api/?name=Gate+Two&background=8b5cf6&color=fff', provider: 'email' },
   
   // --- SALES ---
   { id: 'sales-1', fullName: 'Kezia (Sales)', email: 'kezia.sales@maxwell.com', role: UserRole.SALES, avatarUrl: 'https://ui-avatars.com/api/?name=Kezia+S&background=f59e0b&color=fff', provider: 'email' },
 ];
 
+export type GetAllUsersOptions = {
+  /** If true, API failures (403, network, …) propagate instead of returning []. */
+  rethrowApiError?: boolean;
+};
+
 export const UserService = {
-    getAllUsers: async (): Promise<UserProfile[]> => {
+    getAllUsers: async (opts?: GetAllUsersOptions): Promise<UserProfile[]> => {
         const internalUsersMode = APP_CONFIG.EXTERNAL_API_ONLY
             ? 'API'
             : (APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE');
@@ -45,7 +50,8 @@ export const UserService = {
                     avatarUrl?: string | null;
                     provider?: 'email' | 'google';
                 }>>('/admin/internal-users');
-                return rows.map((r) => ({
+                const list = Array.isArray(rows) ? rows : [];
+                return list.map((r) => ({
                     id: r.id,
                     email: r.email,
                     fullName: r.fullName,
@@ -55,6 +61,7 @@ export const UserService = {
                 }));
             } catch (e) {
                 console.error('UserService API-only fallback error', e);
+                if (opts?.rethrowApiError) throw e;
                 return [];
             }
         }

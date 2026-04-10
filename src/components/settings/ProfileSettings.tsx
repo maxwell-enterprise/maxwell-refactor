@@ -1,15 +1,27 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, Lock, Bell, Camera, Save, LogOut, Trash2 } from 'lucide-react';
+import { User, Lock, Bell, Camera, Save, LogOut, Trash2, AlertTriangle, X } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { UserService } from '../../services/userService';
 import { UserNotificationPreferencesService } from '../../services/userNotificationPreferencesService';
 import { workspaceFetch } from '../../lib/workspaceApi';
 import { UserRole } from '../../types/index';
+import { useAccountDeletionRealtime } from '../../hooks/useAccountDeletionRealtime';
 
 const NOTIF_DEV_MSG =
-  'Notifikasi ini belum dapat diaktifkan. Fitur masih dalam tahap pengembangan.';
+  'These notification toggles cannot be enabled yet. This feature is still in development.';
+
+const MIN_DELETION_REASON_LEN = 80;
+
+type DeletionStatus =
+  | { status: 'NONE' }
+  | { status: 'PENDING'; requestId?: string; submittedAt?: string }
+  | {
+      status: 'REJECTED';
+      requestId?: string;
+      reviewNote?: string | null;
+      rejectedAt?: string | null;
+    };
 
 const ProfileSettings: React.FC = () => {
     const { user, logout, refreshSession } = useAuth();
@@ -23,13 +35,15 @@ const ProfileSettings: React.FC = () => {
     const [formData, setFormData] = useState({
         fullName: user?.fullName || '',
         email: user?.email || '',
-        // These fields are mock for now as they aren't on UserProfile type yet, 
-        // but we handle basic fields.
-        phone: '081234567890', 
+        phone: user?.phone || '',
     });
     const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
     const [avatarPayload, setAvatarPayload] = useState<string | null | undefined>(undefined);
     const [isAvatarBroken, setIsAvatarBroken] = useState(false);
+
+    const [deletionModalOpen, setDeletionModalOpen] = useState(false);
+    const [deletionReason, setDeletionReason] = useState('');
+    const [deletionStatus, setDeletionStatus] = useState<DeletionStatus>({ status: 'NONE' });
 
     // Password State
     const [passwords, setPasswords] = useState({
@@ -50,10 +64,11 @@ const ProfileSettings: React.FC = () => {
             ...prev,
             fullName: user?.fullName || '',
             email: user?.email || '',
+            phone: user?.phone || '',
         }));
         setAvatarPreview(user?.avatarUrl ?? null);
         setIsAvatarBroken(false);
-    }, [user?.fullName, user?.email, user?.avatarUrl]);
+    }, [user?.fullName, user?.email, user?.avatarUrl, user?.phone]);
 
     useEffect(() => {
         if (!user?.id) return;
@@ -75,6 +90,33 @@ const ProfileSettings: React.FC = () => {
             cancelled = true;
         };
     }, [user?.id]);
+
+    const loadDeletionStatus = useCallback(async () => {
+        if (!user?.id) return;
+        try {
+            const res = await workspaceFetch('/me/account/deletion-status');
+            if (!res.ok) return;
+            const data = (await res.json()) as DeletionStatus;
+            if (
+                data &&
+                (data.status === 'NONE' ||
+                    data.status === 'PENDING' ||
+                    data.status === 'REJECTED')
+            ) {
+                setDeletionStatus(data);
+            }
+        } catch {
+            /* offline */
+        }
+    }, [user?.id]);
+
+    useEffect(() => {
+        void loadDeletionStatus();
+    }, [loadDeletionStatus]);
+
+    useAccountDeletionRealtime(!!user?.id, () => {
+        void loadDeletionStatus();
+    });
 
     // Security tab is intentionally disabled for now.
     useEffect(() => {
@@ -142,7 +184,7 @@ const ProfileSettings: React.FC = () => {
         setNotifications(next);
         if (user?.id) {
             void UserNotificationPreferencesService.patchMe({ [key]: false }).catch(
-                () => showToast('Gagal menyimpan preferensi', 'error'),
+                () => showToast('Could not save notification preferences.', 'error'),
             );
         }
     };
@@ -157,6 +199,7 @@ const ProfileSettings: React.FC = () => {
                 body: JSON.stringify({
                     fullName: formData.fullName,
                     email: formData.email,
+                    phone: formData.phone,
                     image: avatarPayload,
                 }),
             });
@@ -176,16 +219,7 @@ const ProfileSettings: React.FC = () => {
             await refreshSession();
             showToast('Profile updated successfully', 'success');
         } catch {
-            // fallback for local/mock mode
-            try {
-                await UserService.updateUserProfile(user.id, {
-                    fullName: formData.fullName,
-                    email: formData.email
-                });
-                showToast('Profile updated successfully', 'success');
-            } catch {
-                showToast('Failed to update profile', 'error');
-            }
+            showToast('Network error — could not reach the server. Profile was not saved.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -204,21 +238,39 @@ const ProfileSettings: React.FC = () => {
         }, 800);
     };
 
-    const handleDeleteAccount = async () => {
+    const openDeletionModal = () => {
         if (!user?.id) return;
         if (user.role === UserRole.SUPER_ADMIN) {
-            showToast('Super Admin account cannot be deleted.', 'error');
+            showToast('Super Admin accounts cannot be deleted.', 'error');
             return;
         }
-        const ok = window.confirm(
-            'Delete this account permanently? This action cannot be undone.'
-        );
-        if (!ok) return;
+        if (deletionStatus.status === 'PENDING') {
+            showToast('Your deletion request is already pending Super Admin review.', 'info');
+            return;
+        }
+        setDeletionReason('');
+        setDeletionModalOpen(true);
+    };
+
+    const submitDeletionRequest = async () => {
+        if (!user?.id) return;
+        const trimmed = deletionReason.trim();
+        if (trimmed.length < MIN_DELETION_REASON_LEN) {
+            showToast(
+                `Please enter at least ${MIN_DELETION_REASON_LEN} characters and explain your decision clearly.`,
+                'error',
+            );
+            return;
+        }
         setIsLoading(true);
         try {
-            const res = await workspaceFetch('/me/account', { method: 'DELETE' });
+            const res = await workspaceFetch('/me/account/deletion-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason: trimmed }),
+            });
             if (!res.ok) {
-                let msg = 'Failed to delete account.';
+                let msg = 'Could not submit the request.';
                 try {
                     const data = (await res.json()) as { message?: string | string[] };
                     if (typeof data?.message === 'string') msg = data.message;
@@ -229,17 +281,106 @@ const ProfileSettings: React.FC = () => {
                 showToast(msg, 'error');
                 return;
             }
-            showToast('Account deleted.', 'success');
-            await logout();
+            setDeletionModalOpen(false);
+            setDeletionReason('');
+            setDeletionStatus({
+                status: 'PENDING',
+                submittedAt: new Date().toISOString(),
+            });
+            showToast(
+                'Request submitted. A Super Admin will review your reason. Check the bell for updates.',
+                'success',
+            );
         } catch {
-            showToast('Network error while deleting account.', 'error');
+            showToast('Network error.', 'error');
         } finally {
             setIsLoading(false);
         }
     };
 
+    const reasonLen = deletionReason.trim().length;
+    const reasonOk = reasonLen >= MIN_DELETION_REASON_LEN;
+
     return (
         <div className="p-6 max-w-4xl mx-auto animate-fade-in">
+            {deletionModalOpen && (
+                <div
+                    className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="del-req-title"
+                >
+                    <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-4 bg-amber-50">
+                            <div className="flex gap-3 min-w-0">
+                                <AlertTriangle
+                                    className="h-6 w-6 shrink-0 text-amber-600 mt-0.5"
+                                    aria-hidden
+                                />
+                                <div>
+                                    <h2
+                                        id="del-req-title"
+                                        className="text-lg font-bold text-slate-900"
+                                    >
+                                        Request account deletion
+                                    </h2>
+                                    <p className="text-xs text-slate-600 mt-1">
+                                        Your account is not deleted immediately. Write a detailed reason below.
+                                        A Super Admin will review and approve or decline. You will get an in-app
+                                        notification (bell icon).
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => !isLoading && setDeletionModalOpen(false)}
+                                className="p-2 rounded-lg text-slate-500 hover:bg-white/80"
+                                aria-label="Close"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-4 flex-1 overflow-y-auto space-y-3">
+                            <label className="block text-xs font-bold text-slate-500 uppercase">
+                                Deletion reason (required, at least {MIN_DELETION_REASON_LEN} characters)
+                            </label>
+                            <textarea
+                                value={deletionReason}
+                                onChange={(e) => setDeletionReason(e.target.value)}
+                                rows={8}
+                                maxLength={8000}
+                                placeholder="Explain why you want to delete your account, what you have considered, and confirm this is your own decision."
+                                className="w-full rounded-lg border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-amber-500/40 outline-none resize-y min-h-[160px]"
+                            />
+                            <p className="text-xs text-slate-500">
+                                {reasonLen} / {MIN_DELETION_REASON_LEN} minimum characters
+                                {!reasonOk && (
+                                    <span className="text-amber-700"> — keep writing until you reach the minimum</span>
+                                )}
+                            </p>
+                        </div>
+                        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 p-4 border-t border-slate-100 bg-slate-50">
+                            <button
+                                type="button"
+                                disabled={isLoading}
+                                onClick={() => setDeletionModalOpen(false)}
+                                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-200/80"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isLoading || !reasonOk}
+                                onClick={() => void submitDeletionRequest()}
+                                className="px-4 py-2.5 rounded-lg text-sm font-bold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {isLoading ? 'Sending…' : 'Submit request to Super Admin'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <h1 className="text-2xl font-bold text-slate-900 mb-6">Account Settings</h1>
 
             <div className="flex flex-col md:flex-row gap-8">
@@ -305,20 +446,27 @@ const ProfileSettings: React.FC = () => {
                         
                         <div className="p-4 border-t border-slate-100">
                             <button
-                                onClick={handleDeleteAccount}
-                                disabled={isLoading || user?.role === UserRole.SUPER_ADMIN}
+                                onClick={openDeletionModal}
+                                disabled={
+                                    isLoading ||
+                                    user?.role === UserRole.SUPER_ADMIN ||
+                                    deletionStatus.status === 'PENDING'
+                                }
                                 className={`mb-2 w-full flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                                    user?.role === UserRole.SUPER_ADMIN
+                                    user?.role === UserRole.SUPER_ADMIN ||
+                                    deletionStatus.status === 'PENDING'
                                         ? 'text-slate-400 bg-slate-50 cursor-not-allowed'
                                         : 'text-red-600 hover:bg-red-50'
                                 }`}
                                 title={
                                     user?.role === UserRole.SUPER_ADMIN
-                                        ? 'Super Admin account cannot be deleted.'
-                                        : 'Delete account permanently'
+                                        ? 'Super Admin accounts cannot be deleted.'
+                                        : deletionStatus.status === 'PENDING'
+                                          ? 'A request is already in progress.'
+                                          : 'Request deletion (reason required; Super Admin approval)'
                                 }
                             >
-                                <Trash2 size={18} className="mr-3" /> Delete Account
+                                <Trash2 size={18} className="mr-3" /> Delete account
                             </button>
                             <button onClick={logout} className="w-full flex items-center px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                                 <LogOut size={18} className="mr-3"/> Sign Out
@@ -333,6 +481,30 @@ const ProfileSettings: React.FC = () => {
                         
                         {activeTab === 'PROFILE' && (
                             <div className="space-y-6">
+                                {deletionStatus.status === 'PENDING' && (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                                        <p className="font-bold">Account deletion: awaiting Super Admin</p>
+                                        <p className="mt-1 text-amber-900/90">
+                                            Your request has been submitted with the reason you provided. A Super
+                                            Admin will approve or decline. Watch notifications (bell icon) for the
+                                            outcome.
+                                        </p>
+                                    </div>
+                                )}
+                                {deletionStatus.status === 'REJECTED' && (
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                                        <p className="font-bold">Previous deletion request was declined</p>
+                                        {deletionStatus.reviewNote ? (
+                                            <p className="mt-1 text-slate-600">
+                                                Note: {deletionStatus.reviewNote}
+                                            </p>
+                                        ) : null}
+                                        <p className="mt-2 text-xs text-slate-500">
+                                            You can submit a new request from the menu on the left if you still want
+                                            to delete your account.
+                                        </p>
+                                    </div>
+                                )}
                                 <div>
                                     <h2 className="text-lg font-bold text-slate-900">Personal Information</h2>
                                     <p className="text-sm text-slate-500">Update your public profile and contact details.</p>

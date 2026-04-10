@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { setWorkspaceToken } from '../../../lib/workspaceAuthToken';
+import { consumeOAuthReturnSearch } from '../../../lib/postAuthNavigation';
 
 export default function AuthCallbackPage() {
   useEffect(() => {
@@ -38,7 +39,24 @@ export default function AuthCallbackPage() {
     if (token) {
       setWorkspaceToken(token);
       window.clearTimeout(watchdog);
-      window.location.replace('/dashboard');
+      const resume = consumeOAuthReturnSearch();
+      const qs = resume.startsWith('?')
+        ? resume.slice(1)
+        : resume.startsWith('&')
+          ? resume
+          : resume;
+      const params = new URLSearchParams(qs || undefined);
+      const hasProduct = Boolean(
+        (params.get('product') || params.get('productId') || '').trim(),
+      );
+      if (hasProduct) {
+        if (!params.get('view')) params.set('view', 'store');
+        if (!params.get('checkout') && !params.get('autocheckout')) {
+          params.set('checkout', '1');
+        }
+      }
+      const search = params.toString();
+      window.location.replace(`/dashboard${search ? `?${search}` : ''}`);
       return;
     }
     if (error) {

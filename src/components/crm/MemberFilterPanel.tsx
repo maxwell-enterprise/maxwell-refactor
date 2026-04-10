@@ -75,10 +75,7 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({ isOpen, onClose, 
                         value={localCriteria.lifecycleStage || ''}
                         onChange={(e) => setLocalCriteria({...localCriteria, lifecycleStage: e.target.value})}
                     >
-                        <option value="">-- All Stages --</option>
-                        <option value="GUEST">Guest</option>
-                        <option value="IDENTIFIED">Identified</option>
-                        <option value="PARTICIPANT">Participant</option>
+                        <option value="">-- All (Member ecosystem) --</option>
                         <option value="MEMBER">Member</option>
                         <option value="CERTIFIED">Certified</option>
                         <option value="FACILITATOR">Facilitator</option>

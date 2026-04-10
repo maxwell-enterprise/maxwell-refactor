@@ -1,5 +1,9 @@
 
-import { IProductRepository, ProductListQuery } from '../contracts';
+import {
+  IProductRepository,
+  ProductListQuery,
+  ProductUpsertOptions,
+} from '../contracts';
 import { Product } from '../../types/index';
 import { DevDatabase } from '../../utils/devDatabase';
 import { STORE_PRODUCTS } from '../../constants';
@@ -75,8 +79,12 @@ export class MockProductRepository implements IProductRepository {
         return products.find(p => p.id === id) || null;
     }
 
-    async upsert(product: Product): Promise<void> {
+    async upsert(
+        product: Product,
+        _options?: ProductUpsertOptions,
+    ): Promise<Product> {
         await DevDatabase.add('products', product);
+        return product;
     }
 
     async delete(id: string): Promise<void> {

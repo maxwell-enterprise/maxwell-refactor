@@ -83,6 +83,7 @@ export interface UserProfile {
   fullName: string;
   role: UserRole;
   avatarUrl?: string;
+  phone?: string;
   provider: 'email' | 'google';
 }
 
@@ -268,7 +269,7 @@ export interface Product {
   description: string;
   priceIdr: number;
   compareAtPriceIdr?: number;
-  category: 'Packages' | 'Certification' | 'Upgrade' | 'Merchandise' | 'Digital';
+  category: 'Packages' | 'Certification' | 'Upgrade' | 'Merchandise' | 'Digital' | 'Token';
   imageUrl: string;
   items: ProductItem[];
   hasVariants: boolean;

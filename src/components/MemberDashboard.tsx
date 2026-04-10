@@ -10,6 +10,8 @@ import { ViewState } from '../types/index';
 import { UserEntitlements, LifecycleStage } from '../types/access';
 import WalletSummaryWidget from './dashboard/WalletSummaryWidget'; 
 import ContractSigningModal from './member/ContractSigningModal'; 
+import { DataService } from '../services/dataService';
+import { resolveJourneyLifecycleStage } from '../lib/memberLifecycleViews';
 
 interface MemberDashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -23,6 +25,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
   const [pendingContract, setPendingContract] = useState<ContractInstance | null>(null); 
   const [showSignModal, setShowSignModal] = useState(false); 
   const [loading, setLoading] = useState(true);
+  const [journeyLifecycle, setJourneyLifecycle] = useState<LifecycleStage>('GUEST');
 
   useEffect(() => {
     if (!user) return;
@@ -30,12 +33,26 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
     (async () => {
       setLoading(true);
       try {
-        const [walletItems, userEntitlements, contracts] = await Promise.all([
-          EntitlementService.getMyWallet(user.id),
-          EntitlementService.getUserEntitlements(user.id),
-          ContractService.getMyContracts(user.id),
-        ]);
+        const [walletItems, userEntitlements, contracts, allMembers] =
+          await Promise.all([
+            EntitlementService.getMyWallet(user.id),
+            EntitlementService.getUserEntitlements(user.id),
+            ContractService.getMyContracts(user.id),
+            DataService.getMembers(),
+          ]);
         if (cancelled) return;
+        const emailLc = user.email?.trim().toLowerCase();
+        const crmMember =
+          (emailLc
+            ? allMembers.find((m) => m.email.trim().toLowerCase() === emailLc)
+            : undefined) ?? allMembers.find((m) => m.id === user.id);
+
+        setJourneyLifecycle(
+          resolveJourneyLifecycleStage({
+            member: crmMember ?? null,
+            entitlementLifecycle: userEntitlements?.attributes?.lifecycle,
+          }),
+        );
         setWallet(walletItems);
         const tickets = walletItems
           .filter(
@@ -61,6 +78,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
           setNextEvent(null);
           setEntitlements(null);
           setPendingContract(null);
+          setJourneyLifecycle('GUEST');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -71,20 +89,29 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
     };
   }, [user]);
 
-  const STAGES: { id: LifecycleStage, label: string }[] = [
+  const STAGES: { id: LifecycleStage, label: string }[] = useMemo(
+    () => [
       { id: 'GUEST', label: 'Guest' },
       { id: 'IDENTIFIED', label: 'Identified' },
       { id: 'PARTICIPANT', label: 'Participant' },
       { id: 'MEMBER', label: 'Member' },
       { id: 'CERTIFIED', label: 'Certified' },
       { id: 'FACILITATOR', label: 'Facilitator' },
-  ];
-
-  const currentStage = entitlements?.attributes?.lifecycle ?? 'GUEST';
-  const currentStageIdx = Math.max(
-    0,
-    STAGES.findIndex((s) => s.id === currentStage),
+    ],
+    [],
   );
+
+  const currentStage = journeyLifecycle;
+  const currentStageIdx = useMemo(() => {
+    const idx = STAGES.findIndex((s) => s.id === currentStage);
+    return idx >= 0 ? idx : 0;
+  }, [STAGES, currentStage]);
+
+  const currentStageLabel =
+    STAGES.find((s) => s.id === currentStage)?.label ?? currentStage;
+
+  const progressPercent =
+    STAGES.length <= 1 ? 0 : (currentStageIdx / (STAGES.length - 1)) * 100;
 
   if (loading) {
     return (
@@ -127,30 +154,34 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                             <Award size={20} className="text-blue-600 mr-2" /> Evolution Journey
                         </h3>
                         <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-3 py-1 rounded-full uppercase tracking-widest border border-blue-100">
-                            {currentStage}
+                            {currentStageLabel}
                         </span>
                     </div>
                     
                     <div className="relative px-2">
                         <div className="absolute top-4 left-0 w-full h-1 bg-slate-100 rounded-full -z-10"></div>
                         <div 
-                            className="absolute top-4 left-0 h-1 bg-blue-600 rounded-full -z-10 transition-all duration-1000"
-                            style={{ width: `${(currentStageIdx / (STAGES.length - 1)) * 100}%` }}
+                            className="absolute top-4 left-0 h-1 bg-blue-600 rounded-full -z-10 transition-all duration-700 ease-out"
+                            style={{ width: `${progressPercent}%` }}
                         ></div>
 
                         <div className="flex justify-between items-start">
                             {STAGES.map((stage, idx) => {
-                                const isCompleted = idx <= currentStageIdx;
+                                const isCompleted = idx < currentStageIdx;
                                 const isCurrent = idx === currentStageIdx;
                                 return (
                                     <div key={stage.id} className="flex flex-col items-center group">
                                         <div 
-                                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-500 ease-out z-10
                                                 ${isCurrent ? 'bg-blue-600 border-blue-600 text-white scale-125 shadow-lg' : 
-                                                isCompleted ? 'bg-white border-blue-600 text-blue-600' : 'bg-white border-slate-200 text-slate-300'}
+                                                isCompleted ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-300'}
                                             `}
                                         >
-                                            {isCompleted ? <CheckCircle2 size={16} /> : <Lock size={12} />}
+                                            {isCompleted || isCurrent ? (
+                                                <CheckCircle2 size={16} className="text-white" />
+                                            ) : (
+                                                <Lock size={12} />
+                                            )}
                                         </div>
                                     </div>
                                 );

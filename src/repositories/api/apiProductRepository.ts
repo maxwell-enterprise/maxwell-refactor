@@ -1,6 +1,10 @@
 import { Product } from '../../types/index';
-import { IProductRepository, ProductListQuery } from '../contracts';
-import { apiRequest } from './apiClient';
+import {
+  IProductRepository,
+  ProductListQuery,
+  ProductUpsertOptions,
+} from '../contracts';
+import { ApiRequestError, apiRequest } from './apiClient';
 
 interface ProductListResponse {
   data: Product[];
@@ -43,6 +47,9 @@ export class ApiProductRepository implements IProductRepository {
     try {
       return await apiRequest<Product>(`/products/${encodeURIComponent(id)}`);
     } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        return null;
+      }
       if (error instanceof Error && error.message.includes('404')) {
         return null;
       }
@@ -51,20 +58,33 @@ export class ApiProductRepository implements IProductRepository {
     }
   }
 
-  async upsert(product: Product): Promise<void> {
+  async upsert(
+    product: Product,
+    options?: ProductUpsertOptions,
+  ): Promise<Product> {
     const payload = JSON.stringify(product);
+    const createOnly = options?.intent === 'create';
+
+    if (createOnly) {
+      return apiRequest<Product>('/products', {
+        method: 'POST',
+        body: payload,
+      });
+    }
 
     const existing = await this.getById(product.id);
 
     if (existing) {
-      await apiRequest<Product>(`/products/${encodeURIComponent(product.id)}`, {
-        method: 'PATCH',
-        body: payload,
-      });
-      return;
+      return apiRequest<Product>(
+        `/products/${encodeURIComponent(product.id)}`,
+        {
+          method: 'PATCH',
+          body: payload,
+        },
+      );
     }
 
-    await apiRequest<Product>('/products', {
+    return apiRequest<Product>('/products', {
       method: 'POST',
       body: payload,
     });

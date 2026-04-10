@@ -11,7 +11,7 @@ import { getWorkspaceToken } from '../lib/workspaceAuthToken';
 import { ApiRequestError } from '../repositories/api/apiClient';
 import { 
   Link, QrCode, Copy, BarChart3, Plus, ExternalLink, 
-  Target, TrendingUp, DollarSign, MousePointer2, Pencil, Save, X, PieChart as PieIcon, Tag, CheckCircle, Upload, Download, FileSpreadsheet, Filter, Search
+  Target, TrendingUp, DollarSign, MousePointer2, Pencil, Save, X, PieChart as PieIcon, Tag, CheckCircle, Upload, Download, FileSpreadsheet, Filter, Search, Trash2
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -19,6 +19,7 @@ import {
 import AIMarketingAdvisor from './marketing/AIMarketingAdvisor';
 import QRCodeDisplay from './common/QRCodeDisplay';
 import { ExcelHelper } from '../utils/excelHelper';
+import { useCampaignMetricsRealtime } from '../hooks/useCampaignMetricsRealtime';
 
 const Marketing: React.FC = () => {
   const { can: canManageCampaigns } = useAccess('mkt_campaigns');
@@ -32,6 +33,8 @@ const Marketing: React.FC = () => {
   const [aiInsights, setAiInsights] = useState<MarketingInsight[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [showQrModal, setShowQrModal] = useState<Campaign | null>(null);
+  const [campaignPendingDelete, setCampaignPendingDelete] = useState<Campaign | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Search & Filter State
@@ -53,18 +56,10 @@ const Marketing: React.FC = () => {
       loadCampaignContext();
   }, [isAuthenticated, isLoading]);
 
-  useEffect(() => {
-      if (!isAuthenticated || !getWorkspaceToken()) return;
-      const interval = window.setInterval(async () => {
-          try {
-              const campaignData = await CampaignService.getCampaigns();
-              setCampaigns(campaignData);
-          } catch {
-              // Silent on background refresh to avoid toast spam.
-          }
-      }, 8000);
-      return () => window.clearInterval(interval);
-  }, [isAuthenticated]);
+  useCampaignMetricsRealtime(
+      Boolean(isAuthenticated && getWorkspaceToken()),
+      setCampaigns,
+  );
 
   const toReadableError = (error: unknown): string => {
       if (error instanceof ApiRequestError && error.status === 401) {
@@ -248,6 +243,25 @@ const Marketing: React.FC = () => {
       const fullUrl = `${window.location.origin}${link}`; 
       navigator.clipboard.writeText(fullUrl);
       showToast('Link copied to clipboard', 'success');
+  };
+
+  const handleConfirmDeleteCampaign = async () => {
+      if (!campaignPendingDelete) return;
+      setDeleteSubmitting(true);
+      try {
+          await CampaignService.deleteCampaign(campaignPendingDelete.id);
+          showToast('Campaign deleted.', 'success');
+          if (editingId === campaignPendingDelete.id) {
+              handleCancelEdit();
+          }
+          setCampaignPendingDelete(null);
+          await loadCampaignContext();
+      } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to delete campaign';
+          showToast(message, 'error');
+      } finally {
+          setDeleteSubmitting(false);
+      }
   };
 
   const formatIDR = (num: number) => {
@@ -458,20 +472,31 @@ const Marketing: React.FC = () => {
                                  <p className="text-sm">No campaigns found matching filters.</p>
                              </div>
                         ) : filteredCampaigns.map(campaign => (
-                            <div key={campaign.id} className={`bg-white p-4 sm:p-5 rounded-xl border shadow-sm hover:shadow-md transition-all relative group flex flex-col justify-between min-w-0 max-w-full ${editingId === campaign.id ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-200'}`}>
+                            <div key={campaign.id} className={`bg-white p-4 sm:p-5 rounded-xl border shadow-sm hover:shadow-md transition-all relative group/card flex flex-col justify-between min-w-0 max-w-full ${editingId === campaign.id ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-200'}`}>
                                 
                                 {canManageCampaigns('WRITE') && (
-                                    <button 
-                                        onClick={() => handleEditClick(campaign)}
-                                        className="absolute top-4 right-4 text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                        title="Edit Campaign"
-                                    >
-                                        <Pencil size={16} />
-                                    </button>
+                                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleEditClick(campaign)}
+                                            className="rounded-full p-2 text-slate-400 bg-slate-100/70 opacity-50 shadow-sm transition-all group-hover/card:opacity-100 group-hover/card:text-blue-600 group-hover/card:bg-blue-50 group-hover/card:shadow-md hover:!opacity-100 hover:!text-blue-600 hover:!bg-blue-50 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                            title="Edit Campaign"
+                                        >
+                                            <Pencil size={16} strokeWidth={2} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCampaignPendingDelete(campaign)}
+                                            className="rounded-full p-2 text-slate-400 bg-slate-100/70 opacity-50 shadow-sm transition-all group-hover/card:opacity-100 group-hover/card:text-red-600 group-hover/card:bg-red-50 group-hover/card:shadow-md hover:!opacity-100 hover:!text-red-600 hover:!bg-red-50 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                                            title="Delete Campaign"
+                                        >
+                                            <Trash2 size={16} strokeWidth={2} />
+                                        </button>
+                                    </div>
                                 )}
 
                                 <div>
-                                    <div className="flex justify-between items-start mb-3 pr-8">
+                                    <div className="flex justify-between items-start mb-3 pr-[4.5rem]">
                                         <div>
                                             <h4 className="font-bold text-slate-800 leading-tight">{campaign.name}</h4>
                                             <div className="flex flex-wrap gap-2 mt-1">
@@ -535,6 +560,46 @@ const Marketing: React.FC = () => {
         )}
 
         {/* QR Code Modal for Campaign */}
+        {campaignPendingDelete && (
+            <div
+                className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-campaign-title"
+                onClick={() => !deleteSubmitting && setCampaignPendingDelete(null)}
+            >
+                <div
+                    className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-scale-in"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <h3 id="delete-campaign-title" className="text-lg font-bold text-slate-900">
+                        Delete campaign?
+                    </h3>
+                    <p className="mt-2 text-sm text-slate-600">
+                        This removes <span className="font-semibold text-slate-800">{campaignPendingDelete.name}</span> and its tracking link. This cannot be undone.
+                    </p>
+                    <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <button
+                            type="button"
+                            disabled={deleteSubmitting}
+                            onClick={() => setCampaignPendingDelete(null)}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            disabled={deleteSubmitting}
+                            onClick={() => void handleConfirmDeleteCampaign()}
+                            className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-50"
+                        >
+                            {deleteSubmitting ? 'Deleting…' : 'Delete campaign'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {showQrModal && (
             <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowQrModal(null)}>
                 <div className="bg-white p-8 rounded-2xl max-w-sm w-full text-center animate-scale-in" onClick={e => e.stopPropagation()}>

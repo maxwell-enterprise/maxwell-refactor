@@ -1,5 +1,9 @@
 
-import { IProductRepository, ProductListQuery } from '../contracts';
+import {
+  IProductRepository,
+  ProductListQuery,
+  ProductUpsertOptions,
+} from '../contracts';
 import { Product } from '../../types/index';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -77,7 +81,10 @@ export class SupabaseProductRepository implements IProductRepository {
         return data as Product;
     }
 
-    async upsert(product: Product): Promise<void> {
+    async upsert(
+        product: Product,
+        _options?: ProductUpsertOptions,
+    ): Promise<Product> {
         if (!supabase) throw new Error("Supabase client not initialized");
 
         // Supabase upsert requires the object to match the table schema.
@@ -88,6 +95,7 @@ export class SupabaseProductRepository implements IProductRepository {
             console.error("Supabase Upsert Product Error:", error);
             throw error;
         }
+        return product;
     }
 
     async delete(id: string): Promise<void> {

@@ -2,6 +2,7 @@
 import { IMemberRepository } from '../contracts';
 import { Member } from '../../types/index';
 import { supabase } from '../../lib/supabaseClient';
+import { normalizeLifecycleStageForStoredEmail } from '../../lib/memberLifecycleViews';
 
 export class SupabaseMemberRepository implements IMemberRepository {
     async getAll(): Promise<Member[]> {
@@ -38,9 +39,14 @@ export class SupabaseMemberRepository implements IMemberRepository {
     async create(member: Member): Promise<void> {
         if (!supabase) throw new Error("Supabase client not initialized");
 
-        // Ensure ID is present before insert, or let DB handle it?
-        // Our DataUtils usually handles generation, so we pass it.
-        const { error } = await supabase.from('members').insert(member);
+        const row = {
+            ...member,
+            lifecycleStage: normalizeLifecycleStageForStoredEmail(
+                member.lifecycleStage,
+                member.email,
+            ),
+        };
+        const { error } = await supabase.from('members').insert(row);
 
         if (error) {
             console.error("Supabase Create Member Error:", error);
@@ -51,11 +57,24 @@ export class SupabaseMemberRepository implements IMemberRepository {
     async update(id: string, data: Partial<Member>): Promise<void> {
         if (!supabase) throw new Error("Supabase client not initialized");
 
+        const current = await this.getById(id);
+        const nextEmail =
+            data.email !== undefined ? data.email : (current?.email ?? '');
+        const nextStage =
+            data.lifecycleStage !== undefined
+                ? data.lifecycleStage
+                : (current?.lifecycleStage ?? 'GUEST');
+        const coercedLifecycle = normalizeLifecycleStageForStoredEmail(
+            nextStage,
+            nextEmail,
+        );
+
         const { error } = await supabase
             .from('members')
             .update({
                 ...data,
-                updatedAt: new Date().toISOString()
+                lifecycleStage: coercedLifecycle,
+                updatedAt: new Date().toISOString(),
             })
             .eq('id', id);
 

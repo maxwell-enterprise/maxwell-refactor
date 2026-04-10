@@ -144,6 +144,7 @@ export const DiscountService = {
     if (discount.scope === 'GLOBAL' || discount.scope === 'ABAC_COMPLEX') isApplicable = true; // Assume ABAC verified in isValid
     if (discount.scope === 'CATEGORY_SPECIFIC' && productCategory && discount.targetIds?.includes(productCategory)) isApplicable = true;
     if (discount.scope === 'EVENT_SPECIFIC' && productId && discount.targetIds?.includes(productId)) isApplicable = true;
+    if (discount.scope === 'Product_SPECIFIC' && productId && discount.targetIds?.includes(productId)) isApplicable = true;
 
     if (!isApplicable) return 0;
     if (discount.type === 'BUNDLE_VOLUME' && (!discount.minQty || qty < discount.minQty)) return 0;

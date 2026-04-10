@@ -24,20 +24,20 @@ const PurchaseHistory: React.FC = () => {
 
     const loadOrders = async () => {
         setLoading(true);
-        // Fetch all transactions (optimized in real backend to only fetch user's)
-        const all = await DataService.getTransactions();
-        
-        // Filter by user context logic:
-        // Since transaction table uses 'payee' name in description or we assume we query by user context in real SQL,
-        // here we filter by matching name for the Mock.
-        const userOrders = all.filter(t => 
-            t.type === 'PO' && 
-            t.description.includes('Store Sale') && 
-            (t.description.includes(user?.fullName || '') || t.description.includes(user?.id || ''))
-        );
-        
-        setOrders(userOrders);
-        setLoading(false);
+        try {
+            const all = await DataService.getTransactions();
+            const userOrders = all.filter(
+                (t) =>
+                    t.type === 'PO' &&
+                    t.description.includes('Store Sale') &&
+                    (t.description.includes(user?.fullName || '') || t.description.includes(user?.id || '')),
+            );
+            setOrders(userOrders);
+        } catch {
+            setOrders([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);

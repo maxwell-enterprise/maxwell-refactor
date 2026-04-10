@@ -165,9 +165,6 @@ const AdminSecurity: React.FC = () => {
               <h1 className="text-xl font-bold leading-tight tracking-tight text-slate-900 sm:text-2xl">
                 Security & Access Control Center
               </h1>
-              <p className="mt-1.5 text-sm leading-normal text-slate-600 sm:text-[15px]">
-                Enterprise governance, risk, and compliance (GRC).
-              </p>
             </div>
           </div>
         </div>

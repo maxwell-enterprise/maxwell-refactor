@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "NEXT_DISABLE_DEVTOOLS=1 next dev",
+    "dev:clean": "rm -rf .next && NEXT_DISABLE_DEVTOOLS=1 next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

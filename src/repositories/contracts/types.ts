@@ -15,6 +15,14 @@ export interface TransactionQueryParams {
     offset?: number;
 }
 
+/**
+ * `intent: 'create'` — POST only (avoids a spurious GET 404 before every new product).
+ * `auto` / omit — GET by id, then PATCH if found else POST (updates & ambiguous saves).
+ */
+export type ProductUpsertOptions = {
+  intent?: 'create' | 'auto';
+};
+
 /** Server-backed product listing (Nest `/products` supports page/limit/search/category). */
 export interface ProductListQuery {
     page: number;
@@ -40,7 +48,7 @@ export interface IProductRepository {
         query: ProductListQuery,
     ): Promise<{ data: Product[]; total: number }>;
     getById(id: string): Promise<Product | null>;
-    upsert(product: Product): Promise<void>;
+    upsert(product: Product, options?: ProductUpsertOptions): Promise<Product>;
     delete(id: string): Promise<void>;
 }
 

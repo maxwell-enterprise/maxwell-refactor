@@ -4,6 +4,20 @@ import { X, CreditCard, QrCode, Building2, Smartphone, Copy, UploadCloud, CheckC
 import { PaymentMethodType, PaymentTransaction, Product, UserRole, Discount, CartItem } from '../../types/index';
 import { PaymentService } from '../../services/paymentService';
 import { DiscountService } from '../../services/discountService';
+import { formatStorePriceIdr } from '../../utils/formatStorePrice';
+
+/** Unit price for a cart line (variant overrides base product price). */
+function getCartLineUnitPrice(product: Product, variantId?: string): number {
+  if (variantId && product.variants?.length) {
+    const v = product.variants.find((vv) => vv.id === variantId);
+    if (v) return v.priceIdr;
+  }
+  return product.priceIdr;
+}
+
+/** When true, Snap UI is skipped; server still creates a real Snap transaction, then simulate-settle marks PAID. */
+const MIDTRANS_UI_DISABLED =
+  String(process.env.NEXT_PUBLIC_MIDTRANS_UI_DISABLED ?? '').toLowerCase() === 'true';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -12,8 +26,8 @@ interface PaymentModalProps {
   products: Product[];
   userEmail: string;
   userRole: UserRole;
-  onUpdateQuantity: (productId: string, delta: number) => void;
-  onRemoveItem: (productId: string) => void;
+  onUpdateQuantity: (productId: string, variantId: string | undefined, delta: number) => void;
+  onRemoveItem: (productId: string, variantId: string | undefined) => void;
   preAppliedDiscountCode?: string; 
   attributionSource?: string; 
   onPaymentSuccess?: () => void;
@@ -57,6 +71,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [dpAmount, setDpAmount] = useState(0);
   const snapPayInFlightRef = useRef(false);
   const [isMidtransPopupOpen, setIsMidtransPopupOpen] = useState(false);
+  const [simulatedSuccessOpen, setSimulatedSuccessOpen] = useState(false);
 
   // Determine if installments are available for this cart
   // Logic: All items in cart must allow installments, or at least the main high-value item?
@@ -72,6 +87,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
   }, [userEmail]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setSimulatedSuccessOpen(false);
+    }
+  }, [isOpen]);
+
   // Handle Auto-Apply Discount
   useEffect(() => {
       if (preAppliedDiscountCode && !appliedDiscount) {
@@ -86,7 +107,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       cart.forEach(item => {
           const product = products.find(p => p.id === item.productId);
           if (product) {
-              subTotal += product.priceIdr * item.quantity;
+              subTotal += getCartLineUnitPrice(product, item.variantId) * item.quantity;
           }
       });
       return subTotal;
@@ -150,9 +171,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           cart.forEach(item => {
               const product = products.find(p => p.id === item.productId);
               if (product) {
+                  const unit = getCartLineUnitPrice(product, item.variantId);
                   const itemDiscount = DiscountService.calculateDiscount(
                       discount, 
-                      product.priceIdr, 
+                      unit, 
                       item.quantity,
                       product.category,
                       product.id
@@ -196,7 +218,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         return {
           id: item.productId,
           name: p?.title || 'Unknown Item',
-          price: p?.priceIdr || 0,
+          price: p ? getCartLineUnitPrice(p, item.variantId) : 0,
           quantity: item.quantity,
           variantId: item.variantId,
         };
@@ -217,6 +239,51 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       });
 
       setTransaction(trx);
+
+      // Test mode: always bypass Midtrans popup and show local success modal.
+      // Conversion is still recorded by backend when transaction reaches PAID
+      // (free checkout is PAID immediately; paid checkout uses simulate-settle).
+      if (MIDTRANS_UI_DISABLED) {
+        try {
+          const paidNow = String(trx.status ?? '').toUpperCase() === 'PAID';
+          if (!paidNow && totalAmount > 0) {
+            await PaymentService.simulateSettle(trx.id, customerEmail);
+          }
+          setSimulatedSuccessOpen(true);
+        } catch (e: unknown) {
+          const msg =
+            e instanceof Error
+              ? e.message
+              : 'Simulasi gagal. Set ALLOW_PAYMENT_SIMULATION=true di server API.';
+          setErrorMessage(msg);
+        } finally {
+          setIsLoading(false);
+          snapPayInFlightRef.current = false;
+        }
+        return;
+      }
+
+      // Rp 0 checkout: backend marks PAID without Midtrans; grant entitlements immediately.
+      const snapOk = typeof snapToken === 'string' && snapToken.trim().length > 0;
+      if (!snapOk) {
+        try {
+          if (!trx.itemsSnapshot) throw new Error('Missing cart snapshot');
+          await PaymentService.confirmManualTransfer(
+            trx.id,
+            trx.totalAmount,
+            trx.itemsSnapshot,
+            trx.customerEmail,
+          );
+          onPaymentSuccess?.();
+          onClose();
+        } catch (e: any) {
+          setErrorMessage(e?.message || 'Failed to complete free order');
+        } finally {
+          setIsLoading(false);
+          snapPayInFlightRef.current = false;
+        }
+        return;
+      }
 
       // Load Midtrans Snap JS then open the hosted payment page.
       const loadSnapJs = () =>
@@ -324,6 +391,30 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   };
 
+  const handleFinalizeSimulatedPayment = async () => {
+    if (!transaction?.itemsSnapshot) {
+      setErrorMessage('Missing cart snapshot');
+      return;
+    }
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      await PaymentService.confirmManualTransfer(
+        transaction.id,
+        transaction.totalAmount,
+        transaction.itemsSnapshot,
+        transaction.customerEmail,
+      );
+      setSimulatedSuccessOpen(false);
+      onPaymentSuccess?.();
+      onClose();
+    } catch (e: unknown) {
+      setErrorMessage(e instanceof Error ? e.message : 'Failed to finalize');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
   };
@@ -416,14 +507,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     </span>
                   )}
                   <span className="text-slate-500 text-xs">
-                    {formatIDR(product.priceIdr)}
+                    {formatStorePriceIdr(getCartLineUnitPrice(product, item.variantId))}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="flex items-center bg-white border border-slate-200 rounded-md">
                     <button
-                      onClick={() => onUpdateQuantity(item.productId, -1)}
+                      onClick={() => onUpdateQuantity(item.productId, item.variantId, -1)}
                       className="px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
                       disabled={item.quantity <= 1}
                     >
@@ -433,7 +524,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       {item.quantity}
                     </span>
                     <button
-                      onClick={() => onUpdateQuantity(item.productId, 1)}
+                      onClick={() => onUpdateQuantity(item.productId, item.variantId, 1)}
                       className="px-2 py-1 text-slate-500 hover:bg-slate-100"
                     >
                       <Plus size={12} />
@@ -441,7 +532,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
 
                   <button
-                    onClick={() => onRemoveItem(item.productId)}
+                    onClick={() => onRemoveItem(item.productId, item.variantId)}
                     className="text-red-400 hover:text-red-600 transition-colors"
                   >
                     <Trash2 size={16} />
@@ -512,7 +603,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       <div className="border-t border-slate-200 pt-3 space-y-2">
         <div className="flex justify-between text-sm text-slate-500">
           <span>Subtotal</span>
-          <span>{formatIDR(subTotal)}</span>
+          <span>{formatStorePriceIdr(subTotal)}</span>
         </div>
         
         {appliedDiscount && (
@@ -529,7 +620,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         
         <div className="border-t border-slate-200 pt-3 flex justify-between text-lg font-bold text-slate-900 items-end">
           <span>Total</span>
-          <span className="text-2xl text-blue-600">{formatIDR(totalAmount)}</span>
+          <span className="text-2xl text-blue-600">{formatStorePriceIdr(totalAmount)}</span>
         </div>
         
         {/* Installment breakdown removed (Midtrans token uses full total) */}
@@ -537,11 +628,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
       <button 
         onClick={handleInitiatePayment}
-        disabled={totalAmount <= 0 || cart.length === 0 || isMidtransPopupOpen}
+        disabled={cart.length === 0 || totalAmount < 0 || isMidtransPopupOpen}
         className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg flex justify-center items-center group disabled:opacity-50"
       >
-        Proceed to Pay {formatIDR(totalAmount)}
-        <ChevronRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
+        {totalAmount === 0 ? (
+          <>
+            Claim free
+            <ChevronRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
+          </>
+        ) : (
+          <>
+            Proceed to Pay {formatStorePriceIdr(totalAmount)}
+            <ChevronRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
+          </>
+        )}
       </button>
     </div>
   );
@@ -713,6 +813,78 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      {simulatedSuccessOpen && transaction && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payment-sim-success-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-600 to-green-500 px-6 py-5 text-white">
+              <div className="flex items-center gap-3">
+                <div className="rounded-full bg-white/20 p-2.5">
+                  <CheckCircle className="h-7 w-7" aria-hidden />
+                </div>
+                <div className="text-left">
+                  <h3
+                    id="payment-sim-success-title"
+                    className="text-lg font-bold leading-tight"
+                  >
+                    Payment Successful
+                  </h3>
+                  <p className="text-xs text-emerald-50">
+                    Your order has been confirmed and recorded.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-6">
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+                  Payment Summary
+                </p>
+                <p className="mt-1 text-sm text-emerald-800">
+                  We have received your payment confirmation. Your access/entitlement will be available in your account.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Total Paid
+                  </p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {formatIDR(transaction.totalAmount)}
+                  </p>
+                </div>
+                <div className="mt-3 border-t border-slate-200 pt-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Order Reference
+                  </p>
+                  <p className="mt-1 break-all rounded-md bg-white px-2.5 py-2 font-mono text-[11px] text-slate-600">
+                    {transaction.orderId}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-center text-xs text-slate-500">
+                You can review transaction details anytime from your order history.
+              </p>
+
+              <button
+                type="button"
+                onClick={handleFinalizeSimulatedPayment}
+                disabled={isLoading}
+                className="w-full rounded-xl bg-slate-900 py-3 font-bold text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+              >
+                {isLoading ? 'Processing...' : 'Continue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Modal Header */}
@@ -731,9 +903,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         </div>
 
         {/* Modal Footer (Security Badge) */}
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-center items-center text-xs text-slate-400">
-           <ShieldCheck size={12} className="mr-1.5" />
-           High-Traffic Queue Protection Enabled
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex flex-col justify-center items-center gap-1 text-xs text-slate-400">
+           <span className="flex items-center">
+             <ShieldCheck size={12} className="mr-1.5" />
+             High-Traffic Queue Protection Enabled
+           </span>
+           {MIDTRANS_UI_DISABLED && (
+             <span className="text-amber-700/90">
+               Midtrans UI dinonaktifkan (NEXT_PUBLIC_MIDTRANS_UI_DISABLED)
+             </span>
+           )}
         </div>
       </div>
     </div>

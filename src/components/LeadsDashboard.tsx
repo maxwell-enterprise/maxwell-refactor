@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Member } from '../types/index';
 import { DataService } from '../services/dataService';
+import { isSalesPipelineLead } from '../lib/memberLifecycleViews';
 import { useToast } from '../context/ToastContext';
 import { Search, Filter, Mail, ChevronRight, UserPlus, Target, UserCog, CheckCircle, Award, Square, CheckSquare, X } from 'lucide-react';
 import WhatsAppQuickAction from './common/WhatsAppQuickAction';
@@ -29,7 +30,7 @@ const LeadsDashboard: React.FC = () => {
     const loadLeads = async () => {
         setLoading(true);
         const allMembers = await DataService.getMembers();
-        const leadList = allMembers.filter(m => m.lifecycleStage === 'IDENTIFIED' || m.lifecycleStage === 'GUEST' || m.lifecycleStage === 'PARTICIPANT');
+        const leadList = allMembers.filter((m) => isSalesPipelineLead(m));
         setLeads(leadList);
         setLoading(false);
     };

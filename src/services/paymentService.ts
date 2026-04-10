@@ -11,26 +11,22 @@ import { INVENTORY_DATA } from '../constants';
 import { RepositoryFactory } from './repositories/index';
 import { apiRequest } from '../repositories/api/apiClient';
 
-const buildPaymentIdempotencyKey = (
-  payload: InitiatePaymentPayload,
-): string => {
-  const stableItems = [...payload.items]
-    .map((item) => `${item.id}:${item.variantId || '-'}:${item.quantity}`)
-    .sort()
-    .join('|');
-  const stableBase = [
-    payload.customerEmail.trim().toLowerCase(),
-    payload.method,
-    payload.discountCode || '-',
-    Math.round(payload.totalAmount).toString(),
-    stableItems,
-  ].join('::');
-  let hash = 0;
-  for (let i = 0; i < stableBase.length; i += 1) {
-    hash = (hash << 5) - hash + stableBase.charCodeAt(i);
-    hash |= 0;
+const buildPaymentIdempotencyKey = (): string => {
+  const g = globalThis as { crypto?: { randomUUID?: () => string } };
+  if (g.crypto?.randomUUID) {
+    return `pay-${g.crypto.randomUUID()}`;
   }
-  return `pay-${Math.abs(hash).toString(16)}-${stableItems.length}`;
+  return `pay-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+};
+
+const toIsoOrNow = (value: unknown): string => {
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+  return new Date().toISOString();
 };
 
 export const PaymentService = {
@@ -88,12 +84,13 @@ export const PaymentService = {
       {
         method: 'POST',
         headers: {
-          'x-idempotency-key': buildPaymentIdempotencyKey(payload),
+          'x-idempotency-key': buildPaymentIdempotencyKey(),
         },
         body: JSON.stringify({
           items: payload.items.map((i) => ({
             productId: i.id,
             quantity: i.quantity,
+            variantId: i.variantId,
           })),
           voucherCode: payload.discountCode,
           paymentMethod: payload.method,
@@ -138,7 +135,18 @@ export const PaymentService = {
 
     return { transaction: tx, snapToken: res.snapToken };
   },
-  
+
+  /** Server must have ALLOW_PAYMENT_SIMULATION=true. Marks PENDING → PAID like a successful gateway. */
+  simulateSettle: async (
+    transactionId: string,
+    customerEmail: string,
+  ): Promise<{ paymentStatus: string; totalAmount: number; orderId: string }> => {
+    return apiRequest('/transactions/simulate-settle', {
+      method: 'POST',
+      body: JSON.stringify({ transactionId, customerEmail }),
+    });
+  },
+
   confirmManualTransfer: async (
     transactionId: string,
     _amountReceived: number,
@@ -150,7 +158,7 @@ export const PaymentService = {
     if (!customerEmail || !customerEmail.includes('@')) {
       throw new Error('Missing customer email for payment status verification');
     }
-    let backendTx: any = null;
+    let backendTx: { paymentStatus?: string; totalAmount?: number } | null = null;
     const maxAttempts = 12;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const statusRes = await apiRequest<{
@@ -163,11 +171,7 @@ export const PaymentService = {
           customerEmail: customerEmail || '',
         }),
       });
-      backendTx = {
-        ...backendTx,
-        paymentStatus: statusRes.paymentStatus,
-        totalAmount: statusRes.totalAmount,
-      };
+      backendTx = { paymentStatus: statusRes.paymentStatus, totalAmount: statusRes.totalAmount };
       if (statusRes.paymentStatus === 'PAID') break;
       await new Promise((r) => setTimeout(r, 1500));
     }
@@ -178,7 +182,7 @@ export const PaymentService = {
 
     const members = await DataService.getMembers();
     const member = members.find(
-      (m) => m.email.toLowerCase() === (backendTx.guestEmail ?? '').toLowerCase(),
+      (m) => m.email.toLowerCase() === (customerEmail || '').toLowerCase(),
     );
 
     if (member && itemsSnapshot && itemsSnapshot.length > 0) {
@@ -191,8 +195,8 @@ export const PaymentService = {
         })),
       );
       await EventBus.emit('PAYMENT_SUCCESS', {
-        transactionId: backendTx.id,
-        orderId: backendTx.transactionNumber,
+        transactionId,
+        orderId: transactionId,
         amount: backendTx.totalAmount,
         memberId: member.id,
         name: member.name,
@@ -204,27 +208,27 @@ export const PaymentService = {
     }
 
     // Return a minimal transaction object for UI consumers.
+    const totalPaid = Number(backendTx.totalAmount ?? 0);
+
     return {
-      id: backendTx.id,
-      orderId: backendTx.transactionNumber,
-      amount: backendTx.subtotalAmount,
-      discountAmount: backendTx.discountAmount,
-      totalAmount: backendTx.totalAmount,
-      paidAmount: backendTx.totalAmount,
+      id: transactionId,
+      orderId: transactionId,
+      amount: totalPaid,
+      discountAmount: 0,
+      totalAmount: totalPaid,
+      paidAmount: totalPaid,
       balanceDue: 0,
-      method: backendTx.paymentMethod as PaymentMethodType,
-      status: backendTx.paymentStatus as any,
-      createdAt: new Date(backendTx.createdAt).toISOString(),
-      expiryTime: backendTx.paymentExpiresAt
-        ? new Date(backendTx.paymentExpiresAt).toISOString()
-        : new Date().toISOString(),
-      customerEmail: backendTx.guestEmail ?? '',
+      method: 'BANK_TRANSFER',
+      status: (backendTx.paymentStatus ?? 'PAID') as any,
+      createdAt: toIsoOrNow(undefined),
+      expiryTime: toIsoOrNow(undefined),
+      customerEmail: customerEmail || '',
       itemsSnapshot,
-      virtualAccountNumber: backendTx.virtualAccountNumber ?? undefined,
-      qrisUrl: backendTx.qrisUrl ?? undefined,
-      bankDetails: backendTx.bankDetails ?? undefined,
+      virtualAccountNumber: undefined,
+      qrisUrl: undefined,
+      bankDetails: undefined,
       proofOfPaymentUrl: undefined,
-      attributionSource: backendTx.attributionSource,
+      attributionSource: undefined,
       installmentPlan: undefined,
       refunds: undefined,
     };

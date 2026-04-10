@@ -1,9 +1,16 @@
 "use client";
+/** From registry: `pnpm dlx shadcn@latest add "https://lucide-animated.com/r/bell.json"` — not `shadcn add @lucide-animated` (missing on ui.shadcn.com). */
 
 import type { Variants } from "motion/react";
 import { motion, useAnimation } from "motion/react";
 import type { HTMLAttributes } from "react";
-import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -14,6 +21,8 @@ export interface BellIconHandle {
 
 interface BellIconProps extends HTMLAttributes<HTMLDivElement> {
   size?: number;
+  /** When true, shakes in a loop (shake → pause 1s → repeat). Hover animation is disabled. */
+  alertLoop?: boolean;
 }
 
 const SVG_VARIANTS: Variants = {
@@ -22,7 +31,17 @@ const SVG_VARIANTS: Variants = {
 };
 
 const BellIcon = forwardRef<BellIconHandle, BellIconProps>(
-  ({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      size = 28,
+      alertLoop = false,
+      ...props
+    },
+    ref
+  ) => {
     const controls = useAnimation();
     const isControlledRef = useRef(false);
 
@@ -35,26 +54,59 @@ const BellIcon = forwardRef<BellIconHandle, BellIconProps>(
       };
     });
 
+    useEffect(() => {
+      if (!alertLoop) return;
+
+      let cancelled = false;
+      const run = async () => {
+        while (!cancelled) {
+          await controls.start({
+            rotate: [0, -10, 10, -10, 0],
+            transition: { duration: 0.55, ease: "easeInOut" },
+          });
+          if (cancelled) break;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      };
+      void run();
+      return () => {
+        cancelled = true;
+      };
+    }, [alertLoop, controls]);
+
+    useEffect(() => {
+      if (alertLoop) return;
+      void controls.start("normal");
+    }, [alertLoop, controls]);
+
     const handleMouseEnter = useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
+        if (alertLoop) {
+          onMouseEnter?.(e);
+          return;
+        }
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
           controls.start("animate");
         }
       },
-      [controls, onMouseEnter]
+      [alertLoop, controls, onMouseEnter]
     );
 
     const handleMouseLeave = useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
+        if (alertLoop) {
+          onMouseLeave?.(e);
+          return;
+        }
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
           controls.start("normal");
         }
       },
-      [controls, onMouseLeave]
+      [alertLoop, controls, onMouseLeave]
     );
     return (
       <div
