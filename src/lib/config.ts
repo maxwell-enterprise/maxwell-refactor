@@ -75,7 +75,12 @@ const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   '';
 const apiBaseUrl = resolveApiBaseUrl();
-const externalApiOnly = process.env.NEXT_PUBLIC_EXTERNAL_API_ONLY === 'true';
+/**
+ * API-only is the safe default for this app. Explicitly set
+ * `NEXT_PUBLIC_EXTERNAL_API_ONLY=false` only when intentionally testing
+ * legacy Supabase/mock flows locally.
+ */
+const externalApiOnly = process.env.NEXT_PUBLIC_EXTERNAL_API_ONLY !== 'false';
 
 const hasSupabaseKeys = !!(supabaseUrl && supabaseAnonKey);
 
