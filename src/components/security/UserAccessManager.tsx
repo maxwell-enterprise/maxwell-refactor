@@ -9,9 +9,11 @@ import MemberLookup from '../common/MemberLookup'; // NEW IMPORT
 import { workspaceFetch } from '../../lib/workspaceApi';
 import { ApiRequestError } from '../../repositories/api/apiClient';
 import { useAccountDeletionRealtime } from '../../hooks/useAccountDeletionRealtime';
+import { setWorkspaceToken } from '../../lib/workspaceAuthToken';
 
-/** Roles assignable from Security quick-actions (matches product: Finance, Operations, Marketing, Sales). */
+/** Roles assignable from Security quick-actions. */
 const SECURITY_QUICK_ASSIGN_ROLES: UserRole[] = [
+  UserRole.SUPER_ADMIN,
   UserRole.FINANCE,
   UserRole.OPERATIONS,
   UserRole.MARKETING,
@@ -19,9 +21,6 @@ const SECURITY_QUICK_ASSIGN_ROLES: UserRole[] = [
 ];
 
 function selectRoleOptionsForUser(user: UserProfile): UserRole[] {
-  if (user.role === UserRole.SUPER_ADMIN) {
-    return [UserRole.SUPER_ADMIN];
-  }
   if (
     !SECURITY_QUICK_ASSIGN_ROLES.includes(user.role) &&
     user.role !== UserRole.MEMBER
@@ -202,7 +201,36 @@ const UserAccessManager: React.FC = () => {
         return;
       }
 
+      const payload = (await res.json()) as
+        | {
+            ok?: boolean;
+            mode?: 'updated' | 'pending_signup';
+            actorRelogRequired?: boolean;
+            actorNewRole?: string;
+            actorSessionToken?: string;
+          }
+        | undefined;
+
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+      const isSuperAdminHandover =
+        newRole === UserRole.SUPER_ADMIN && user.id !== authUser?.id;
+      const shouldRelogActor =
+        payload?.actorRelogRequired === true || isSuperAdminHandover;
+      if (shouldRelogActor) {
+        const replacementToken =
+          typeof payload?.actorSessionToken === 'string' &&
+          payload.actorSessionToken.trim().length > 0
+            ? payload.actorSessionToken
+            : null;
+        if (replacementToken) {
+          setWorkspaceToken(replacementToken);
+        }
+        if (typeof window !== 'undefined') {
+          window.location.replace('/dashboard?view=leads');
+        }
+        return;
+      }
+
       showToast(`User role updated to ${newRole}`, 'success');
     } catch {
       showToast('Network error while updating role.', 'error');
@@ -372,9 +400,6 @@ const UserAccessManager: React.FC = () => {
                                         className={`text-xs font-bold py-1.5 pl-2 pr-8 rounded-lg border appearance-none cursor-pointer outline-none focus:ring-2 focus:ring-blue-500/20 transition-all ${getRoleColor(user.role)}`}
                                         value={user.role}
                                         onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
-                                        disabled={isSuperAdmin}
-                                        aria-disabled={isSuperAdmin ? 'true' : undefined}
-                                        title={isSuperAdmin ? 'Super Admin role cannot be changed from Quick Actions.' : undefined}
                                     >
                                         {roleSelectOptions.map((role) => (
                                             <option key={role} value={role} className="bg-white text-slate-700">
@@ -532,7 +557,7 @@ const UserAccessManager: React.FC = () => {
                         </h3>
                         <button onClick={() => setIsPromoteModalOpen(false)} className="text-slate-400 hover:text-slate-600"><XCircle size={20}/></button>
                     </div>
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6 min-h-[17.5rem] sm:min-h-[20rem]">
                         <MemberLookup
                             onSelect={handlePromoteMember}
                             placeholder="Find member by name or email..."
