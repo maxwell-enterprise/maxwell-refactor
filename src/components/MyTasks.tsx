@@ -1,11 +1,16 @@
 
 import React, { useEffect, useState } from 'react';
-import { TaskService, UnifiedTask } from '../services/taskService';
+import {
+    TaskService,
+    UnifiedTask,
+    MAXWELL_TASKS_UPDATED_EVENT,
+} from '../services/taskService';
 import { OpsService } from '../services/opsService';
 import { SupportService } from '../services/supportService';
 import { OpsTask, OpsTaskStatus } from '../types/ops';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useDialog } from '../context/DialogContext';
 import { markRbacInboxRead } from '../lib/rbacInboxClient';
 import { 
     ClipboardList, LifeBuoy, CheckCircle2, Bell,
@@ -17,6 +22,7 @@ import TicketResolutionModal from './support/TicketResolutionModal';
 const MyTasks: React.FC = () => {
   const { userRole, logout } = useAuth();
   const { showToast } = useToast();
+  const { confirm } = useDialog();
   const [tasks, setTasks] = useState<UnifiedTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,11 +31,17 @@ const MyTasks: React.FC = () => {
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<UnifiedTask | null>(null);
 
-  const loadTasks = async () => {
+  const loadTasks = async (forceRefresh = false) => {
       setLoading(true);
       try {
-          const data = await TaskService.getMyTasks(userRole);
+          const data = await TaskService.getMyTasks(
+              userRole,
+              forceRefresh ? { bypassCache: true } : undefined,
+          );
           setTasks(data);
+          if (forceRefresh && typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent(MAXWELL_TASKS_UPDATED_EVENT));
+          }
       } catch (error) {
           console.error('[MyTasks] Failed to load tasks:', error);
           showToast('Failed to load Action Center data', 'error');
@@ -45,11 +57,21 @@ const MyTasks: React.FC = () => {
   const handleTaskClick = async (task: UnifiedTask) => {
       const inboxId = task.metadata?.rbacInboxId;
       if (task.source === 'SYSTEM' && inboxId) {
+          const ok = await confirm({
+              title: 'Your access has changed',
+              variant: 'warning',
+              confirmLabel: 'Mark read & sign out',
+              cancelLabel: 'Cancel',
+              message: (
+                  <span>
+                      To apply your updated access rights, this session will end and you will need to{' '}
+                      <strong>sign in again</strong>. Continue?
+                  </span>
+              ),
+          });
+          if (!ok) return;
           await markRbacInboxRead(inboxId);
-          showToast(
-              'Akun Anda diarahkan ke RBAC: kami mengeluarkan sesi ini supaya login berikutnya memuat role baru.',
-              'info',
-          );
+          showToast('Please sign in again so your menus and permissions stay up to date.', 'info');
           await logout();
           return;
       }
@@ -60,19 +82,31 @@ const MyTasks: React.FC = () => {
               if (realTask) {
                   setSelectedChecklistId(checklist.id);
                   setSelectedOpsTask(realTask);
+              } else {
+                  showToast('Task was not found on the checklist.', 'error');
               }
+          } else {
+              showToast('Checklist was not found or is no longer available.', 'info');
           }
       } else if (task.source === 'SUPPORT') {
           setSelectedTicket(task);
+      } else if (task.source === 'SYSTEM' && !inboxId) {
+          showToast('This system task has no on-screen action.', 'info');
       }
   };
 
   const handleOpsTaskUpdate = async (taskId: string, status: OpsTaskStatus, note: string) => {
       if (!selectedChecklistId) return;
-      const updated = await OpsService.updateTaskStatus(selectedChecklistId, taskId, status, userRole, note);
-      if (updated) {
+      try {
+          const updated = await OpsService.updateTaskStatus(selectedChecklistId, taskId, status, userRole, note);
+          if (!updated) {
+              showToast('Could not update task (checklist or task not found).', 'error');
+              return;
+          }
           showToast(`Task ${status.toLowerCase()} successfully`, 'success');
-          loadTasks();
+          loadTasks(true);
+      } catch (e) {
+          showToast(e instanceof Error ? e.message : 'Task update failed.', 'error');
       }
   };
 
@@ -80,7 +114,7 @@ const MyTasks: React.FC = () => {
       await SupportService.resolveTicket(taskId, resolution);
       showToast("Ticket resolved and member notified", "success");
       setSelectedTicket(null);
-      loadTasks();
+      loadTasks(true);
   };
 
   const filteredTasks = tasks.filter(t => 
@@ -107,6 +141,10 @@ const MyTasks: React.FC = () => {
                 <p className="text-sm text-slate-500 mt-1">
                     {tasks.length} critical items require your immediate attention.
                 </p>
+                <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-400">
+                    <span className="font-semibold text-violet-700">SYSTEM</span> cards are important notices from the platform
+                    (for example when your workspace permissions change). After you confirm, you will be signed out once so the next login picks up the latest access.
+                </p>
             </div>
             <div className="flex items-center gap-2">
                 <div className="relative flex-1 md:w-64">
@@ -119,7 +157,7 @@ const MyTasks: React.FC = () => {
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <button onClick={loadTasks} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 transition-colors">
+                <button type="button" onClick={() => loadTasks(true)} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 transition-colors">
                     <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </button>
             </div>

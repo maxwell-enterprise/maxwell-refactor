@@ -42,7 +42,10 @@ export const AutomationQueueService = {
         };
 
         if (isSystemApiMode()) {
-            await systemApi.putAutomationQueueItem(item.id, item);
+            // `/fe/system/automations/queue/*` requires Ops/Marketing/etc.; storefront JWTs
+            // (Member/Sales) get 403 and noisy DevTools. Queue intake for commerce is server-owned
+            // (checkout / webhooks); client-side WhatsApp/Ops hooks still run from EventBus.
+            return;
         } else if (APP_CONFIG.USE_MOCK) {
             await DevDatabase.add('system_background_jobs', item); 
         } else if (supabase) {

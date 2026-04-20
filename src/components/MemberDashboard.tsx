@@ -1,17 +1,27 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { EntitlementService } from '../services/entitlementService';
 import { WalletItem } from '../types/access';
-import { ContractService } from '../services/contractService'; 
-import { ContractInstance } from '../types/contract'; 
-import { Calendar, MapPin, Award, Clock, CheckCircle2, Lock, AlertCircle } from 'lucide-react';
+import { ContractService } from '../services/contractService';
+import { ContractInstance } from '../types/contract';
+import { Calendar, MapPin, Award, Clock, CheckCircle2, Lock } from 'lucide-react';
+import type { Member } from '../types/index';
 import { ViewState } from '../types/index';
 import { UserEntitlements, LifecycleStage } from '../types/access';
-import WalletSummaryWidget from './dashboard/WalletSummaryWidget'; 
-import ContractSigningModal from './member/ContractSigningModal'; 
+import WalletSummaryWidget from './dashboard/WalletSummaryWidget';
+import ContractSigningModal from './member/ContractSigningModal';
 import { DataService } from '../services/dataService';
 import { resolveJourneyLifecycleStage } from '../lib/memberLifecycleViews';
+import {
+  readWalletSessionCache,
+  writeWalletSessionCache,
+} from '../lib/walletSessionCache';
+import {
+  readMemberZoneSessionCache,
+  writeMemberZoneSessionCache,
+  invalidateMemberZoneSessionCache,
+} from '../lib/memberZoneSessionCache';
+import { WALLET_REFRESH_EVENT } from '../services/paymentService';
 
 interface MemberDashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -27,34 +37,102 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [journeyLifecycle, setJourneyLifecycle] = useState<LifecycleStage>('GUEST');
 
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const [walletItems, userEntitlements, contracts, allMembers] =
+  const applyDashboardData = useCallback(
+    (
+      walletItems: WalletItem[],
+      userEntitlements: UserEntitlements | null,
+      contracts: ContractInstance[],
+      crmMember: Member | null,
+    ) => {
+      setJourneyLifecycle(
+        resolveJourneyLifecycleStage({
+          member: crmMember ?? null,
+          entitlementLifecycle: userEntitlements?.attributes?.lifecycle,
+        }),
+      );
+      setWallet(walletItems);
+      const tickets = walletItems
+        .filter(
+          (i) =>
+            i.type === 'TICKET' &&
+            i.status === 'ACTIVE' &&
+            i.expiryDate,
+        )
+        .sort(
+          (a, b) =>
+            new Date(a.expiryDate!).getTime() -
+            new Date(b.expiryDate!).getTime(),
+        );
+      setNextEvent(tickets.length > 0 ? tickets[0] : null);
+      setEntitlements(userEntitlements);
+      const unsigned = contracts.find((c) => c.status === 'PUBLISHED');
+      setPendingContract(unsigned ?? null);
+    },
+    [],
+  );
+
+  const loadDashboard = useCallback(
+    async (mode: 'full' | 'background' = 'full') => {
+      if (!user) return;
+
+      const runFetch = async () => {
+        const walletSnap = readWalletSessionCache(user.id);
+        const walletItemsPromise = walletSnap
+          ? Promise.resolve(walletSnap.items)
+          : Promise.all([
+              EntitlementService.getMyWallet(user.id),
+              EntitlementService.getWalletMemberHub(user.id),
+            ]).then(([wi, hub]) => {
+              writeWalletSessionCache(user.id, wi, hub);
+              return wi;
+            });
+        const [walletItems, userEntitlements, contracts, crmMember] =
           await Promise.all([
-            EntitlementService.getMyWallet(user.id),
+            walletItemsPromise,
             EntitlementService.getUserEntitlements(user.id),
             ContractService.getMyContracts(user.id),
-            DataService.getMembers(),
+            DataService.resolveMeCrmMember({
+              id: user.id,
+              email: user.email ?? null,
+            }),
           ]);
-        if (cancelled) return;
-        const emailLc = user.email?.trim().toLowerCase();
-        const crmMember =
-          (emailLc
-            ? allMembers.find((m) => m.email.trim().toLowerCase() === emailLc)
-            : undefined) ?? allMembers.find((m) => m.id === user.id);
-
-        setJourneyLifecycle(
-          resolveJourneyLifecycleStage({
-            member: crmMember ?? null,
-            entitlementLifecycle: userEntitlements?.attributes?.lifecycle,
-          }),
+        applyDashboardData(
+          walletItems,
+          userEntitlements,
+          contracts,
+          crmMember,
         );
-        setWallet(walletItems);
-        const tickets = walletItems
+        const jl = resolveJourneyLifecycleStage({
+          member: crmMember ?? null,
+          entitlementLifecycle: userEntitlements?.attributes?.lifecycle,
+        });
+        const unsigned = contracts.find((c) => c.status === 'PUBLISHED');
+        writeMemberZoneSessionCache({
+          userId: user.id,
+          walletItems,
+          entitlements: userEntitlements,
+          pendingContract: unsigned ?? null,
+          journeyLifecycle: jl,
+          fetchedAt: Date.now(),
+        });
+      };
+
+      if (mode === 'background') {
+        try {
+          await runFetch();
+        } catch (e) {
+          console.error('[MemberDashboard] background refresh failed', e);
+        }
+        return;
+      }
+
+      const zoneSnap = readMemberZoneSessionCache(user.id);
+      if (zoneSnap) {
+        setWallet(zoneSnap.walletItems);
+        setEntitlements(zoneSnap.entitlements);
+        setPendingContract(zoneSnap.pendingContract);
+        setJourneyLifecycle(zoneSnap.journeyLifecycle);
+        const tickets = zoneSnap.walletItems
           .filter(
             (i) =>
               i.type === 'TICKET' &&
@@ -67,27 +145,45 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
               new Date(b.expiryDate!).getTime(),
           );
         setNextEvent(tickets.length > 0 ? tickets[0] : null);
-        setEntitlements(userEntitlements);
-        const unsigned = contracts.find((c) => c.status === 'PUBLISHED');
-        if (unsigned) setPendingContract(unsigned);
-        else setPendingContract(null);
+        setLoading(false);
+        try {
+          await runFetch();
+        } catch (e) {
+          console.error('[MemberDashboard] background refresh failed', e);
+        }
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await runFetch();
       } catch (e) {
         console.error('[MemberDashboard] load failed', e);
-        if (!cancelled) {
-          setWallet([]);
-          setNextEvent(null);
-          setEntitlements(null);
-          setPendingContract(null);
-          setJourneyLifecycle('GUEST');
-        }
+        setWallet([]);
+        setNextEvent(null);
+        setEntitlements(null);
+        setPendingContract(null);
+        setJourneyLifecycle('GUEST');
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
+    },
+    [user, applyDashboardData],
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    void loadDashboard('full');
+  }, [user, loadDashboard]);
+
+  useEffect(() => {
+    if (!user) return;
+    const onWalletRefresh = () => {
+      void loadDashboard('full');
     };
-  }, [user]);
+    window.addEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
+    return () => window.removeEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
+  }, [user, loadDashboard]);
 
   const STAGES: { id: LifecycleStage, label: string }[] = useMemo(
     () => [
@@ -235,7 +331,16 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
         </div>
 
         {showSignModal && pendingContract && (
-            <ContractSigningModal instance={pendingContract} onClose={() => setShowSignModal(false)} onSigned={() => { setShowSignModal(false); setPendingContract(null); }} />
+            <ContractSigningModal
+                instance={pendingContract}
+                onClose={() => setShowSignModal(false)}
+                onSigned={() => {
+                    setShowSignModal(false);
+                    setPendingContract(null);
+                    invalidateMemberZoneSessionCache();
+                    void loadDashboard('full');
+                }}
+            />
         )}
       </div>
     </div>

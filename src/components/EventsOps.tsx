@@ -117,7 +117,7 @@ const EventsAdmin: React.FC = () => {
 
       await DataService.upsertEvent(updatedChild);
       showToast(action === 'LINK' ? 'Event added to series' : 'Event removed from series', 'success');
-      loadEvents(); 
+      await loadEvents(); 
   };
 
   // --- REFACTORED DELETE LOGIC USING GLOBAL DIALOG ---
@@ -206,6 +206,11 @@ const EventsAdmin: React.FC = () => {
         recurringMeta: { frequency: 'WEEKLY', time: '09:00', patternDescription: '', totalSessions: 1 },
         onlineMeetingLink: '',
         locationMapLink: '',
+        banner_url: '',
+        status: 'Upcoming',
+        sessions: [],
+        gates: [],
+        selectionConfig: { mode: 'BUNDLE', minSelect: 1, maxSelect: 1 },
         isVisibleInCatalog: true
       });
       setShowCreateModal(true);
@@ -246,7 +251,12 @@ const EventsAdmin: React.FC = () => {
     const finalTags = Array.from(new Set([...existingTags, ...tierTags].filter(t => !!t)));
 
     if (isEditing && eventData.id) {
-        eventToSave = { ...events.find(e => e.id === eventData.id)!, ...eventData, creditTags: finalTags } as Event;
+        const previous = events.find(e => e.id === eventData.id);
+        eventToSave = {
+            ...(previous ?? (eventData as Event)),
+            ...eventData,
+            creditTags: finalTags,
+        } as Event;
     } else {
         eventToSave = {
             id: `EVT-${Date.now()}`,
@@ -259,16 +269,21 @@ const EventsAdmin: React.FC = () => {
             locationMode: eventData.locationMode || 'OFFLINE',
             locationMapLink: eventData.locationMapLink,
             onlineMeetingLink: eventData.onlineMeetingLink,
-            capacity: eventData.capacity || 100,
+            banner_url: eventData.banner_url?.trim() || undefined,
+            capacity: eventData.capacity ?? 100,
             type: eventData.type as EventType,
-            status: 'Upcoming',
-            revenue: 0,
-            attendees: 0,
+            status: eventData.status ?? 'Upcoming',
+            revenue: eventData.revenue ?? 0,
+            attendees: eventData.attendees ?? 0,
             parentEventId: eventData.parentEventId,
+            classId: eventData.classId,
             creditTags: finalTags,
             admissionPolicy: eventData.admissionPolicy || 'PRE_BOOKED',
             isRecurring: eventData.isRecurring,
             recurringMeta: eventData.recurringMeta,
+            selectionConfig: eventData.selectionConfig,
+            gates: eventData.gates ?? [],
+            sessions: eventData.sessions ?? [],
             tiers: eventData.tiers || [],
             doneTag: eventData.type === 'CONTAINER' ? '' : eventData.doneTag,
             isVisibleInCatalog: eventData.isVisibleInCatalog !== undefined ? eventData.isVisibleInCatalog : true
@@ -278,7 +293,7 @@ const EventsAdmin: React.FC = () => {
     await DataService.upsertEvent(eventToSave);
     showToast(isEditing ? 'Event updated' : 'Event created', 'success');
     setShowCreateModal(false);
-    loadEvents();
+    await loadEvents();
   };
 
   const toggleSeriesExpand = (seriesId: string) => {

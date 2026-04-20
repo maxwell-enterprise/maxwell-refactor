@@ -23,6 +23,23 @@ export class SupabaseMemberRepository implements IMemberRepository {
         return data as Member[];
     }
 
+    async searchForMemberLookup(query: string): Promise<Member[]> {
+        if (!supabase) throw new Error("Supabase client not initialized");
+        const q = query.trim();
+        if (!q) return [];
+        const esc = q.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+        const { data, error } = await supabase
+            .from('members')
+            .select('*')
+            .ilike('email', `%${esc}%`)
+            .limit(50);
+        if (error) {
+            console.error('Supabase member lookup:', error);
+            return [];
+        }
+        return (data ?? []) as Member[];
+    }
+
     async getById(id: string): Promise<Member | null> {
         if (!supabase) throw new Error("Supabase client not initialized");
 

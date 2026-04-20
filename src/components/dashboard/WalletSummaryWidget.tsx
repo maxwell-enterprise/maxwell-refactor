@@ -11,11 +11,23 @@ interface WalletSummaryWidgetProps {
 
 const WalletSummaryWidget: React.FC<WalletSummaryWidgetProps> = ({ walletItems, onNavigate }) => {
     
+    /** Flex (punch) balance only; unlimited passes do not inflate the headline number. */
     const credits = useMemo(() => {
         return walletItems
-            .filter(i => i.type === 'CREDIT_PASS' && i.status === 'ACTIVE')
-            .reduce((acc, curr) => acc + (curr.meta?.credits || 0), 0);
+            .filter((i) => i.type === 'CREDIT_PASS' && i.status === 'ACTIVE')
+            .reduce((acc, curr) => {
+                if (curr.meta?.isUnlimited) return acc;
+                return acc + (curr.meta?.credits || 0);
+            }, 0);
     }, [walletItems]);
+
+    const hasUnlimitedPass = useMemo(
+        () =>
+            walletItems.some(
+                (i) => i.type === 'CREDIT_PASS' && i.status === 'ACTIVE' && i.meta?.isUnlimited,
+            ),
+        [walletItems],
+    );
 
     const activeTickets = useMemo(() => {
         return walletItems.filter(i => i.type === 'TICKET' && i.status === 'ACTIVE').length;
@@ -62,7 +74,9 @@ const WalletSummaryWidget: React.FC<WalletSummaryWidgetProps> = ({ walletItems, 
                 <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Balance</p>
                     <div className="flex items-baseline gap-2">
-                        <h3 className="text-4xl font-bold">{credits}</h3>
+                        <h3 className="text-4xl font-bold">
+                            {hasUnlimitedPass && credits === 0 ? '∞' : credits}
+                        </h3>
                         <span className="text-sm font-medium text-slate-300">Flex Credits</span>
                     </div>
                 </div>

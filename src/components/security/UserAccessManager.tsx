@@ -358,7 +358,7 @@ const UserAccessManager: React.FC = () => {
                         onClick={() => void loadUsers()}
                         className="text-xs font-bold text-blue-600 hover:underline"
                     >
-                        Coba lagi
+                        Try again
                     </button>
                 </div>
             ) : (

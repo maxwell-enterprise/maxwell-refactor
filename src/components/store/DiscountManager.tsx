@@ -32,6 +32,12 @@ const DiscountManager: React.FC = () => {
         try {
             const data = await DiscountService.getDiscounts();
             setDiscounts(Array.isArray(data) ? data : []);
+        } catch (e) {
+            setDiscounts([]);
+            showToast(
+                e instanceof Error ? e.message : 'Could not load vouchers.',
+                'error',
+            );
         } finally {
             setLoading(false);
         }

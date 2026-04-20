@@ -1,6 +1,6 @@
 
 import { IEntitlementRepository } from '../contracts';
-import { UserEntitlements, WalletItem, GiftAllocation, CorporateTeamMember, WalletTransactionHistory } from '../../types/access';
+import { UserEntitlements, WalletItem, GiftAllocation, CorporateTeamMember, WalletMemberHub, WalletTransactionHistory } from '../../types/access';
 import { DevDatabase } from '../../utils/devDatabase';
 import { SEED_ENTITLEMENTS } from '../../services/entitlementService';
 import { AUTH_TEST_WALLET_ITEMS } from '../../seeds/auth_test_user';
@@ -74,6 +74,24 @@ export class MockEntitlementRepository implements IEntitlementRepository {
 
     async logWalletTransaction(tx: WalletTransactionHistory): Promise<void> {
         await DevDatabase.add('wallet_transactions', tx);
+    }
+
+    async getWalletMemberHub(userId: string): Promise<WalletMemberHub | null> {
+        return {
+            appUserId: userId,
+            displayName: 'Demo Member',
+            email: 'member@example.com',
+            memberPublicId: `M-${userId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'DEMO'}`,
+            gateScanQrPayload: `MEMBER:${userId}`,
+            membershipTier: 'BRONZE',
+            cardNumber: 'MX-DEMO-001',
+            gamification: {
+                totalPoints: 120,
+                currentLevel: '2',
+                rank: 8,
+            },
+            card: null,
+        };
     }
     // ----------------------------
 

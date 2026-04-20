@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Event, EventType, LocationMode, OperationalSession, EventSelectionConfig } from '../../../types/index';
 import { MasterDoneTag } from '../../../types/certification';
 import { 
@@ -10,6 +10,7 @@ import {
 import TierManager from './TierManager';
 import SessionLogisticsManager from './SessionLogisticsManager';
 import { useToast } from '../../../context/ToastContext';
+import { uploadEventBannerImage } from '../../../lib/eventBannerUpload';
 
 interface EventFormProps {
     isOpen: boolean;
@@ -29,32 +30,71 @@ interface EventFormProps {
     onSave: (data: Partial<Event>) => void;
 }
 
+/** Keeps controlled inputs stable (never undefined → defined on first keystroke). */
+function normalizeEventFormData(data: Partial<Event>): Partial<Event> {
+    const sel = data.selectionConfig;
+    return {
+        ...data,
+        name: data.name ?? '',
+        date: data.date ?? '',
+        time: data.time ?? '',
+        location: data.location ?? '',
+        description: data.description ?? '',
+        type: data.type ?? 'SOLO',
+        status: data.status ?? 'Upcoming',
+        admissionPolicy: data.admissionPolicy ?? 'PRE_BOOKED',
+        locationMode: data.locationMode ?? 'OFFLINE',
+        creditTags: data.creditTags ?? [],
+        capacity: data.capacity ?? 0,
+        isVisibleInCatalog:
+            data.isVisibleInCatalog !== undefined ? data.isVisibleInCatalog : true,
+        banner_url: data.banner_url ?? '',
+        endDate: data.endDate ?? '',
+        selectionConfig: {
+            mode: sel?.mode ?? 'BUNDLE',
+            minSelect: sel?.minSelect ?? 1,
+            maxSelect: sel?.maxSelect ?? 1,
+        },
+    };
+}
+
 const EventForm: React.FC<EventFormProps> = ({ 
     isOpen, isEditing, initialData, masterDoneTags, availableCreditTags,
     bundleableEvents, availableContainers, orphanEvents, linkedChildren, onManageChild,
     onClose, onSave 
 }) => {
     const { showToast } = useToast();
-    // Default visibility to TRUE if undefined (for new events)
-    const [formData, setFormData] = useState<Partial<Event>>({
-        ...initialData,
-        capacity: initialData.capacity ?? 0,
-        isVisibleInCatalog: initialData.isVisibleInCatalog !== undefined ? initialData.isVisibleInCatalog : true
-    });
+    const bannerFileInputRef = useRef<HTMLInputElement>(null);
+    const [bannerUploading, setBannerUploading] = useState(false);
+    const [formData, setFormData] = useState<Partial<Event>>(() =>
+        normalizeEventFormData(initialData),
+    );
     const [activeTab, setActiveTab] = useState<'GENERAL' | 'LOCATION' | 'ACCESS' | 'TIERS' | 'LOGISTICS' | 'HIERARCHY'>('GENERAL');
     
     const [expandedTierIndex, setExpandedTierIndex] = useState<number | null>(null);
     
     useEffect(() => {
-        setFormData({
-            ...initialData,
-            capacity: initialData.capacity ?? 0,
-            isVisibleInCatalog: initialData.isVisibleInCatalog !== undefined ? initialData.isVisibleInCatalog : true
-        });
+        setFormData(normalizeEventFormData(initialData));
     }, [initialData]);
 
     const updateField = (field: keyof Event, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleBannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        setBannerUploading(true);
+        try {
+            const url = await uploadEventBannerImage(file);
+            updateField('banner_url', url);
+            showToast('Banner uploaded; URL filled from storage.', 'success');
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Banner upload failed', 'error');
+        } finally {
+            setBannerUploading(false);
+        }
     };
 
     const updateSelectionConfig = (field: keyof EventSelectionConfig, value: any) => {
@@ -204,9 +244,17 @@ const EventForm: React.FC<EventFormProps> = ({
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Banner Image URL</label>
-                                    <div className="flex gap-3 items-start">
-                                        <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Banner image</label>
+                                    <p className="text-xs text-slate-500 mb-2">Paste a URL or upload a file (stored like product images).</p>
+                                    <input
+                                        ref={bannerFileInputRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                        className="hidden"
+                                        onChange={handleBannerFileChange}
+                                    />
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:gap-3 sm:items-start">
+                                        <div className="flex-1 min-w-0">
                                             <input 
                                                 type="text" 
                                                 className="w-full p-3 border border-slate-300 rounded-lg text-sm" 
@@ -215,11 +263,22 @@ const EventForm: React.FC<EventFormProps> = ({
                                                 placeholder="https://..."
                                             />
                                         </div>
-                                        {formData.banner_url && (
-                                            <div className="w-20 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                                                <img src={formData.banner_url} alt="Preview" className="w-full h-full object-cover" />
-                                            </div>
-                                        )}
+                                        <div className="flex gap-2 shrink-0">
+                                            <button
+                                                type="button"
+                                                disabled={bannerUploading}
+                                                onClick={() => bannerFileInputRef.current?.click()}
+                                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                            >
+                                                <ImageIcon size={16} />
+                                                {bannerUploading ? 'Uploading…' : 'Upload file'}
+                                            </button>
+                                            {formData.banner_url && (
+                                                <div className="w-20 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
+                                                    <img src={formData.banner_url} alt="Preview" className="w-full h-full object-cover" />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 

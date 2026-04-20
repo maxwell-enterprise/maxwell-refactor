@@ -3,6 +3,13 @@ import React from 'react';
 import { Event } from '../../../types/index';
 import { RotateCw, Award, Monitor, Calendar, Clock, MapPin, Users, Settings, ScanLine, Projector, ListFilter, EyeOff, Trash2, History } from 'lucide-react';
 
+/** Compare calendar YYYY-MM-DD without UTC midnight shift from `new Date("YYYY-MM-DD")`. */
+function startOfLocalDayFromYmd(ymd: string): Date {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
+    if (!m) return new Date(ymd);
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
 interface EventListItemProps {
     event: Event;
     isChild?: boolean;
@@ -14,7 +21,8 @@ interface EventListItemProps {
 }
 
 const EventListItem: React.FC<EventListItemProps> = ({ event, isChild = false, onEdit, onDelete, onGateConfig, onProjector, canWrite }) => {
-    const isPast = new Date(event.date) < new Date(new Date().setHours(0,0,0,0));
+    const isPast =
+        startOfLocalDayFromYmd(event.date) < new Date(new Date().setHours(0, 0, 0, 0));
 
     return (
         <div

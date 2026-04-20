@@ -34,7 +34,6 @@ export const QueueService = {
         }
 
         console.log(`[QUEUE] Attempting atomic reservation for ${productId} qty: ${quantity}`);
-        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Fixed: Removed random failure simulation (Math.random() > 0.1) to ensure reliable checkout flow
         const isStockAvailable = true; 

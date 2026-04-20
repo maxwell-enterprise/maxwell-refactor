@@ -1,11 +1,11 @@
 /**
- * Taksonomi role & lifecycle — selaras `server-maxwell/.../role-taxonomy.ts`.
- * `UserRole` = nilai JWT / workspace user; jangan ubah string tanpa migrasi backend.
+ * Role & lifecycle taxonomy — aligned with `server-maxwell/.../role-taxonomy.ts`.
+ * `UserRole` is the JWT / workspace value; do not change strings without a backend migration.
  */
 
 import { UserRole } from '../types/index';
 
-/** Lifecycle pelanggan (ABAC) — `members.lifecycleStage`; bukan status “belum login”. */
+/** Customer lifecycle (ABAC) — `members.lifecycleStage`; not the same as “not logged in”. */
 export const MemberLifecycle = {
   GUEST: 'GUEST',
   IDENTIFIED: 'IDENTIFIED',
@@ -18,7 +18,7 @@ export const MemberLifecycle = {
 export type MemberLifecycleStage =
   (typeof MemberLifecycle)[keyof typeof MemberLifecycle];
 
-/** Label dokumen SoD → `UserRole` yang dipakai aplikasi. */
+/** SoD document labels mapped to application `UserRole` values. */
 export const DocumentInternalRole = {
   SUPER_ADMIN: UserRole.SUPER_ADMIN,
   OPS_PRODUCER: UserRole.OPERATIONS,

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, startTransition } from 'react';
 import DashboardLayout from './layouts/DashboardLayout';
 import { useAuth } from './context/AuthContext';
 import { ViewState, UserRole } from './types/index';
@@ -56,6 +56,17 @@ const CAMPAIGN_QUERY_KEYS = [
   'autocheckout',
 ] as const;
 
+/** Consumer routes that exist only under the My Zone sidebar (not in workspace rail). */
+const MY_ZONE_ONLY_VIEWS: ReadonlySet<ViewState> = new Set([
+  ViewState.WALLET,
+  ViewState.STORE_CATALOG,
+  ViewState.EVENT_MARKETPLACE,
+  ViewState.ENABLEMENT,
+  ViewState.AI_COACH,
+  ViewState.MY_TRIBE,
+  ViewState.SETTINGS,
+]);
+
 const App: React.FC = () => {
   const { user, userRole, isAuthenticated, isLoading, login } = useAuth();
   const [currentView, setCurrentViewState] = useState<ViewState>(readInitialViewFromUrlOrStorage);
@@ -92,14 +103,18 @@ const App: React.FC = () => {
     if (viewParam) {
       const parsed = fromFeatureSlug(viewParam);
       if (parsed) {
-        setCurrentViewState(parsed);
+        startTransition(() => {
+          setCurrentViewState(parsed);
+        });
       }
       return;
     }
     try {
       const raw = sessionStorage.getItem(VIEW_STORAGE_KEY);
       if (raw && (Object.values(ViewState) as string[]).includes(raw)) {
-        setCurrentViewState(raw as ViewState);
+        startTransition(() => {
+          setCurrentViewState(raw as ViewState);
+        });
       }
     } catch {
       /* ignore */
@@ -112,14 +127,28 @@ const App: React.FC = () => {
     } catch {
       /* ignore */
     }
-    setCurrentViewState(v);
+    startTransition(() => {
+      setCurrentViewState(v);
+    });
   }, []);
 
+  /**
+   * Sidebar "Workspace" vs "My Zone" must match the screen you are on.
+   * Pure members always live in My Zone. Staff (e.g. Sales) default to Workspace,
+   * but deep links like `?view=wallet` or Store / Wallet flows are **consumer** routes
+   * that only exist under the My Zone menu — auto-switch so the rail is not stuck on CRM/Ops.
+   */
   useEffect(() => {
     if (userRole === UserRole.MEMBER) {
       setIsPersonalZone(true);
+      return;
     }
-  }, [userRole]);
+    if (MY_ZONE_ONLY_VIEWS.has(currentView)) {
+      setIsPersonalZone(true);
+    } else {
+      setIsPersonalZone(false);
+    }
+  }, [userRole, currentView]);
 
   useEffect(() => {
     if (!isAuthenticated || typeof window === 'undefined') return;

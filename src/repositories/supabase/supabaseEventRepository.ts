@@ -26,10 +26,11 @@ export class SupabaseEventRepository implements IEventRepository {
         return data as Event;
     }
 
-    async upsert(event: Event): Promise<void> {
+    async upsert(event: Event): Promise<Event> {
         if (!supabase) throw new Error("Supabase client not initialized");
         const { error } = await supabase.from('events').upsert(event);
         if (error) throw error;
+        return event;
     }
 
     async delete(id: string): Promise<void> {

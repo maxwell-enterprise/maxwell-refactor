@@ -1,6 +1,6 @@
 import type { LifecycleStage, Member } from '../types/index';
 
-/** Urutan untuk UI Evolution Journey & parsing stage dari API/DB. */
+/** Order for Evolution Journey UI and parsing stages from API/DB. */
 export const LIFECYCLE_PROGRESSION_ORDER: readonly LifecycleStage[] = [
   'GUEST',
   'IDENTIFIED',
@@ -22,8 +22,8 @@ export function parseLifecycleStage(
 }
 
 /**
- * Stage untuk progress member: prioritas baris CRM (`members`) + aturan email;
- * jika belum ada di CRM, pakai `user_entitlements.attributes.lifecycle`.
+ * Member progress stage: CRM row (`members`) + email rules take priority;
+ * if absent in CRM, fall back to `user_entitlements.attributes.lifecycle`.
  */
 export function resolveJourneyLifecycleStage(params: {
   member: Pick<Member, 'lifecycleStage' | 'email'> | null | undefined;
@@ -42,14 +42,14 @@ export function resolveJourneyLifecycleStage(params: {
   return fromEntitlements ?? 'GUEST';
 }
 
-/** Sales Pipeline — belum transaksi berbayar (akuisisi / closing). */
+/** Sales pipeline — no paid transaction yet (acquisition / closing). */
 export const LEAD_PIPELINE_LIFECYCLE_STAGES = new Set<LifecycleStage>([
   'GUEST',
   'IDENTIFIED',
   'PARTICIPANT',
 ]);
 
-/** Member Database — sudah dalam ekosistem berbayar / sertifikasi / delegasi (retensi / upsell). */
+/** Member database — paid ecosystem / certification / delegation (retention / upsell). */
 export const MEMBER_DATABASE_LIFECYCLE_STAGES = new Set<LifecycleStage>([
   'MEMBER',
   'CERTIFIED',
@@ -57,8 +57,8 @@ export const MEMBER_DATABASE_LIFECYCLE_STAGES = new Set<LifecycleStage>([
 ]);
 
 /**
- * Baku produk: `GUEST` = anonim (tanpa identitas tersimpan). Jika sudah ada email di `members`,
- * stage minimal `IDENTIFIED`. Dipakai saat create/update agar data baru konsisten.
+ * Product rule: `GUEST` = anonymous (no stored identity). If `members` already has an email,
+ * minimum stage is `IDENTIFIED`. Used on create/update so new data stays consistent.
  */
 export function normalizeLifecycleStageForStoredEmail(
   stage: LifecycleStage,
@@ -69,7 +69,7 @@ export function normalizeLifecycleStageForStoredEmail(
   return stage;
 }
 
-/** Hanya untuk filter berdasarkan stage mentah (tanpa aturan email). */
+/** Filter by raw stage only (no email normalization). */
 export function isLeadPipelineLifecycle(stage: LifecycleStage): boolean {
   return LEAD_PIPELINE_LIFECYCLE_STAGES.has(stage);
 }
@@ -79,9 +79,9 @@ export function isMemberDatabaseLifecycle(stage: LifecycleStage): boolean {
 }
 
 /**
- * Sales Pipeline: tampilkan lead yang belum membayar — IDENTIFIED, PARTICIPANT,
- * atau GUEST benar-benar tanpa email. Baris GUEST + email dianggap salah klasifikasi
- * dan tetap ikut pipeline (setara IDENTIFIED) sampai diperbaiki di DB.
+ * Sales pipeline: unpaid leads — IDENTIFIED, PARTICIPANT, or GUEST with no email.
+ * GUEST rows that already have email are treated as misclassified and stay in the
+ * pipeline (same as IDENTIFIED) until corrected in the database.
  */
 export function isSalesPipelineLead(
   m: Pick<Member, 'lifecycleStage' | 'email'>,

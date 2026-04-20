@@ -21,6 +21,44 @@ function toIsoString(v: unknown): string | undefined {
   return String(v);
 }
 
+/** Align API `type` strings with the FE wallet contract (same semantics as Nest checkout BOM). */
+function normalizeWalletItemType(raw: unknown): WalletItem['type'] {
+  const u = String(raw ?? 'TICKET')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_');
+  if (u === 'DIGITAL' || u === 'DIGITAL_LINK') return 'DIGITAL_CONTENT';
+  if (
+    u === 'DIGITAL_CONTENT' ||
+    u === 'TICKET' ||
+    u === 'CREDIT_PASS' ||
+    u === 'MEMBERSHIP' ||
+    u === 'PHYSICAL_ORDER'
+  ) {
+    return u as WalletItem['type'];
+  }
+  return 'TICKET';
+}
+
+function normalizeWalletStatus(raw: unknown): WalletItem['status'] {
+  const u = String(raw ?? 'ACTIVE').trim().toUpperCase();
+  const allowed: WalletItem['status'][] = [
+    'ACTIVE',
+    'USED',
+    'EXPIRED',
+    'GIFTED',
+    'GIFT_PENDING',
+    'PROCESSING',
+    'SHIPPED',
+    'DELIVERED',
+    'PENDING_CLAIM',
+    'CLAIMED',
+  ];
+  return (allowed.includes(u as WalletItem['status'])
+    ? u
+    : 'ACTIVE') as WalletItem['status'];
+}
+
 /**
  * Maps Nest `/fe/wallet/items` rows to the FE `WalletItem` contract.
  * Ensures `meta.credits` exists for CREDIT_PASS when backend stores `balance` only.
@@ -32,7 +70,7 @@ export function normalizeWalletItem(row: Record<string, unknown>): WalletItem {
       ? { ...(metaRaw as Record<string, unknown>) }
       : {};
 
-  const type = String(row.type ?? 'TICKET') as WalletItem['type'];
+  const type = normalizeWalletItemType(row.type);
   if (type === 'CREDIT_PASS' || type === 'MEMBERSHIP') {
     if (meta.credits == null && meta.balance != null) {
       meta.credits = Number(meta.balance);
@@ -50,16 +88,28 @@ export function normalizeWalletItem(row: Record<string, unknown>): WalletItem {
     subtitle: String(row.subtitle ?? ''),
     expiryDate: toIsoString(row.expiryDate),
     qrData: row.qrData != null ? String(row.qrData) : undefined,
-    status: String(row.status ?? 'ACTIVE') as WalletItem['status'],
+    status: normalizeWalletStatus(row.status),
     isTransferable: Boolean(row.isTransferable),
     sponsoredBy: row.sponsoredBy != null ? String(row.sponsoredBy) : undefined,
     meta: Object.keys(meta).length ? meta : undefined,
   };
 }
 
+function unwrapWalletItemsPayload(rows: unknown): unknown[] {
+  if (Array.isArray(rows)) return rows;
+  if (rows && typeof rows === 'object' && !Array.isArray(rows)) {
+    const o = rows as Record<string, unknown>;
+    if (Array.isArray(o.data)) return o.data;
+    if (Array.isArray(o.items)) return o.items;
+    if (Array.isArray(o.results)) return o.results;
+  }
+  return [];
+}
+
 export function normalizeWalletItems(rows: unknown): WalletItem[] {
-  if (!Array.isArray(rows)) return [];
-  return rows.map((r) =>
+  const list = unwrapWalletItemsPayload(rows);
+  if (!Array.isArray(list)) return [];
+  return list.map((r) =>
     normalizeWalletItem(r && typeof r === 'object' ? (r as Record<string, unknown>) : {}),
   );
 }

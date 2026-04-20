@@ -1,6 +1,8 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { X, CreditCard, QrCode, Building2, Smartphone, Copy, UploadCloud, CheckCircle, AlertCircle, Clock, ShieldCheck, Loader2, Tag, ChevronRight, Mail, Trash2, Plus, Minus, Zap, PieChart } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { PaymentMethodType, PaymentTransaction, Product, UserRole, Discount, CartItem } from '../../types/index';
 import { PaymentService } from '../../services/paymentService';
 import { DiscountService } from '../../services/discountService';
@@ -15,9 +17,18 @@ function getCartLineUnitPrice(product: Product, variantId?: string): number {
   return product.priceIdr;
 }
 
-/** When true, Snap UI is skipped; server still creates a real Snap transaction, then simulate-settle marks PAID. */
-const MIDTRANS_UI_DISABLED =
-  String(process.env.NEXT_PUBLIC_MIDTRANS_UI_DISABLED ?? '').toLowerCase() === 'true';
+/**
+ * When true, Midtrans Snap is not loaded; checkout uses the in-app success modal + server
+ * `simulate-settle` (same PAID + wallet path as a real webhook). Default: Snap off (`true`).
+ * Production with real Midtrans: set `NEXT_PUBLIC_MIDTRANS_UI_DISABLED=false` and point the API
+ * at live keys + webhook; the API should not allow simulation there (explicit or prod defaults).
+ */
+const MIDTRANS_UI_DISABLED = (() => {
+  const v = String(
+    process.env.NEXT_PUBLIC_MIDTRANS_UI_DISABLED ?? 'true',
+  ).trim().toLowerCase();
+  return v !== 'false' && v !== '0';
+})();
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -26,6 +37,8 @@ interface PaymentModalProps {
   products: Product[];
   userEmail: string;
   userRole: UserRole;
+  /** Authenticated app user id (wallet owner). Used when CRM member list has no row for checkout email. */
+  walletUserId?: string;
   onUpdateQuantity: (productId: string, variantId: string | undefined, delta: number) => void;
   onRemoveItem: (productId: string, variantId: string | undefined) => void;
   preAppliedDiscountCode?: string; 
@@ -42,12 +55,25 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     products,
     userEmail,
     userRole,
+    walletUserId,
     onUpdateQuantity,
     onRemoveItem,
     preAppliedDiscountCode,
     attributionSource,
     onPaymentSuccess,
 }) => {
+  const { refreshSession } = useAuth();
+
+  /** Refresh workspace session after server-side wallet/CRM updates so `user.id` stays aligned; then parent callback. */
+  const runAfterPaymentSuccess = useCallback(async () => {
+    try {
+      await refreshSession({ silent: true });
+    } catch {
+      /* best-effort */
+    }
+    onPaymentSuccess?.();
+  }, [onPaymentSuccess, refreshSession]);
+
   const [step, setStep] = useState<Step>('SUMMARY');
   const [selectedMethod] = useState<PaymentMethodType>('BANK_TRANSFER');
   const [transaction, setTransaction] = useState<PaymentTransaction | null>(null);
@@ -72,6 +98,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const snapPayInFlightRef = useRef(false);
   const [isMidtransPopupOpen, setIsMidtransPopupOpen] = useState(false);
   const [simulatedSuccessOpen, setSimulatedSuccessOpen] = useState(false);
+  /** Midtrans-disabled path: payment + confirm already done; splash only, optional auto-close. */
+  const checkoutAlreadyFinalizedRef = useRef(false);
+  const successAutoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [successSplashAutoClose, setSuccessSplashAutoClose] = useState(false);
 
   // Determine if installments are available for this cart
   // Logic: All items in cart must allow installments, or at least the main high-value item?
@@ -90,16 +120,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       setSimulatedSuccessOpen(false);
+      setSuccessSplashAutoClose(false);
+      checkoutAlreadyFinalizedRef.current = false;
+      if (successAutoCloseTimerRef.current) {
+        clearTimeout(successAutoCloseTimerRef.current);
+        successAutoCloseTimerRef.current = null;
+      }
     }
   }, [isOpen]);
-
-  // Handle Auto-Apply Discount
-  useEffect(() => {
-      if (preAppliedDiscountCode && !appliedDiscount) {
-          setVoucherCode(preAppliedDiscountCode);
-          setTimeout(() => handleApplyVoucher(), 100); 
-      }
-  }, [preAppliedDiscountCode, cart]);
 
   // Cart Calculation Logic
   const calculateCartTotals = () => {
@@ -133,73 +161,98 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
-  useEffect(() => {
-      if (appliedDiscount) {
-          handleApplyVoucher();
-      }
-  }, [cart]);
+  const applyVoucherCode = useCallback(
+    async (codeRaw: string) => {
+      const codeToUse = codeRaw.trim();
+      if (!codeToUse || cart.length === 0) return;
 
-  const handleApplyVoucher = async () => {
-      if ((!voucherCode && !preAppliedDiscountCode) && !appliedDiscount) return;
-      const codeToUse = voucherCode || preAppliedDiscountCode || appliedDiscount?.discount.code || '';
-      
       setIsCheckingVoucher(true);
       setVoucherError('');
 
-      // Simulate Network
-      await new Promise(r => setTimeout(r, 600));
-
       try {
-          const discount = await DiscountService.findByCode(codeToUse);
-          if (!discount) {
-              setVoucherError('Invalid voucher code.');
-              setAppliedDiscount(null);
-              setIsCheckingVoucher(false);
-              return;
-          }
+        const discount = await DiscountService.findByCode(codeToUse);
+        if (!discount) {
+          setVoucherError('Invalid voucher code.');
+          setAppliedDiscount(null);
+          return;
+        }
 
-          const validation = await DiscountService.isValid(discount, userRole);
-          if (!validation.valid) {
-              setVoucherError(validation.reason || 'Voucher not applicable.');
-              setAppliedDiscount(null);
-              setIsCheckingVoucher(false);
-              return;
-          }
+        const validation = await DiscountService.isValid(
+          discount,
+          userRole,
+          walletUserId,
+        );
+        if (!validation.valid) {
+          setVoucherError(validation.reason || 'Voucher not applicable.');
+          setAppliedDiscount(null);
+          return;
+        }
 
-          let totalDiscount = 0;
-          
-          cart.forEach(item => {
-              const product = products.find(p => p.id === item.productId);
-              if (product) {
-                  const unit = getCartLineUnitPrice(product, item.variantId);
-                  const itemDiscount = DiscountService.calculateDiscount(
-                      discount, 
-                      unit, 
-                      item.quantity,
-                      product.category,
-                      product.id
-                  );
-                  if(discount.type === 'PERCENTAGE') {
-                      totalDiscount += itemDiscount * item.quantity;
-                  } else {
-                      totalDiscount += itemDiscount; 
-                  }
-              }
-          });
+        let totalDiscount = 0;
 
-          if (totalDiscount === 0) {
-              setVoucherError('Voucher code is valid but not applicable to items in your cart.');
-              setAppliedDiscount(null);
-          } else {
-              setAppliedDiscount({ discount, amount: totalDiscount });
+        cart.forEach((item) => {
+          const product = products.find((p) => p.id === item.productId);
+          if (product) {
+            const unit = getCartLineUnitPrice(product, item.variantId);
+            const itemDiscount = DiscountService.calculateDiscount(
+              discount,
+              unit,
+              item.quantity,
+              product.category,
+              product.id,
+              userRole,
+            );
+            if (discount.type === 'PERCENTAGE') {
+              totalDiscount += itemDiscount * item.quantity;
+            } else {
+              totalDiscount += itemDiscount;
+            }
           }
+        });
+
+        if (totalDiscount === 0) {
+          setVoucherError(
+            'Voucher code is valid but not applicable to items in your cart.',
+          );
+          setAppliedDiscount(null);
+        } else {
+          setAppliedDiscount({ discount, amount: totalDiscount });
+        }
       } catch (error) {
-          console.error("Voucher check failed", error);
-          setVoucherError('Error checking voucher.');
+        console.error('Voucher check failed', error);
+        setVoucherError('Error checking voucher.');
       } finally {
-          setIsCheckingVoucher(false);
+        setIsCheckingVoucher(false);
       }
-  };
+    },
+    [cart, products, userRole, walletUserId],
+  );
+
+  const handleApplyVoucher = useCallback(() => {
+    const code =
+      voucherCode.trim() ||
+      preAppliedDiscountCode?.trim() ||
+      '';
+    return applyVoucherCode(code);
+  }, [applyVoucherCode, preAppliedDiscountCode, voucherCode]);
+
+  /** Campaign / deep-link codes: wait for cart lines before applying. */
+  useEffect(() => {
+    if (!preAppliedDiscountCode || appliedDiscount) return;
+    if (cart.length === 0) return;
+    setVoucherCode((v) => v || preAppliedDiscountCode);
+    const t = window.setTimeout(() => {
+      void applyVoucherCode(preAppliedDiscountCode);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [preAppliedDiscountCode, appliedDiscount, cart.length, applyVoucherCode]);
+
+  /** Recompute line discounts when the cart changes but a code is already applied. */
+  useEffect(() => {
+    const code = appliedDiscount?.discount.code?.trim();
+    if (!code || cart.length === 0) return;
+    void applyVoucherCode(code);
+  }, [cart, appliedDiscount?.discount.code, applyVoucherCode]);
 
   const handleInitiatePayment = async () => {
     if (snapPayInFlightRef.current) return; // prevent double snap.pay while popup is still open
@@ -208,8 +261,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         return;
     }
 
-    setIsLoading(true);
-    setErrorMessage(null); // Reset error
+    flushSync(() => {
+      setIsLoading(true);
+      setErrorMessage(null);
+    });
     snapPayInFlightRef.current = true;
 
     try {
@@ -240,6 +295,25 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
       setTransaction(trx);
 
+      const serverDiscount = Math.round(Number(trx.discountAmount ?? 0));
+      if (appliedDiscount) {
+        const clientDiscount = Math.round(appliedDiscount.amount);
+        if (clientDiscount !== serverDiscount) {
+          if (serverDiscount === 0) {
+            setAppliedDiscount(null);
+            setVoucherError(
+              'Server did not apply this voucher (product scope, role, dates, or usage limits). Totals charged follow the server.',
+            );
+          } else {
+            setAppliedDiscount({
+              discount: appliedDiscount.discount,
+              amount: serverDiscount,
+            });
+            setVoucherError('');
+          }
+        }
+      }
+
       // Test mode: always bypass Midtrans popup and show local success modal.
       // Conversion is still recorded by backend when transaction reaches PAID
       // (free checkout is PAID immediately; paid checkout uses simulate-settle).
@@ -249,16 +323,42 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           if (!paidNow && totalAmount > 0) {
             await PaymentService.simulateSettle(trx.id, customerEmail);
           }
+          if (trx.itemsSnapshot?.length) {
+            await PaymentService.confirmManualTransfer(
+              trx.id,
+              trx.totalAmount,
+              trx.itemsSnapshot,
+              trx.customerEmail,
+              walletUserId,
+            );
+          }
+          await runAfterPaymentSuccess();
+          checkoutAlreadyFinalizedRef.current = true;
+          setSuccessSplashAutoClose(true);
           setSimulatedSuccessOpen(true);
+          setIsLoading(false);
+          snapPayInFlightRef.current = false;
+          if (successAutoCloseTimerRef.current) {
+            clearTimeout(successAutoCloseTimerRef.current);
+          }
+          successAutoCloseTimerRef.current = setTimeout(() => {
+            successAutoCloseTimerRef.current = null;
+            checkoutAlreadyFinalizedRef.current = false;
+            setSuccessSplashAutoClose(false);
+            setSimulatedSuccessOpen(false);
+            onClose();
+          }, 1800);
         } catch (e: unknown) {
           const msg =
             e instanceof Error
               ? e.message
-              : 'Simulasi gagal. Set ALLOW_PAYMENT_SIMULATION=true di server API.';
+              : 'Simulation failed. Set ALLOW_PAYMENT_SIMULATION=true on the server API.';
           setErrorMessage(msg);
         } finally {
-          setIsLoading(false);
-          snapPayInFlightRef.current = false;
+          if (!checkoutAlreadyFinalizedRef.current) {
+            setIsLoading(false);
+            snapPayInFlightRef.current = false;
+          }
         }
         return;
       }
@@ -273,8 +373,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             trx.totalAmount,
             trx.itemsSnapshot,
             trx.customerEmail,
+            walletUserId,
           );
-          onPaymentSuccess?.();
+          await runAfterPaymentSuccess();
           onClose();
         } catch (e: any) {
           setErrorMessage(e?.message || 'Failed to complete free order');
@@ -301,14 +402,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               ? 'https://app.midtrans.com/snap/snap.js'
               : 'https://app.sandbox.midtrans.com/snap/snap.js';
             if ((existing as HTMLScriptElement).src === expectedSrc) {
-              // Script is being/was loaded; wait a tick.
-              setTimeout(
-                () =>
-                  (window as any).snap
-                    ? resolve()
-                    : reject(new Error('Midtrans snap not ready')),
-                500,
-              );
+              const deadline = Date.now() + 4000;
+              const tick = () => {
+                if ((window as any).snap) {
+                  resolve();
+                  return;
+                }
+                if (Date.now() >= deadline) {
+                  reject(new Error('Midtrans snap not ready'));
+                  return;
+                }
+                setTimeout(tick, 50);
+              };
+              tick();
               return;
             }
 
@@ -345,8 +451,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 trx.totalAmount,
                 trx.itemsSnapshot,
                 trx.customerEmail,
+                walletUserId,
               );
-              onPaymentSuccess?.();
+              await runAfterPaymentSuccess();
               onClose();
             } catch (e: any) {
               setErrorMessage(e?.message || 'Failed to finalize payment');
@@ -392,6 +499,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   const handleFinalizeSimulatedPayment = async () => {
+    if (checkoutAlreadyFinalizedRef.current) {
+      if (successAutoCloseTimerRef.current) {
+        clearTimeout(successAutoCloseTimerRef.current);
+        successAutoCloseTimerRef.current = null;
+      }
+      checkoutAlreadyFinalizedRef.current = false;
+      setSuccessSplashAutoClose(false);
+      setSimulatedSuccessOpen(false);
+      onClose();
+      return;
+    }
     if (!transaction?.itemsSnapshot) {
       setErrorMessage('Missing cart snapshot');
       return;
@@ -404,9 +522,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         transaction.totalAmount,
         transaction.itemsSnapshot,
         transaction.customerEmail,
+        walletUserId,
       );
       setSimulatedSuccessOpen(false);
-      onPaymentSuccess?.();
+      await runAfterPaymentSuccess();
       onClose();
     } catch (e: unknown) {
       setErrorMessage(e instanceof Error ? e.message : 'Failed to finalize');
@@ -432,24 +551,32 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   };
 
-  // --- CRITICAL UPDATE: ACTUALLY PROCESS THE MOCK PAYMENT ---
+  /** Same post-payment path as Snap `onSuccess` / finalize simulated modal: session hydrate + parent callback. */
   const handleSimulateSuccess = async () => {
-      if(!transaction) return;
-      setIsLoading(true);
-      try {
-          // This call ensures Entitlements are granted even for manual/simulated payments
-          await PaymentService.confirmManualTransfer(
-            transaction.id,
-            transaction.totalAmount,
-            transaction.itemsSnapshot,
-            transaction.customerEmail,
-          );
-          onClose();
-      } catch (e) {
-          setErrorMessage("Simulation failed. Try again.");
-      } finally {
-          setIsLoading(false);
-      }
+    if (!transaction) return;
+    if (!transaction.itemsSnapshot?.length) {
+      setErrorMessage('Missing cart snapshot');
+      return;
+    }
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      await PaymentService.confirmManualTransfer(
+        transaction.id,
+        transaction.totalAmount,
+        transaction.itemsSnapshot,
+        transaction.customerEmail,
+        walletUserId,
+      );
+      await runAfterPaymentSuccess();
+      onClose();
+    } catch (e: unknown) {
+      setErrorMessage(
+        e instanceof Error ? e.message : 'Simulation failed. Try again.',
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderSummary = () => {
@@ -464,7 +591,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           )}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
-            Menunggu konfirmasi pembayaran di Midtrans...
+            Waiting for Midtrans payment confirmation…
           </div>
         </div>
       );
@@ -873,13 +1000,23 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 You can review transaction details anytime from your order history.
               </p>
 
+              {successSplashAutoClose && (
+                <p className="text-center text-[11px] font-medium text-slate-500">
+                  This window will close automatically in a moment…
+                </p>
+              )}
+
               <button
                 type="button"
                 onClick={handleFinalizeSimulatedPayment}
                 disabled={isLoading}
                 className="w-full rounded-xl bg-slate-900 py-3 font-bold text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
               >
-                {isLoading ? 'Processing...' : 'Continue'}
+                {successSplashAutoClose
+                  ? 'Close'
+                  : isLoading
+                    ? 'Processing...'
+                    : 'Continue'}
               </button>
             </div>
           </div>
@@ -906,11 +1043,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex flex-col justify-center items-center gap-1 text-xs text-slate-400">
            <span className="flex items-center">
              <ShieldCheck size={12} className="mr-1.5" />
-             High-Traffic Queue Protection Enabled
+             Secure checkout · server-validated totals
            </span>
            {MIDTRANS_UI_DISABLED && (
              <span className="text-amber-700/90">
-               Midtrans UI dinonaktifkan (NEXT_PUBLIC_MIDTRANS_UI_DISABLED)
+               Midtrans Snap is disabled by default. Set{' '}
+               <code className="rounded bg-amber-100/80 px-1">NEXT_PUBLIC_MIDTRANS_UI_DISABLED=false</code>{' '}
+               to use the real Midtrans UI.
              </span>
            )}
         </div>

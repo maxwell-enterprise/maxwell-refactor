@@ -199,9 +199,15 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
             
             // Allow past events but warn (handled in toast if needed)
 
+            const tierDisplayName =
+                selectedEventTier &&
+                evt.tiers?.find(t => t.id === selectedEventTier)?.name;
+
             newItem = {
                 id: tempId,
-                name: itemLabel || `${evt.name} ${selectedEventTier ? `(${selectedEventTier})` : ''}`,
+                name:
+                    itemLabel ||
+                    (tierDisplayName ? `${evt.name} (${tierDisplayName})` : evt.name),
                 type: 'TICKET',
                 quantity: itemQty,
                 meta: { 
@@ -814,6 +820,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                                             <option value="">{(!currentSelectedEvent?.tiers || currentSelectedEvent.tiers.length === 0) ? 'Standard / No Tier' : '-- Select Tier --'}</option>
                                                             {currentSelectedEvent?.tiers?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                                         </select>
+                                                        {currentSelectedEvent &&
+                                                            (!currentSelectedEvent.tiers || currentSelectedEvent.tiers.length === 0) && (
+                                                                <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                                                                    This event has no tiers in backend data — admission is standard. Add tiers in Ops / Event Mgmt to enable choices here.
+                                                                </p>
+                                                            )}
                                                     </div>
                                                     <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded border border-slate-200">
                                                         <input type="checkbox" className="w-4 h-4 text-purple-600 rounded" checked={isTransferable} onChange={e => setIsTransferable(e.target.checked)}/>

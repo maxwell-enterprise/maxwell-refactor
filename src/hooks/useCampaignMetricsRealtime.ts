@@ -89,7 +89,18 @@ export function useCampaignMetricsRealtime(
           );
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          void (async () => {
+            try {
+              const data = await CampaignService.getCampaigns();
+              setCampaigns(data);
+            } catch {
+              /* same as polling path */
+            }
+          })();
+        }
+      });
 
     return () => {
       void client.removeChannel(channel);

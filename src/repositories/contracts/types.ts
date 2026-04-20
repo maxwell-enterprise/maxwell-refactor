@@ -2,7 +2,7 @@
 import { Member, Product, Transaction, PaymentTransaction, InventoryItem, InventoryTransaction, ContentPost, EmailTemplate, EmailCampaign, EmailLog, WhatsAppTask, WhatsAppTemplate, Event, CartItem, EventInvitation } from '../../types/index';
 import { OpsChecklist, OpsTemplate } from '../../types/ops';
 import { Badge, PointRule, UserGamificationProfile } from '../../types/gamification';
-import { UserEntitlements, WalletItem, GiftAllocation, CorporateTeamMember, CreditTagMaster, WalletTransactionHistory } from '../../types/access';
+import { UserEntitlements, WalletItem, GiftAllocation, CorporateTeamMember, CreditTagMaster, WalletMemberHub, WalletTransactionHistory } from '../../types/access';
 import { ActiveCart } from '../../services/cartService';
 
 // NEW: Query Params for SQL-like filtering
@@ -38,6 +38,11 @@ export interface ProductListQuery {
 export interface IMemberRepository {
     getAll(): Promise<Member[]>;
     getById(id: string): Promise<Member | null>;
+    /**
+     * Server: GET /members?search=… (bounded). Mock/Supabase: filter client-side.
+     * Used for My Zone / dashboards — never load the full members table for one row.
+     */
+    searchForMemberLookup(query: string): Promise<Member[]>;
     create(member: Member): Promise<void>;
     update(id: string, data: Partial<Member>): Promise<void>;
 }
@@ -55,7 +60,7 @@ export interface IProductRepository {
 export interface IEventRepository {
     getAll(): Promise<Event[]>;
     getById(id: string): Promise<Event | null>;
-    upsert(event: Event): Promise<void>;
+    upsert(event: Event): Promise<Event>;
     delete(id: string): Promise<void>;
 }
 
@@ -145,6 +150,9 @@ export interface IEntitlementRepository {
     // NEW: Wallet History Methods
     getWalletHistory(userId: string): Promise<WalletTransactionHistory[]>;
     logWalletTransaction(tx: WalletTransactionHistory): Promise<void>;
+
+    /** Nest: JWT session; mock: synthetic from userId. */
+    getWalletMemberHub(userId: string): Promise<WalletMemberHub | null>;
 
     getGiftAllocations(): Promise<GiftAllocation[]>;
     upsertGiftAllocation(gift: GiftAllocation): Promise<void>;

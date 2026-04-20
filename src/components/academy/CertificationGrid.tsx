@@ -222,19 +222,19 @@ const CertificationGrid: React.FC = () => {
             <div className="flex-1 overflow-auto relative custom-scrollbar bg-white">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center min-h-[min(50vh,280px)] h-full text-slate-500 text-sm">
-                        Memuat data…
+                        Loading data…
                     </div>
                 ) : rules.length === 0 ? (
                     <div className="flex flex-col items-center justify-center min-h-[min(50vh,280px)] h-full text-center px-6">
                         <Database className="text-slate-300 mb-3" size={40} strokeWidth={1.25} />
-                        <p className="text-slate-600 font-medium">Belum ada certification rule</p>
-                        <p className="text-slate-500 text-sm mt-1 max-w-md">Buat rule di bagian Admin → Certification Rules dulu, lalu matrix akan muncul di sini.</p>
+                        <p className="text-slate-600 font-medium">No certification rules yet</p>
+                        <p className="text-slate-500 text-sm mt-1 max-w-md">Create rules under Admin → Certification Rules first; the matrix will appear here.</p>
                     </div>
                 ) : gridColumns.length === 0 ? (
                     <div className="flex flex-col items-center justify-center min-h-[min(50vh,280px)] h-full text-slate-400 text-center px-6">
                         <Calendar size={48} className="mb-4 opacity-20"/>
-                        <p className="font-medium">Belum ada requirement untuk rule ini</p>
-                        <p className="text-xs mt-1 max-w-md">Tambahkan tag wajib di pengaturan rule (Certification Rules).</p>
+                        <p className="font-medium">No requirements for this rule yet</p>
+                        <p className="text-xs mt-1 max-w-md">Add required tags in the rule settings (Certification Rules).</p>
                     </div>
                 ) : (
                     <table className="w-full border-collapse text-xs">

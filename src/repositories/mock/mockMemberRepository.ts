@@ -28,6 +28,24 @@ export class MockMemberRepository implements IMemberRepository {
         return members.find(m => m.id === id) || null;
     }
 
+    async searchForMemberLookup(query: string): Promise<Member[]> {
+        const q = query.trim().toLowerCase();
+        if (!q) return [];
+        const members = await this.getAll();
+        return members
+            .filter((m) => {
+                const em = (m.email ?? '').trim().toLowerCase();
+                const nm = (m.name ?? '').trim().toLowerCase();
+                return (
+                    em === q ||
+                    m.id === query.trim() ||
+                    em.includes(q) ||
+                    nm.includes(q)
+                );
+            })
+            .slice(0, 50);
+    }
+
     async create(member: Member): Promise<void> {
         const newMember = { ...member };
         newMember.lifecycleStage = normalizeLifecycleStageForStoredEmail(

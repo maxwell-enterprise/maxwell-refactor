@@ -58,7 +58,7 @@ const GiftManagementModal: React.FC<GiftManagementModalProps> = ({ userId, userN
 
     const generateWALink = (gift: GiftAllocation) => {
         const ticket = tickets[gift.entitlementId];
-        const message = `Halo! 👋 Saya (${userName}) ingin mengingatkan bahwa ada tiket *${gift.itemName}* di Wallet Anda.\n\nLogin ke Portal Maxwell (${window.location.origin}) dengan email: ${gift.targetEmail}\nOTP: 12345`;
+        const message = `Hi! 👋 ${userName} is reminding you that ticket *${gift.itemName}* is waiting in your wallet.\n\nSign in to the Maxwell portal (${window.location.origin}) with email: ${gift.targetEmail}\nOTP: 12345`;
         return WhatsAppService.generateLink("", message);
     };
 

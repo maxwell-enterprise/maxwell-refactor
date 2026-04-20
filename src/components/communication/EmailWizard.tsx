@@ -123,7 +123,7 @@ const EmailWizard: React.FC<EmailWizardProps> = ({ onClose, onComplete }) => {
             onComplete();
         } catch (e) {
             showToast(
-                e instanceof Error ? e.message : 'Gagal menyimpan campaign. Coba lagi.',
+                e instanceof Error ? e.message : 'Failed to save campaign. Please try again.',
                 'error',
             );
         } finally {

@@ -26,6 +26,26 @@ export const DataService = {
     return await RepositoryFactory.getMemberRepository().getById(id);
   },
 
+  /**
+   * Single CRM row for the signed-in user (My Zone / lifecycle). Avoids `getAll()` at scale.
+   */
+  resolveMeCrmMember: async (user: {
+    id: string;
+    email?: string | null;
+  }): Promise<Member | null> => {
+    const repo = RepositoryFactory.getMemberRepository();
+    const emailLc = user.email?.trim().toLowerCase();
+    if (emailLc) {
+      const hits = await repo.searchForMemberLookup(emailLc);
+      const byEmail =
+        hits.find((m) => m.email.trim().toLowerCase() === emailLc) ?? null;
+      if (byEmail) return byEmail;
+    }
+    const trimmedId = String(user.id ?? '').trim();
+    if (!trimmedId) return null;
+    return await repo.getById(trimmedId);
+  },
+
   updateMember: async (id: string, updates: Partial<Member & { notes?: string }>): Promise<void> => {
     return await RepositoryFactory.getMemberRepository().update(id, updates);
   },
@@ -72,7 +92,7 @@ export const DataService = {
       return await RepositoryFactory.getEventRepository().getById(id);
   },
 
-  upsertEvent: async (event: Event): Promise<void> => {
+  upsertEvent: async (event: Event): Promise<Event> => {
       return await RepositoryFactory.getEventRepository().upsert(event);
   },
 

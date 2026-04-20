@@ -13,4 +13,6 @@ export interface ScanResult {
   message: string;
   data?: any; // The object found (Member, Event, etc.)
   timestamp: string;
+  /** Raw QR string (used by Gate Scanner — do not pass human-readable messages here). */
+  qrPayload?: string;
 }

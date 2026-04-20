@@ -63,7 +63,7 @@ const Marketing: React.FC = () => {
 
   const toReadableError = (error: unknown): string => {
       if (error instanceof ApiRequestError && error.status === 401) {
-          return 'Sesi login tidak valid. Silakan login ulang.';
+          return 'Your session is invalid. Please sign in again.';
       }
       if (error instanceof Error) {
           const raw = error.message?.trim();
@@ -89,7 +89,7 @@ const Marketing: React.FC = () => {
           setProducts([]);
           setDiscounts([]);
           if (!hasShownAuthWarning) {
-              showToast('Sesi login belum siap. Silakan login ulang.', 'error');
+              showToast('Your session is not ready yet. Please sign in again.', 'error');
               setHasShownAuthWarning(true);
           }
           return;

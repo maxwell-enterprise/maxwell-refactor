@@ -43,6 +43,12 @@ export const TAG_REGISTRY: TagDefinition[] = [
         description: 'Flexible Credit for any Standard Class',
         usageType: 'CONSUMABLE_CREDIT',
         defaultDeduction: 1
+    },
+    {
+        id: 'MLCT_FULL',
+        description: 'Mentorship / program class credits',
+        usageType: 'CONSUMABLE_CREDIT',
+        defaultDeduction: 1
     }
 ];
 

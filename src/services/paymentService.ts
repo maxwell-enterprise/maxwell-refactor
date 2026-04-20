@@ -5,11 +5,22 @@ import { QueueService } from './queueService';
 import { CommunicationService } from './communicationService'; 
 import { OpsService } from './opsService'; 
 import { DataService } from './dataService'; 
-import { EntitlementService } from './entitlementService'; 
 import { EventBus } from './eventBus'; 
 import { INVENTORY_DATA } from '../constants';
 import { RepositoryFactory } from './repositories/index';
 import { apiRequest } from '../repositories/api/apiClient';
+import { invalidateWalletSessionCache } from '../lib/walletSessionCache';
+import { invalidateMemberZoneSessionCache } from '../lib/memberZoneSessionCache';
+
+/** Fired after payment settles so Wallet / My Tickets can refetch without a full page reload. */
+export const WALLET_REFRESH_EVENT = 'maxwell-wallet-refresh';
+
+function dispatchWalletRefresh(): void {
+  if (typeof window === 'undefined') return;
+  invalidateWalletSessionCache();
+  invalidateMemberZoneSessionCache();
+  window.dispatchEvent(new CustomEvent(WALLET_REFRESH_EVENT));
+}
 
 const buildPaymentIdempotencyKey = (): string => {
   const g = globalThis as { crypto?: { randomUUID?: () => string } };
@@ -35,11 +46,14 @@ export const PaymentService = {
     payload: InitiatePaymentPayload,
   ): Promise<{ transaction: PaymentTransaction; snapToken: string }> => {
     // 1. BUSINESS LOGIC: Stock Reservation & SHARED INVENTORY CHECK
-    const allEvents = await DataService.getEvents();
+    const [allEvents, allProducts] = await Promise.all([
+      DataService.getEvents(),
+      DataService.getProducts(),
+    ]);
 
     for (const item of payload.items) {
         // A. Physical Goods Check (Warehouse)
-        const productDef = (await DataService.getProducts()).find(p => p.id === item.id);
+        const productDef = allProducts.find((p) => p.id === item.id);
         
         if (productDef) {
             // Find specific variant items if variant selected
@@ -75,10 +89,10 @@ export const PaymentService = {
         }
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     // 2. CREATE PAYMENT IN BACKEND (BE is source of truth for amount)
-    // Endpoint creates a Midtrans Snap token so FE can open hosted payment page.
+    // Each line must include variantId when the cart has a variant so `itemsSnapshot` matches the
+    // correct BOM (VIP vs Regular, etc.). Nest persists this and CheckoutEntitlementsService expands
+    // the right lines — not the legacy client `EntitlementService.processTransactionEntitlements`.
     const res = await apiRequest<{ transaction: any; snapToken: string }>(
       '/transactions/midtrans/snap',
       {
@@ -141,10 +155,16 @@ export const PaymentService = {
     transactionId: string,
     customerEmail: string,
   ): Promise<{ paymentStatus: string; totalAmount: number; orderId: string }> => {
-    return apiRequest('/transactions/simulate-settle', {
+    const res = await apiRequest<{
+      paymentStatus: string;
+      totalAmount: number;
+      orderId: string;
+    }>('/transactions/simulate-settle', {
       method: 'POST',
       body: JSON.stringify({ transactionId, customerEmail }),
     });
+    dispatchWalletRefresh();
+    return res;
   },
 
   confirmManualTransfer: async (
@@ -152,6 +172,8 @@ export const PaymentService = {
     _amountReceived: number,
     itemsSnapshot?: PaymentTransaction['itemsSnapshot'],
     customerEmail?: string,
+    /** Logged-in workspace / app user id when CRM `Member` row is missing (wallet is keyed by auth user). */
+    walletUserId?: string,
   ): Promise<PaymentTransaction> => {
     // SECURITY: don't allow user to "simulate paid" unless backend says PAID.
     // Midtrans webhook is async, so we poll briefly.
@@ -159,7 +181,7 @@ export const PaymentService = {
       throw new Error('Missing customer email for payment status verification');
     }
     let backendTx: { paymentStatus?: string; totalAmount?: number } | null = null;
-    const maxAttempts = 12;
+    const maxAttempts = 16;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const statusRes = await apiRequest<{
         paymentStatus: string;
@@ -173,42 +195,39 @@ export const PaymentService = {
       });
       backendTx = { paymentStatus: statusRes.paymentStatus, totalAmount: statusRes.totalAmount };
       if (statusRes.paymentStatus === 'PAID') break;
-      await new Promise((r) => setTimeout(r, 1500));
+      // Short backoff: webhook / settle is usually immediate; long sleeps felt sluggish in checkout.
+      await new Promise((r) => setTimeout(r, 350));
     }
 
     if (!backendTx || backendTx.paymentStatus !== 'PAID') {
       throw new Error('Payment not completed yet');
     }
 
-    const members = await DataService.getMembers();
-    const member = members.find(
-      (m) => m.email.toLowerCase() === (customerEmail || '').toLowerCase(),
-    );
-
-    if (member && itemsSnapshot && itemsSnapshot.length > 0) {
-      await EntitlementService.processTransactionEntitlements(
-        member.id,
-        itemsSnapshot.map((i) => ({
-          id: i.id,
-          variantId: i.variantId,
-          quantity: i.quantity,
-        })),
+    // Wallet entitlements are granted by the Nest backend (webhook / simulate-settle / Rp 0 checkout).
+    if (itemsSnapshot && itemsSnapshot.length > 0) {
+      const members = await DataService.getMembers();
+      const member = members.find(
+        (m) => m.email.toLowerCase() === (customerEmail || '').toLowerCase(),
       );
+      const memberId =
+        (walletUserId && walletUserId.trim()) || member?.id || '';
       await EventBus.emit('PAYMENT_SUCCESS', {
         transactionId,
         orderId: transactionId,
         amount: backendTx.totalAmount,
-        memberId: member.id,
-        name: member.name,
-        member_name: member.name,
-        email: member.email,
-        phone: member.phone,
+        memberId,
+        name: member?.name ?? '',
+        member_name: member?.name ?? '',
+        email: member?.email ?? customerEmail ?? '',
+        phone: member?.phone ?? '',
         product_name: itemsSnapshot.map((i) => i.name).join(', '),
       });
     }
 
     // Return a minimal transaction object for UI consumers.
     const totalPaid = Number(backendTx.totalAmount ?? 0);
+
+    dispatchWalletRefresh();
 
     return {
       id: transactionId,
@@ -238,7 +257,7 @@ export const PaymentService = {
     // No BE endpoint for proof upload is currently wired.
     // Keep UX intact by acknowledging the action.
     console.log(`(Mock) Upload proof ${file.name} for ${transactionId}`);
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 80));
     return true;
   },
 

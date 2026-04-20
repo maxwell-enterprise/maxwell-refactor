@@ -10,10 +10,22 @@ const DiscountAnalytics: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        DiscountAnalyticsService.analyzePerformance().then(d => {
-            setData(d);
-            setLoading(false);
-        });
+        let cancelled = false;
+        DiscountAnalyticsService.analyzePerformance()
+            .then((d) => {
+                if (!cancelled) {
+                    setData(Array.isArray(d) ? d : []);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setData([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const totalDiscount = data.reduce((sum, d) => sum + d.totalDiscountGiven, 0);

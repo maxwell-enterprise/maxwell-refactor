@@ -1,6 +1,6 @@
 
 import { IEntitlementRepository } from '../contracts';
-import { UserEntitlements, WalletItem, GiftAllocation, CorporateTeamMember, WalletTransactionHistory } from '../../types/access';
+import { UserEntitlements, WalletItem, GiftAllocation, CorporateTeamMember, WalletMemberHub, WalletTransactionHistory } from '../../types/access';
 import { supabase } from '../../lib/supabaseClient';
 
 export class SupabaseEntitlementRepository implements IEntitlementRepository {
@@ -67,6 +67,10 @@ export class SupabaseEntitlementRepository implements IEntitlementRepository {
         if (!supabase) throw new Error("Supabase client not initialized");
         const { error } = await supabase.from('wallet_transactions').insert(tx);
         if (error) throw error;
+    }
+
+    async getWalletMemberHub(_userId: string): Promise<WalletMemberHub | null> {
+        return null;
     }
     // ----------------------------
 

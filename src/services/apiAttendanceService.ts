@@ -84,14 +84,15 @@ export const ApiAttendanceService = {
   recordAttendance: async (
     member: Member,
     event: Event,
-    method: 'SELF_SCAN' | 'ADMIN_OVERRIDE',
+    method: 'SELF_SCAN' | 'ADMIN_OVERRIDE' | 'LINK_CLICKED',
   ): Promise<AttendanceRecord> => {
+    const apiMethod = method === 'LINK_CLICKED' ? 'SELF_SCAN' : method;
     const result = await apiRequest<CheckinApiResult>('/checkin/manual', {
       method: 'POST',
       body: JSON.stringify({
         memberId: member.id,
         eventId: event.id,
-        method,
+        method: apiMethod,
       }),
     });
     return {

@@ -128,7 +128,7 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
             const targetEventId = activeContext?.id || item.meta?.eventId || '';
             const dummyEvent: any = { id: targetEventId, name: activeContext?.name || item.title };
 
-            await AttendanceService.recordAttendance(dummyMember, dummyEvent, 'SELF_SCAN');
+            await AttendanceService.recordAttendance(dummyMember, dummyEvent, 'LINK_CLICKED');
             setIsAttended(true);
         } catch (e) {
             console.warn("Auto-attendance failed, proceeding to link anyway", e);

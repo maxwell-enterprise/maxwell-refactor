@@ -56,14 +56,31 @@ const InventoryManager: React.FC = () => {
 
     const loadData = async () => {
         setLoading(true);
-        if (activeTab === 'STOCK') {
-            const data = await OpsService.getInventory();
-            setItems(data);
-        } else {
-            const txs = await OpsService.getInventoryTransactions();
-            setTransactions(txs);
+        try {
+            if (activeTab === 'STOCK') {
+                const data = await OpsService.getInventory();
+                setItems(Array.isArray(data) ? data : []);
+            } else {
+                const txs = await OpsService.getInventoryTransactions();
+                setTransactions(Array.isArray(txs) ? txs : []);
+            }
+        } catch (e) {
+            if (activeTab === 'STOCK') {
+                setItems([]);
+                showToast(
+                    e instanceof Error ? e.message : 'Could not load inventory.',
+                    'error',
+                );
+            } else {
+                setTransactions([]);
+                showToast(
+                    e instanceof Error ? e.message : 'Could not load stock movements.',
+                    'error',
+                );
+            }
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleOpenMovementModal = (item: InventoryItem, type: InventoryMovementType) => {

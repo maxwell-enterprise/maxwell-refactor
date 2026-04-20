@@ -165,11 +165,14 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
                                         However, since the WalletItem is one ID, we use a composite string "TICKET:EVENT_ID:USER_ID:WALLET_ID".
                                         The Event ID changes based on selection, allowing the scanner to know which session is being accessed.
                                      */}
-                                     <QRCodeDisplay 
-                                        data={`TICKET:${activeTab === 'ACCESS' ? (selectedSession?.id || eventData?.id) : ''}:${item.userId}:${item.id}`} 
-                                        size={160} 
-                                        showLabel={false} 
-                                        className="mix-blend-multiply opacity-90 group-hover:opacity-100 transition-opacity" 
+                                     <QRCodeDisplay
+                                        data={
+                                          item.qrData?.trim() ||
+                                          `TICKET:${selectedSession?.id || eventData?.id || (typeof item.meta?.eventId === 'string' ? item.meta.eventId : '') || 'UNKNOWN'}:${item.userId}:${item.id}`
+                                        }
+                                        size={160}
+                                        showLabel={false}
+                                        className="opacity-90 transition-opacity group-hover:opacity-100"
                                      />
                                      <div className="mt-4 flex items-center justify-center text-green-600 text-[10px] font-bold uppercase tracking-wider bg-green-50 py-1.5 rounded-lg">
                                          <ShieldCheck size={12} className="mr-1.5"/> Valid Ticket

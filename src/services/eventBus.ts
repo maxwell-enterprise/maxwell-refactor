@@ -1,10 +1,18 @@
 
 import { SystemTriggerType } from '../types/ops';
+import { PointTriggerType } from '../types/gamification';
 import { WhatsAppService } from './whatsappService';
 import { OpsService } from './opsService';
 import { GamificationService } from './gamificationService';
 import { AutomationQueueService } from './automationQueueService';
-import { CommunicationService } from './communicationService';
+
+const safe = async (label: string, fn: () => Promise<void>): Promise<void> => {
+    try {
+        await fn();
+    } catch (e) {
+        console.warn(`[EVENT BUS] ${label} skipped:`, e instanceof Error ? e.message : e);
+    }
+};
 
 /**
  * THE EVENT BUS
@@ -16,34 +24,55 @@ export const EventBus = {
     emit: async (eventId: SystemTriggerType, payload: any) => {
         console.log(`⚡ [EVENT BUS] Fired: ${eventId}`, payload);
 
-        // We use Promise.allSettled to ensure one failure doesn't stop others
+        const memberKey = String(
+            payload.memberId || payload.userId || '',
+        ).trim();
+        /** Rules use PURCHASE_COMPLETE; PAYMENT_SUCCESS is only on the commerce bus. */
+        const gamificationTrigger: PointTriggerType =
+            eventId === 'PAYMENT_SUCCESS'
+                ? 'PURCHASE_COMPLETE'
+                : (eventId as unknown as PointTriggerType);
+
+        // We use Promise.allSettled so one failure doesn't stop others; each branch is also wrapped.
         await Promise.allSettled([
-            
-            // 1. COMMUNICATION (WhatsApp Automation)
-            // Checks if there is a WA Template linked to this trigger
-            WhatsAppService.processSystemTrigger(eventId, {
-                name: payload.name || payload.member_name || 'Member',
-                phone: payload.phone || ''
-            }, payload),
-
-            // 2. OPERATIONS (SOP & Task Automation)
-            // Checks if there are any Ops Tasks waiting for this event
-            OpsService.handleSystemTrigger(eventId, payload),
-
-            // 3. GAMIFICATION (Points & Badges)
-            // Checks if this event awards points
-            GamificationService.processTrigger(
-                payload.memberId || payload.userId, 
-                eventId as any, // Cast to PointTriggerType (Overlap exists)
-                payload
+            safe('WhatsApp automation', () =>
+                WhatsAppService.processSystemTrigger(
+                    eventId,
+                    {
+                        name: payload.name || payload.member_name || 'Member',
+                        phone: payload.phone || '',
+                    },
+                    payload,
+                ),
             ),
 
-            // 4. AUTOMATION QUEUE (Background Workers)
-            // Adds to the admin visible queue for heavy tasks
-            // Note: We only add specific heavy events to the visual queue to avoid clutter
-            (['PAYMENT_SUCCESS', 'NEW_MEMBER_REGISTRATION'].includes(eventId)) 
-                ? AutomationQueueService.addToQueue(eventId, payload, `Event Bus Trigger: ${eventId}`)
-                : Promise.resolve()
+            safe('Ops automation', () =>
+                OpsService.handleSystemTrigger(eventId, payload),
+            ),
+
+            safe('Gamification', async () => {
+                if (!memberKey) return;
+                await GamificationService.processTrigger(
+                    memberKey,
+                    gamificationTrigger,
+                    payload,
+                );
+            }),
+
+            safe('Automation queue', async () => {
+                if (
+                    !['PAYMENT_SUCCESS', 'NEW_MEMBER_REGISTRATION'].includes(
+                        eventId,
+                    )
+                ) {
+                    return;
+                }
+                await AutomationQueueService.addToQueue(
+                    eventId,
+                    payload,
+                    `Event Bus Trigger: ${eventId}`,
+                );
+            }),
         ]);
     }
 };

@@ -18,7 +18,7 @@ const WhatsAppQueue: React.FC = () => {
     
     // Default show Pending & Clicked (hide Archived by default)
     const [filterStatus, setFilterStatus] = useState<WATaskStatus | 'ALL' | 'ACTIVE'>('ACTIVE');
-    /** Ref = kunci sinkron (anti double-tap sebelum re-render); bump = paksa update UI disabled */
+    /** Ref = sync key (avoid double-tap before re-render); bump = force disabled UI update */
     const busyRef = useRef<Set<string>>(new Set());
     const [, bumpBusy] = useState(0);
     const loadInFlight = useRef(false);
@@ -50,7 +50,7 @@ const WhatsAppQueue: React.FC = () => {
             setTasks(data);
         } catch (e) {
             showToast(
-                e instanceof Error ? e.message : 'Gagal memuat antrian',
+                e instanceof Error ? e.message : 'Failed to load queue',
                 'error',
             );
         } finally {
@@ -83,7 +83,7 @@ const WhatsAppQueue: React.FC = () => {
                 showToast(
                     e instanceof Error
                         ? e.message
-                        : 'Gagal memperbarui status tugas',
+                        : 'Failed to update task status',
                     'error',
                 );
             }
@@ -103,7 +103,7 @@ const WhatsAppQueue: React.FC = () => {
                 showToast('Task archived', 'info');
             } catch (e) {
                 showToast(
-                    e instanceof Error ? e.message : 'Gagal mengarsipkan',
+                    e instanceof Error ? e.message : 'Failed to archive',
                     'error',
                 );
             }
@@ -125,7 +125,7 @@ const WhatsAppQueue: React.FC = () => {
                 showToast('Task removed', 'info');
             } catch (e) {
                 showToast(
-                    e instanceof Error ? e.message : 'Gagal menghapus tugas',
+                    e instanceof Error ? e.message : 'Failed to delete task',
                     'error',
                 );
             }
@@ -214,22 +214,22 @@ const WhatsAppQueue: React.FC = () => {
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
                         <RefreshCw className="animate-spin text-green-500" size={24} />
-                        <span className="text-sm font-medium">Memuat antrian WhatsApp…</span>
+                        <span className="text-sm font-medium">Loading WhatsApp queue…</span>
                     </div>
                 ) : tasks.length === 0 ? (
                     <div className="max-w-lg mx-auto flex flex-col items-center text-center py-16 px-4">
                         <MessageCircle className="text-slate-200 mb-3" size={44} />
-                        <p className="text-sm font-semibold text-slate-800">Antrian kosong</p>
+                        <p className="text-sm font-semibold text-slate-800">Queue is empty</p>
                         <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                            Belum ada tugas WhatsApp di database (0 data). Tugas dari otomatisasi atau input manual akan tampil di sini.
+                            There are no WhatsApp tasks in the database yet (0 rows). Tasks from automation or manual entry will show up here.
                         </p>
                     </div>
                 ) : filteredTasks.length === 0 ? (
                     <div className="max-w-lg mx-auto flex flex-col items-center text-center py-16 px-4">
                         <Filter className="text-slate-200 mb-3" size={40} />
-                        <p className="text-sm font-semibold text-slate-800">Tidak ada tugas yang cocok</p>
+                        <p className="text-sm font-semibold text-slate-800">No matching tasks</p>
                         <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                            Ada {tasks.length} tugas di database, tapi tidak ada yang sesuai pencarian atau filter saat ini. Kosongkan kotak cari atau pilih &quot;All History&quot; / kategori lain.
+                            There are {tasks.length} tasks in the database, but none match the current search or filters. Clear the search box or choose &quot;All History&quot; / another category.
                         </p>
                     </div>
                 ) : (

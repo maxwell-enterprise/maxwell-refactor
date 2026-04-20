@@ -24,6 +24,13 @@ export interface UnifiedTask {
     };
 }
 
+/** Fired after task list is force-refreshed so shell (e.g. header bell) can resync without coupling components. */
+export const MAXWELL_TASKS_UPDATED_EVENT = 'maxwell-tasks-updated';
+
+/** Short TTL so tab-hopping does not refetch OPS+Support+RBAC every time; bell stays “fresh enough”. */
+const MY_TASKS_CACHE_TTL_MS = 20_000;
+let myTasksCache: { roleKey: string; at: number; data: UnifiedTask[] } | null = null;
+
 /** RBAC rows are shaped on the server (`assignedRole` from DB, not from this argument). */
 async function fetchRbacTasksFromApi(): Promise<UnifiedTask[]> {
     if (typeof window === 'undefined') return [];
@@ -36,12 +43,31 @@ async function fetchRbacTasksFromApi(): Promise<UnifiedTask[]> {
     }
 }
 
+export type GetMyTasksOptions = {
+  /** Skip cache (e.g. manual refresh or after mutation). */
+  bypassCache?: boolean;
+};
+
 export const TaskService = {
     /**
      * Aggregates tasks from multiple sources (Ops Checklists, Tickets)
      * Filters by the user's role.
      */
-    getMyTasks: async (userRole: UserRole): Promise<UnifiedTask[]> => {
+    getMyTasks: async (
+        userRole: UserRole,
+        opts?: GetMyTasksOptions,
+    ): Promise<UnifiedTask[]> => {
+        const roleKey = String(userRole);
+        const now = Date.now();
+        if (
+            !opts?.bypassCache &&
+            myTasksCache &&
+            myTasksCache.roleKey === roleKey &&
+            now - myTasksCache.at < MY_TASKS_CACHE_TTL_MS
+        ) {
+            return myTasksCache.data;
+        }
+
         const rbacTasks = await fetchRbacTasksFromApi();
         const tasks: UnifiedTask[] = [];
 
@@ -99,15 +125,17 @@ export const TaskService = {
         });
 
         const merged = [...rbacTasks, ...tasks];
-        return merged.sort((a, b) => {
+        const sorted = merged.sort((a, b) => {
             if (a.priority === 'HIGH' && b.priority !== 'HIGH') return -1;
             if (a.priority !== 'HIGH' && b.priority === 'HIGH') return 1;
             return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         });
+        myTasksCache = { roleKey, at: Date.now(), data: sorted };
+        return sorted;
     },
 
     getPendingCount: async (userRole: UserRole): Promise<number> => {
         const tasks = await TaskService.getMyTasks(userRole);
         return tasks.length;
-    }
+    },
 };

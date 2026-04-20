@@ -135,7 +135,7 @@ const PDFDesigner: React.FC = () => {
             }
         } catch (e) {
             showToast(
-                e instanceof Error ? e.message : 'Gagal menyimpan template PDF',
+                e instanceof Error ? e.message : 'Failed to save PDF template',
                 'error',
             );
         } finally {
@@ -193,9 +193,9 @@ const PDFDesigner: React.FC = () => {
 
                     {savedTemplateCount === 0 && (
                         <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-100 text-[11px] text-amber-900 leading-relaxed">
-                            <span className="font-bold">Belum ada template PDF tersimpan</span>
+                            <span className="font-bold">No saved PDF templates yet</span>
                             <span className="block mt-1 text-amber-800/90">
-                                Database mengembalikan 0 template. Setelah desain selesai, klik <span className="font-semibold">Save Template</span> untuk menyimpan.
+                                The database returned 0 templates. When your design is ready, click <span className="font-semibold">Save Template</span> to persist it.
                             </span>
                         </div>
                     )}

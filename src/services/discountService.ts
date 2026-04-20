@@ -1,5 +1,12 @@
 
 import { Discount, Product, UserRole } from '../types/index';
+
+function normalizeDiscountScope(scope: string | undefined): string {
+  return String(scope ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/-/g, '_');
+}
 import { UserEntitlements } from '../types/access';
 import { DISCOUNT_DATA } from '../constants';
 import { APP_CONFIG, assertExternalApiMode, BackendMode } from '../lib/config';
@@ -108,7 +115,8 @@ export const DiscountService = {
   findByCode: async (code: string): Promise<Discount | undefined> => {
     // Now async to fetch from DB
     const all = await DiscountService.getDiscounts();
-    return all.find(d => d.code === code.toUpperCase());
+    const needle = code.trim().toUpperCase();
+    return all.find((d) => String(d.code).trim().toUpperCase() === needle);
   },
 
   // Refactored to be Async for Context Fetching
@@ -139,12 +147,38 @@ export const DiscountService = {
     return { valid: true };
   },
 
-  calculateDiscount: (discount: Discount, productPrice: number, qty: number, productCategory?: string, productId?: string): number => {
+  calculateDiscount: (
+    discount: Discount,
+    productPrice: number,
+    qty: number,
+    productCategory?: string,
+    productId?: string,
+    userRole?: UserRole,
+  ): number => {
+    const sc = normalizeDiscountScope(discount.scope);
     let isApplicable = false;
-    if (discount.scope === 'GLOBAL' || discount.scope === 'ABAC_COMPLEX') isApplicable = true; // Assume ABAC verified in isValid
-    if (discount.scope === 'CATEGORY_SPECIFIC' && productCategory && discount.targetIds?.includes(productCategory)) isApplicable = true;
-    if (discount.scope === 'EVENT_SPECIFIC' && productId && discount.targetIds?.includes(productId)) isApplicable = true;
-    if (discount.scope === 'Product_SPECIFIC' && productId && discount.targetIds?.includes(productId)) isApplicable = true;
+    if (sc === 'GLOBAL' || sc === 'ABAC_COMPLEX') isApplicable = true; // Assume ABAC verified in isValid
+    if (
+      sc === 'USER_ROLE_SPECIFIC' &&
+      userRole &&
+      discount.targetIds?.some(
+        (t) => String(t).trim().toUpperCase() === String(userRole).trim().toUpperCase(),
+      )
+    ) {
+      isApplicable = true;
+    }
+    if (sc === 'CATEGORY_SPECIFIC' && productCategory && discount.targetIds?.includes(productCategory)) isApplicable = true;
+    if (sc === 'EVENT_SPECIFIC' && productId && discount.targetIds?.includes(productId)) isApplicable = true;
+    if (sc === 'PRODUCT_SPECIFIC' && productId && discount.targetIds?.includes(productId)) isApplicable = true;
+    // Legacy string from older seeds / imports
+    if (
+      !isApplicable &&
+      discount.scope === 'Product_SPECIFIC' &&
+      productId &&
+      discount.targetIds?.includes(productId)
+    ) {
+      isApplicable = true;
+    }
 
     if (!isApplicable) return 0;
     if (discount.type === 'BUNDLE_VOLUME' && (!discount.minQty || qty < discount.minQty)) return 0;

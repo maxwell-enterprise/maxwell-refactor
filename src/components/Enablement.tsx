@@ -165,7 +165,7 @@ const Enablement: React.FC = () => {
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6 lg:grid-cols-3">
                         {articles.length === 0 && (
                             <div className="lg:col-span-3 rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
-                                Materi operasional saat ini belum tersedia.
+                                Operational materials are not available yet.
                             </div>
                         )}
                         {articles.map(article => (
@@ -199,7 +199,7 @@ const Enablement: React.FC = () => {
 
                 {activeTab === 'MENTORING' && (!session || !persona) && (
                     <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
-                        AI Mentor saat ini belum tersedia.
+                        AI Mentor is not available yet.
                     </div>
                 )}
 
@@ -217,7 +217,7 @@ const Enablement: React.FC = () => {
 
                         {quizzes.length === 0 && (
                             <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
-                                Validation &amp; exam saat ini belum tersedia.
+                                Validation and exams are not available yet.
                             </div>
                         )}
 

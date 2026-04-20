@@ -36,9 +36,17 @@ const Operations: React.FC = () => {
     };
 
     const handleTaskUpdate = async (checklistId: string, taskId: string, status: OpsTaskStatus, note: string) => {
-        await OpsService.updateTaskStatus(checklistId, taskId, status, userRole, note);
-        showToast('Task updated', 'success');
-        loadData();
+        try {
+            const updated = await OpsService.updateTaskStatus(checklistId, taskId, status, userRole, note);
+            if (!updated) {
+                showToast('Could not update task (checklist or task not found).', 'error');
+                return;
+            }
+            showToast('Task updated', 'success');
+            await loadData();
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Task update failed.', 'error');
+        }
     };
 
     const toggleExpand = (id: string) => {

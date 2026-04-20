@@ -9,7 +9,7 @@ export type SessionLoadingScreenProps = {
  * Minimal full-viewport shell while auth/session hydrates.
  */
 const SessionLoadingScreen: React.FC<SessionLoadingScreenProps> = ({
-  title = 'Memuat sesi…',
+  title = 'Loading session…',
 }) => (
   <div className="flex min-h-screen w-full items-center justify-center bg-slate-50 px-4 font-sans antialiased">
     <div

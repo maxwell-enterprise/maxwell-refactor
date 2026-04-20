@@ -145,7 +145,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     };
 
     const handleRemindWA = (row: RowData) => {
-        const message = `Halo ${row.recipientName}! 👋 Saya (${donorName}) sudah mengirimkan tiket *${row.originalTicket.title}* ke email ${row.recipientEmail}. Silakan cek dan klaim ya!`;
+        const message = `Hi ${row.recipientName}! 👋 ${donorName} sent you ticket *${row.originalTicket.title}* to ${row.recipientEmail}. Please check your email and claim it.`;
         // Ensure phone is normalized (in case it wasn't during save or legacy data)
         const phone = normalizePhone(row.recipientPhone);
         const url = WhatsAppService.generateLink(phone, message);

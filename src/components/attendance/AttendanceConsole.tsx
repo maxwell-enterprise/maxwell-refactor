@@ -195,7 +195,7 @@ const AttendanceConsole: React.FC = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-0">
                                 {visibleGates.length === 0 ? (
                                     <div className="col-span-full bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-700">
-                                        Gate belum dikonfigurasi pada event ini. Silakan set gate di Event Operations.
+                                        No gate is configured for this event yet. Configure gates in Event Operations.
                                     </div>
                                 ) : (
                                     visibleGates.map(gate => (

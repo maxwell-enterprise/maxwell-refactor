@@ -2,8 +2,7 @@
 import { OpsChecklist, OpsTemplate, OpsTaskStatus, SystemTriggerType, OpsTask } from '../types/ops';
 import { UserRole, InventoryMovementType, InventoryItem, InventoryTransaction } from '../types/index';
 import { RepositoryFactory } from './repositories/index';
-import { AuditService } from './auditService'; 
-import { apiRequest } from '../repositories/api/apiClient';
+import { AuditService } from './auditService';
 
 export const OpsService = {
     
@@ -64,19 +63,48 @@ export const OpsService = {
         return await RepositoryFactory.getWorkflowRepository().getChecklistById(id);
     },
 
-    updateTaskStatus: async (checklistId: string, taskId: string, status: OpsTaskStatus, actorRole: UserRole, note: string): Promise<OpsChecklist | null> => {
-        const updatedChecklist = await apiRequest<OpsChecklist>(
-            `/store/ops-checklists/${encodeURIComponent(checklistId)}/tasks/${encodeURIComponent(taskId)}/status`,
-            {
-                method: 'PATCH',
-                body: JSON.stringify({
-                    status,
-                    actorRole,
-                    note
-                })
-            }
-        );
-        return updatedChecklist ?? null;
+    updateTaskStatus: async (
+        checklistId: string,
+        taskId: string,
+        status: OpsTaskStatus,
+        actorRole: UserRole,
+        note: string,
+    ): Promise<OpsChecklist | null> => {
+        const repo = RepositoryFactory.getWorkflowRepository();
+        const checklist =
+            (await repo.getChecklistById(checklistId)) ??
+            (await repo.getChecklists()).find((c) => c.id === checklistId);
+        if (!checklist) return null;
+
+        const task = checklist.tasks.find((t) => t.id === taskId);
+        if (!task) return null;
+        if (!Array.isArray(task.logs)) task.logs = [];
+
+        const now = new Date().toISOString();
+        task.status = status;
+        task.logs.push({
+            timestamp: now,
+            actor: String(actorRole),
+            action: 'STATUS_CHANGE',
+            note: note?.trim() ? note.trim() : undefined,
+        });
+        if (status === 'COMPLETED' || status === 'SKIPPED' || status === 'FAILED') {
+            task.completedAt = now;
+            task.completedBy = String(actorRole);
+        } else if (status === 'IN_PROGRESS') {
+            delete task.completedAt;
+            delete task.completedBy;
+        }
+
+        const total = checklist.tasks.length;
+        const completedCount = checklist.tasks.filter((t) => t.status === 'COMPLETED').length;
+        checklist.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+        checklist.updatedAt = now;
+        checklist.status =
+            completedCount === total && total > 0 ? 'COMPLETED' : 'ACTIVE';
+
+        await repo.saveChecklist(checklist);
+        return checklist;
     },
 
     // --- TEMPLATES (MIGRATED TO REPO) ---

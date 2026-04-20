@@ -54,7 +54,7 @@ const PublicCampaignProductDeepLink: React.FC<PublicCampaignProductDeepLinkProps
         const p = await DataService.getProductById(productId.trim());
         if (cancelled) return;
         if (!p) {
-          setLoadError('Produk tidak ditemukan.');
+          setLoadError('Product not found.');
           setProduct(null);
           return;
         }
@@ -102,6 +102,7 @@ const PublicCampaignProductDeepLink: React.FC<PublicCampaignProductDeepLinkProps
           1,
           p.category,
           p.id,
+          UserRole.GUEST,
         );
         if (off <= 0) {
           setPriceOverride({ current: listAfterEngine, compare: listOriginal });
@@ -117,7 +118,7 @@ const PublicCampaignProductDeepLink: React.FC<PublicCampaignProductDeepLinkProps
       } catch (e) {
         if (!cancelled) {
           setLoadError(
-            e instanceof Error ? e.message : 'Gagal memuat produk.',
+            e instanceof Error ? e.message : 'Failed to load product.',
           );
         }
       } finally {
@@ -133,7 +134,7 @@ const PublicCampaignProductDeepLink: React.FC<PublicCampaignProductDeepLinkProps
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-        <p className="mt-4 text-sm text-slate-500">Memuat penawaran…</p>
+        <p className="mt-4 text-sm text-slate-500">Loading offer…</p>
       </div>
     );
   }
@@ -141,12 +142,12 @@ const PublicCampaignProductDeepLink: React.FC<PublicCampaignProductDeepLinkProps
   if (loadError || !product) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 text-center">
-        <p className="max-w-md text-sm text-slate-600">{loadError ?? 'Produk tidak tersedia.'}</p>
+        <p className="max-w-md text-sm text-slate-600">{loadError ?? 'Product unavailable.'}</p>
         <a
           href="/"
           className="mt-6 text-sm font-semibold text-blue-600 hover:underline"
         >
-          Kembali ke beranda
+          Back to home
         </a>
       </div>
     );
@@ -179,7 +180,7 @@ const PublicCampaignProductDeepLink: React.FC<PublicCampaignProductDeepLinkProps
         }}
         initialVariantId={initialVariantId}
         displayPriceOverride={displayPriceOverride}
-        primaryCtaLabel="Masuk untuk checkout"
+        primaryCtaLabel="Sign in to checkout"
         primaryCtaHint={formatIDR(displayPriceOverride?.current ?? product.priceIdr)}
         closeOnAddToCart={false}
         campaignSource={campaignSource}

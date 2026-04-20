@@ -86,10 +86,33 @@ const EventMarketplace: React.FC = () => {
         }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [events]);
 
-    // Group Draft Tickets
+    /** Unassigned / draft tickets: redeemed or bulk-issued, transferable, no recipient yet (Entitlement → Wallet pipeline). */
     const draftTickets = useMemo(() => {
-        return wallet.filter(w => w.type === 'TICKET' && w.status === 'ACTIVE' && w.isTransferable && !w.meta?.recipientEmail);
+        return wallet.filter(
+            (w) =>
+                w.type === 'TICKET' &&
+                w.status === 'ACTIVE' &&
+                w.isTransferable &&
+                !w.meta?.recipientEmail,
+        );
     }, [wallet]);
+
+    /** Consumable flex credits on active passes; unlimited is tracked separately (no punch balance). */
+    const { flexCreditsTotal, hasUnlimitedPass } = useMemo(() => {
+        const passes = wallet.filter((w) => w.type === 'CREDIT_PASS' && w.status === 'ACTIVE');
+        let flex = 0;
+        let unlimited = false;
+        for (const w of passes) {
+            if (w.meta?.isUnlimited) unlimited = true;
+            else flex += w.meta?.credits || 0;
+        }
+        return { flexCreditsTotal: flex, hasUnlimitedPass: unlimited };
+    }, [wallet]);
+
+    const passMatchesEventTags = (w: WalletItem, event: Event) => {
+        const tag = w.meta?.creditTag ?? w.meta?.tag;
+        return typeof tag === 'string' && event.creditTags.includes(tag);
+    };
 
     // Check Eligibility Helper
     const checkEligibility = (event: Event) => {
@@ -97,7 +120,7 @@ const EventMarketplace: React.FC = () => {
             w.type === 'CREDIT_PASS' && 
             w.status === 'ACTIVE' && 
             (w.meta?.isUnlimited || w.meta?.credits > 0) && 
-            event.creditTags.includes(w.meta?.tag)
+            passMatchesEventTags(w, event)
         );
     };
 
@@ -273,8 +296,18 @@ const EventMarketplace: React.FC = () => {
                          <div className="min-w-0">
                              <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-600">Available credits</p>
                              <p className="text-xl font-bold tabular-nums text-indigo-950 sm:text-2xl">
-                                 {wallet.filter(w => w.type === 'CREDIT_PASS').reduce((acc, w) => acc + (w.meta?.credits || 0), 0)}
+                                 {hasUnlimitedPass && flexCreditsTotal === 0 ? '∞' : flexCreditsTotal}
                              </p>
+                             {hasUnlimitedPass && flexCreditsTotal > 0 && (
+                                 <p className="mt-0.5 text-[10px] font-semibold leading-tight text-indigo-600">
+                                     + unlimited pass
+                                 </p>
+                             )}
+                             {hasUnlimitedPass && flexCreditsTotal === 0 && (
+                                 <p className="mt-0.5 text-[10px] font-medium leading-tight text-indigo-600">
+                                     Unlimited access (no punch balance)
+                                 </p>
+                             )}
                          </div>
                      </div>
                      

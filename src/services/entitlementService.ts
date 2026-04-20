@@ -1,6 +1,6 @@
 
 import { UserProfile, UserRole, Product, Event, ProductItem, Member } from '../types/index';
-import { UserEntitlements, Entitlement, GiftAllocation, CorporateTeamMember, WalletItem, WalletTransactionHistory } from '../types/access';
+import { UserEntitlements, Entitlement, GiftAllocation, CorporateTeamMember, WalletItem, WalletMemberHub, WalletTransactionHistory } from '../types/access';
 import { CommunicationService } from './communicationService'; 
 import { DataService } from './dataService'; 
 import { getTagDefinition } from '../constants/tagRegistry'; 
@@ -31,6 +31,11 @@ export const EntitlementService = {
 
   getMyWallet: async (userId: string): Promise<WalletItem[]> => {
       return await RepositoryFactory.getEntitlementRepository().getWalletItems(userId);
+  },
+
+  /** Digital membership hub (card + CRM id + gamification); Nest uses JWT, mock uses userId. */
+  getWalletMemberHub: async (userId: string): Promise<WalletMemberHub | null> => {
+      return await RepositoryFactory.getEntitlementRepository().getWalletMemberHub(userId);
   },
 
   // Fix: Added getWalletItems as an alias for getMyWallet to satisfy external callers
@@ -87,11 +92,27 @@ export const EntitlementService = {
   consumePassUsage: async (passId: string, qty: number, eventId: string): Promise<boolean> => {
       const repo = RepositoryFactory.getEntitlementRepository();
       const pass = await repo.getWalletItemById(passId);
-      if (pass && pass.meta && pass.meta.credits >= qty) {
+      if (!pass?.meta) return false;
+
+      if (pass.meta.isUnlimited) {
+          await repo.logWalletTransaction({
+              id: `TX-USAGE-${Date.now()}`,
+              userId: pass.userId,
+              walletItemId: pass.id,
+              transactionType: 'USAGE',
+              amountChange: 0,
+              balanceAfter: typeof pass.meta.credits === 'number' ? pass.meta.credits : 0,
+              referenceId: eventId,
+              referenceName: 'Unlimited pass redemption',
+              timestamp: new Date().toISOString(),
+          });
+          return true;
+      }
+
+      if (typeof pass.meta.credits === 'number' && pass.meta.credits >= qty) {
           pass.meta.credits -= qty;
           await repo.upsertWalletItem(pass);
-          
-          // Log the credit burn to ledger
+
           await repo.logWalletTransaction({
               id: `TX-USAGE-${Date.now()}`,
               userId: pass.userId,
@@ -100,7 +121,7 @@ export const EntitlementService = {
               amountChange: -qty,
               balanceAfter: pass.meta.credits,
               referenceId: eventId,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
           });
           return true;
       }
@@ -120,33 +141,50 @@ export const EntitlementService = {
 
       const repo = RepositoryFactory.getEntitlementRepository();
       const ticketId = `TKT-REDEEM-${Date.now()}`;
-      
+
+      const isDraft = assignee.type === 'DRAFT';
+      const isGuest = assignee.type === 'GUEST';
+
+      const venueMeta = {
+          eventId,
+          location: event.location,
+          locationMode: event.locationMode,
+          onlineMeetingLink: event.onlineMeetingLink,
+      };
+
       const newTicket: WalletItem = {
           id: ticketId,
-          userId: assignee.type === 'MYSELF' ? userId : 'PENDING_GUEST', 
+          userId: assignee.type === 'MYSELF' || isDraft ? userId : 'PENDING_GUEST',
           type: 'TICKET',
           title: event.name,
-          subtitle: assignee.type === 'MYSELF' ? 'Standard Admission' : `Guest: ${assignee.name}`,
+          subtitle: assignee.type === 'MYSELF'
+              ? 'Standard Admission'
+              : isDraft
+                ? 'Draft — assign later'
+                : `Guest: ${assignee.name}`,
           status: 'ACTIVE',
           isTransferable: assignee.type !== 'MYSELF',
           expiryDate: event.date,
           qrData: `TICKET:${event.id}:${userId}:${ticketId}`,
-          meta: { 
-              eventId, 
-              location: event.location,
-              // IMPORTANT: Save online/offline context to ticket
-              locationMode: event.locationMode, 
-              onlineMeetingLink: event.onlineMeetingLink,
-              recipientName: assignee.name,
-              recipientEmail: assignee.email,
-              recipientPhone: assignee.phone
-          }
+          meta: isDraft
+              ? { ...venueMeta, redemptionMode: 'DRAFT' as const }
+              : {
+                    ...venueMeta,
+                    recipientName: assignee.name,
+                    recipientEmail: assignee.email,
+                    recipientPhone: assignee.phone,
+                },
       };
 
-      // 3. Persist and potentially distribute if guest
-      if (assignee.type !== 'MYSELF') {
+      // 3. Persist: self + draft stay in purchaser wallet; guest triggers distribution / claim flow
+      if (isGuest) {
           await repo.upsertWalletItem(newTicket);
-          await EntitlementService.distributeTickets(userId, 'Sponsor', [{ ...assignee, ticketId }]);
+          await EntitlementService.distributeTickets(
+              userId,
+              'Sponsor',
+              [{ name: assignee.name, email: assignee.email, phone: assignee.phone, ticketId }],
+              { immediateTransfer: true },
+          );
       } else {
           await repo.upsertWalletItem(newTicket);
       }
@@ -161,33 +199,49 @@ export const EntitlementService = {
       const repo = RepositoryFactory.getEntitlementRepository();
       const ticketId = `TKT-FREE-${Date.now()}`;
 
+      const isDraft = assignee.type === 'DRAFT';
+      const isGuest = assignee.type === 'GUEST';
+
+      const venueMeta = {
+          eventId,
+          location: event.location,
+          locationMode: event.locationMode,
+          onlineMeetingLink: event.onlineMeetingLink,
+          admissionPolicy: event.admissionPolicy,
+      };
+
       const newTicket: WalletItem = {
           id: ticketId,
-          userId: assignee.type === 'MYSELF' ? userId : 'PENDING_GUEST',
+          userId: assignee.type === 'MYSELF' || isDraft ? userId : 'PENDING_GUEST',
           type: 'TICKET',
           title: event.name,
-          subtitle: assignee.type === 'MYSELF' 
-              ? `${event.admissionPolicy === 'ON_SITE_DEDUCTION' ? 'Pay at Gate' : 'Free Registration'}` 
-              : `Guest: ${assignee.name}`,
+          subtitle: assignee.type === 'MYSELF'
+              ? `${event.admissionPolicy === 'ON_SITE_DEDUCTION' ? 'Pay at Gate' : 'Free Registration'}`
+              : isDraft
+                ? 'Draft — assign later'
+                : `Guest: ${assignee.name}`,
           status: 'ACTIVE',
           isTransferable: assignee.type !== 'MYSELF',
           expiryDate: event.date,
           qrData: `TICKET:${event.id}:${userId}:${ticketId}`,
-          meta: {
-              eventId,
-              location: event.location,
-              locationMode: event.locationMode,
-              onlineMeetingLink: event.onlineMeetingLink,
-              admissionPolicy: event.admissionPolicy,
-              recipientName: assignee.name,
-              recipientEmail: assignee.email,
-              recipientPhone: assignee.phone
-          }
+          meta: isDraft
+              ? { ...venueMeta, redemptionMode: 'DRAFT' as const }
+              : {
+                    ...venueMeta,
+                    recipientName: assignee.name,
+                    recipientEmail: assignee.email,
+                    recipientPhone: assignee.phone,
+                },
       };
 
-      if (assignee.type !== 'MYSELF') {
+      if (isGuest) {
           await repo.upsertWalletItem(newTicket);
-          await EntitlementService.distributeTickets(userId, 'Sponsor', [{ ...assignee, ticketId }]);
+          await EntitlementService.distributeTickets(
+              userId,
+              'Sponsor',
+              [{ name: assignee.name, email: assignee.email, phone: assignee.phone, ticketId }],
+              { immediateTransfer: true },
+          );
       } else {
           await repo.upsertWalletItem(newTicket);
       }
@@ -207,8 +261,13 @@ export const EntitlementService = {
       if (ticket) {
           ticket.userId = userId;
           ticket.status = 'ACTIVE';
-          // Using bracket notation to avoid TS error on dynamically added prop if not in interface
           delete (ticket as any).sponsoredBy;
+          if (ticket.meta && typeof ticket.meta === 'object') {
+              delete ticket.meta.recipientName;
+              delete ticket.meta.recipientEmail;
+              delete ticket.meta.recipientPhone;
+              delete ticket.meta.pendingClaimIssuedAt;
+          }
           await repo.upsertWalletItem(ticket);
       }
       
@@ -217,22 +276,69 @@ export const EntitlementService = {
       await repo.upsertGiftAllocation(gift);
   },
 
-  // --- NEW: DISTRIBUTION LOGIC (MOBILE OPTIMIZED) ---
+  // --- DISTRIBUTION: default = pending claim (ticket stays with donor); guest checkout uses immediateTransfer ---
   distributeTickets: async (
-      donorId: string, 
-      donorName: string, 
-      recipients: { name: string, email: string, phone: string, ticketId: string }[]
+      donorId: string,
+      donorName: string,
+      recipients: { name: string; email: string; phone: string; ticketId: string }[],
+      opts?: { immediateTransfer?: boolean },
   ): Promise<void> => {
       const repo = RepositoryFactory.getEntitlementRepository();
-      
+      const immediate = opts?.immediateTransfer === true;
+
       for (const recipient of recipients) {
-          // 1. Resolve or Create Shadow Member
+          const donorTicket = await repo.getWalletItemById(recipient.ticketId);
+          if (!donorTicket) continue;
+
+          const allocationId = `DISTR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          const claimToken = `CLAIM-${Math.floor(100000 + Math.random() * 900000)}`;
+
+          if (!immediate) {
+              donorTicket.userId = donorId;
+              donorTicket.status = 'PENDING_CLAIM';
+              donorTicket.meta = {
+                  ...(donorTicket.meta || {}),
+                  recipientName: recipient.name,
+                  recipientEmail: recipient.email,
+                  recipientPhone: recipient.phone,
+                  pendingClaimIssuedAt: new Date().toISOString(),
+              };
+              await repo.upsertWalletItem(donorTicket);
+
+              const allocation: GiftAllocation = {
+                  id: allocationId,
+                  sourceUserId: donorId,
+                  sourceUserName: donorName,
+                  entitlementId: donorTicket.id,
+                  itemName: donorTicket.title,
+                  targetEmail: recipient.email,
+                  claimToken,
+                  status: 'PENDING',
+                  createdAt: new Date().toISOString(),
+              };
+              await repo.upsertGiftAllocation(allocation);
+
+              await repo.logWalletTransaction({
+                  id: `TX-GIFT-PEND-${Date.now()}`,
+                  userId: donorId,
+                  walletItemId: donorTicket.id,
+                  transactionType: 'TRANSFER_OUT',
+                  amountChange: 0,
+                  balanceAfter: 0,
+                  referenceName: `Invitation pending: ${recipient.name}`,
+                  timestamp: new Date().toISOString(),
+              });
+              continue;
+          }
+
           const members = await DataService.getMembers();
-          let targetMember = members.find(m => m.email.toLowerCase() === recipient.email.toLowerCase());
-          
+          let targetMember = members.find(
+              (m) => m.email.toLowerCase() === recipient.email.toLowerCase(),
+          );
+
           if (!targetMember) {
               const newMember: Member = {
-                  id: `M-SHADOW-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                  id: `M-SHADOW-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                   name: recipient.name,
                   email: recipient.email,
                   phone: recipient.phone,
@@ -245,48 +351,54 @@ export const EntitlementService = {
                   platform: 'Digital',
                   regInUS: false,
                   lifecycleStage: 'IDENTIFIED',
-                  engagement: { lastActiveDate: new Date().toISOString(), eventsAttendedCount: 0, contentCompletionRate: 0, communityReputationScore: 0, leadScore: 0 }
+                  engagement: {
+                      lastActiveDate: new Date().toISOString(),
+                      eventsAttendedCount: 0,
+                      contentCompletionRate: 0,
+                      communityReputationScore: 0,
+                      leadScore: 0,
+                  },
               };
               await DataService.addMember(newMember);
               targetMember = newMember;
           }
 
-          // 2. Atomic Transfer of Ownership
-          const donorTicket = await repo.getWalletItemById(recipient.ticketId);
-          if (donorTicket) {
-              donorTicket.userId = targetMember.id;
-              donorTicket.status = 'ACTIVE';
-              donorTicket.sponsoredBy = donorName;
-              await repo.upsertWalletItem(donorTicket);
+          donorTicket.userId = targetMember.id;
+          donorTicket.status = 'ACTIVE';
+          donorTicket.sponsoredBy = donorName;
+          donorTicket.meta = {
+              ...(donorTicket.meta || {}),
+              recipientName: recipient.name,
+              recipientEmail: recipient.email,
+              recipientPhone: recipient.phone,
+          };
+          await repo.upsertWalletItem(donorTicket);
 
-              // 3. Log Allocation for Audit
-              const allocation: GiftAllocation = {
-                  id: `DISTR-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-                  sourceUserId: donorId,
-                  sourceUserName: donorName,
-                  entitlementId: donorTicket.id,
-                  itemName: donorTicket.title,
-                  targetEmail: recipient.email,
-                  claimToken: `DISTR-${Math.floor(100000 + Math.random() * 900000)}`,
-                  status: 'CLAIMED',
-                  claimedByUserId: targetMember.id,
-                  claimedAt: new Date().toISOString(),
-                  createdAt: new Date().toISOString()
-              };
-              await repo.upsertGiftAllocation(allocation);
-              
-              // 4. Log Transaction History for Ledger
-              await repo.logWalletTransaction({
-                  id: `TX-GIFT-${Date.now()}`,
-                  userId: donorId,
-                  walletItemId: donorTicket.id,
-                  transactionType: 'TRANSFER_OUT',
-                  amountChange: -1,
-                  balanceAfter: 0,
-                  referenceName: `Gifted to ${recipient.name}`,
-                  timestamp: new Date().toISOString()
-              });
-          }
+          const allocation: GiftAllocation = {
+              id: allocationId,
+              sourceUserId: donorId,
+              sourceUserName: donorName,
+              entitlementId: donorTicket.id,
+              itemName: donorTicket.title,
+              targetEmail: recipient.email,
+              claimToken,
+              status: 'CLAIMED',
+              claimedByUserId: targetMember.id,
+              claimedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+          };
+          await repo.upsertGiftAllocation(allocation);
+
+          await repo.logWalletTransaction({
+              id: `TX-GIFT-${Date.now()}`,
+              userId: donorId,
+              walletItemId: donorTicket.id,
+              transactionType: 'TRANSFER_OUT',
+              amountChange: -1,
+              balanceAfter: 0,
+              referenceName: `Gifted to ${recipient.name}`,
+              timestamp: new Date().toISOString(),
+          });
       }
   },
 
@@ -294,54 +406,209 @@ export const EntitlementService = {
       return await RepositoryFactory.getEntitlementRepository().getGiftAllocations();
   },
 
-  processTransactionEntitlements: async (userId: string, items: { id: string, variantId?: string, quantity: number }[]): Promise<void> => {
-      const allProducts = await DataService.getProducts(); 
+  /**
+   * Legacy client-side wallet expansion (optional mock/Supabase flows).
+   * Production store purchases: entitlements are granted by Nest `CheckoutEntitlementsService` from
+   * `payment_transactions.itemsSnapshot` (includes `variantId` per line).
+   */
+  processTransactionEntitlements: async (
+      userId: string,
+      items: { id: string; variantId?: string; quantity: number }[],
+      opts?: { orderReference?: string },
+  ): Promise<void> => {
+      const allProducts = await DataService.getProducts();
       const allEvents = await DataService.getEvents();
       const newWalletItems: WalletItem[] = [];
 
       for (const item of items) {
-          const productDef = allProducts.find(p => p.id === item.id);
+          const productDef = allProducts.find((p) => p.id === item.id);
           if (!productDef) continue;
-          const generated = generateWalletItems(userId, productDef, item.quantity, item.variantId, allEvents);
+          const generated = generateWalletItems(
+              userId,
+              productDef,
+              item.quantity,
+              item.variantId,
+              allEvents,
+          );
           newWalletItems.push(...generated);
       }
 
       if (newWalletItems.length > 0) {
-          await RepositoryFactory.getEntitlementRepository().upsertWalletItems(newWalletItems);
+          const repo = RepositoryFactory.getEntitlementRepository();
+          await repo.upsertWalletItems(newWalletItems);
+
+          const ref = opts?.orderReference;
+          const ts = new Date().toISOString();
+          for (const w of newWalletItems) {
+              const balance =
+                  w.type === 'CREDIT_PASS' && w.meta && typeof w.meta.credits === 'number'
+                      ? w.meta.credits
+                      : 0;
+              await repo.logWalletTransaction({
+                  id: `TX-PUR-${w.id}-${Date.now()}`,
+                  userId,
+                  walletItemId: w.id,
+                  transactionType: 'PURCHASE',
+                  amountChange: w.type === 'CREDIT_PASS' ? balance : 1,
+                  balanceAfter: balance,
+                  referenceId: ref,
+                  referenceName: w.title,
+                  timestamp: ts,
+              });
+          }
       }
-  }
+  },
 };
 
-function generateWalletItems(userId: string, product: Product, qty: number, variantId?: string, allEvents: Event[] = []): WalletItem[] {
-    const items: WalletItem[] = [];
-    const prodItems = (product.hasVariants && variantId) 
-        ? (product.variants?.find(v => v.id === variantId)?.items || product.items)
-        : product.items;
+function resolveCreditPassExpiry(meta?: { expiration?: string; isUnlimited?: boolean }): string | undefined {
+    if (meta?.isUnlimited) return undefined;
+    const exp = meta?.expiration;
+    if (typeof exp === 'string' && exp.trim()) return exp.trim();
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().slice(0, 10);
+}
 
-    prodItems.forEach(item => {
-        for(let i=0; i < item.quantity * qty; i++) {
-            const id = `W-${Date.now()}-${Math.floor(Math.random()*10000)}-${i}`;
-            const isTicket = item.type === 'TICKET';
-            const evt = isTicket ? allEvents.find(e => e.id === item.meta?.eventId) : null;
+function generateWalletItems(
+    userId: string,
+    product: Product,
+    qty: number,
+    variantId?: string,
+    allEvents: Event[] = [],
+): WalletItem[] {
+    const out: WalletItem[] = [];
+    let prodItems: ProductItem[] =
+        product.hasVariants && variantId
+            ? product.variants?.find((v) => v.id === variantId)?.items || product.items
+            : product.items;
 
-            items.push({
-                id, userId, 
-                type: item.type as any,
-                title: item.name,
-                subtitle: isTicket ? (evt?.name || 'Unknown Event') : (item.type === 'EVENT_CREDIT' ? 'Access Pass' : ''),
-                status: 'ACTIVE',
-                isTransferable: item.meta?.isTransferable ?? true,
-                expiryDate: isTicket ? evt?.date : '2025-12-31',
-                qrData: `TICKET:${evt?.id}:${userId}:${id}`,
-                meta: {
-                    ...item.meta,
-                    // IMPORTANT: Enrich ticket with Event context for Online access
-                    location: evt?.location,
-                    locationMode: evt?.locationMode,
-                    onlineMeetingLink: evt?.onlineMeetingLink
+    if ((!prodItems || prodItems.length === 0) && product.category === 'Token') {
+        prodItems = [
+            {
+                id: 'token-credit-default',
+                name: product.title?.trim() || 'Flexible wallet credits',
+                type: 'EVENT_CREDIT',
+                quantity: 1,
+                meta: { creditTag: 'FLEX_CREDIT_2025' },
+            },
+        ];
+    }
+
+    const stamp = () => `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+
+    prodItems.forEach((bom) => {
+        const lineUnits = bom.quantity * qty;
+        const bomType =
+            bom.type === 'TOKEN' ||
+            bom.type === 'CREDIT' ||
+            bom.type === 'FLEX_CREDIT' ||
+            bom.type === 'WALLET_CREDIT'
+                ? 'EVENT_CREDIT'
+                : bom.type;
+
+        switch (bomType) {
+            case 'TICKET': {
+                const evt = bom.meta?.eventId
+                    ? allEvents.find((e) => e.id === bom.meta.eventId)
+                    : undefined;
+                for (let i = 0; i < lineUnits; i++) {
+                    const id = `W-TKT-${stamp()}-${i}`;
+                    out.push({
+                        id,
+                        userId,
+                        type: 'TICKET',
+                        title: bom.name,
+                        subtitle: evt?.name || 'Event admission',
+                        status: 'ACTIVE',
+                        isTransferable: bom.meta?.isTransferable ?? true,
+                        expiryDate: evt?.date,
+                        qrData: evt
+                            ? `TICKET:${evt.id}:${userId}:${id}`
+                            : `TICKET:${bom.meta?.eventId ?? 'UNKNOWN'}:${userId}:${id}`,
+                        meta: {
+                            ...bom.meta,
+                            eventId: bom.meta?.eventId,
+                            targetTier: bom.meta?.targetTier,
+                            location: evt?.location,
+                            locationMode: evt?.locationMode,
+                            onlineMeetingLink: evt?.onlineMeetingLink,
+                        },
+                    });
                 }
-            });
+                break;
+            }
+            case 'EVENT_CREDIT':
+            case 'RECURRING_PASS': {
+                const id = `W-CR-${stamp()}`;
+                const tagId = bom.meta?.creditTag as string | undefined;
+                const tagDef = tagId ? getTagDefinition(tagId) : null;
+                const unlimited =
+                    !!bom.meta?.isUnlimited || tagDef?.usageType === 'UNLIMITED_ACCESS';
+                const credits = unlimited ? 999_999 : lineUnits;
+                out.push({
+                    id,
+                    userId,
+                    type: 'CREDIT_PASS',
+                    title: bom.name,
+                    subtitle: tagDef?.description || 'Program credits',
+                    status: 'ACTIVE',
+                    isTransferable: bom.meta?.isTransferable ?? false,
+                    expiryDate: resolveCreditPassExpiry(bom.meta),
+                    meta: {
+                        ...bom.meta,
+                        credits,
+                        creditTag: tagId,
+                        targetTier: bom.meta?.targetTier,
+                        isUnlimited: unlimited,
+                    },
+                });
+                break;
+            }
+            case 'PHYSICAL': {
+                for (let i = 0; i < lineUnits; i++) {
+                    const id = `W-PHY-${stamp()}-${i}`;
+                    out.push({
+                        id,
+                        userId,
+                        type: 'PHYSICAL_ORDER',
+                        title: bom.name,
+                        subtitle: 'Preparing shipment',
+                        status: 'PROCESSING',
+                        isTransferable: false,
+                        meta: {
+                            ...bom.meta,
+                            skuRef: bom.meta?.skuRef,
+                            productId: product.id,
+                        },
+                    });
+                }
+                break;
+            }
+            case 'DIGITAL_LINK': {
+                for (let i = 0; i < lineUnits; i++) {
+                    const id = `W-DIG-${stamp()}-${i}`;
+                    const url =
+                        (typeof bom.meta?.url === 'string' && bom.meta.url) ||
+                        (typeof bom.meta?.link === 'string' && bom.meta.link) ||
+                        '';
+                    out.push({
+                        id,
+                        userId,
+                        type: 'DIGITAL_CONTENT',
+                        title: bom.name,
+                        subtitle: url ? 'Tap to open your access link' : 'Digital access',
+                        status: 'ACTIVE',
+                        isTransferable: bom.meta?.isTransferable ?? false,
+                        expiryDate: resolveCreditPassExpiry(bom.meta),
+                        meta: {
+                            ...bom.meta,
+                            url: url || undefined,
+                        },
+                    });
+                }
+                break;
+            }
         }
     });
-    return items;
+    return out;
 }

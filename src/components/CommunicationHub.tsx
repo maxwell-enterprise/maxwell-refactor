@@ -111,7 +111,7 @@ const CommunicationHub: React.FC = () => {
                                         <td colSpan={5} className="p-16 text-center text-slate-500">
                                             <div className="flex flex-col items-center gap-2">
                                                 <Zap className="text-blue-400 animate-pulse" size={28} />
-                                                <span className="text-sm font-medium">Memuat campaign…</span>
+                                                <span className="text-sm font-medium">Loading campaigns…</span>
                                             </div>
                                         </td>
                                     </tr>
@@ -120,9 +120,9 @@ const CommunicationHub: React.FC = () => {
                                         <td colSpan={5} className="p-16 text-center">
                                             <div className="max-w-md mx-auto flex flex-col items-center gap-3 text-slate-600">
                                                 <FileText className="text-slate-300" size={40} />
-                                                <p className="text-sm font-semibold text-slate-800">Belum ada campaign email</p>
+                                                <p className="text-sm font-semibold text-slate-800">No email campaigns yet</p>
                                                 <p className="text-sm text-slate-500 leading-relaxed">
-                                                    Data di database kosong (0 campaign). Klik <span className="font-bold text-blue-600">New Email</span> di atas untuk membuat campaign pertama.
+                                                    The database is empty (0 campaigns). Click <span className="font-bold text-blue-600">New Email</span> above to create your first campaign.
                                                 </p>
                                             </div>
                                         </td>
@@ -172,7 +172,7 @@ const CommunicationHub: React.FC = () => {
                                         <td colSpan={5} className="p-16 text-center text-slate-500">
                                             <div className="flex flex-col items-center gap-2">
                                                 <Zap className="text-blue-400 animate-pulse" size={28} />
-                                                <span className="text-sm font-medium">Memuat log pengiriman…</span>
+                                                <span className="text-sm font-medium">Loading send logs…</span>
                                             </div>
                                         </td>
                                     </tr>
@@ -181,9 +181,9 @@ const CommunicationHub: React.FC = () => {
                                         <td colSpan={5} className="p-16 text-center">
                                             <div className="max-w-md mx-auto flex flex-col items-center gap-3 text-slate-600">
                                                 <Mail className="text-slate-300" size={40} />
-                                                <p className="text-sm font-semibold text-slate-800">Belum ada log email</p>
+                                                <p className="text-sm font-semibold text-slate-800">No email logs yet</p>
                                                 <p className="text-sm text-slate-500 leading-relaxed">
-                                                    Di database belum ada riwayat pengiriman (0 log). Log akan muncul setelah campaign terkirim atau email transaksi dikirim.
+                                                    There are no send records in the database yet (0 logs). Logs appear after a campaign sends or transactional email goes out.
                                                 </p>
                                             </div>
                                         </td>

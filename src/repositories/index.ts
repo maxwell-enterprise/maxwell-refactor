@@ -166,8 +166,13 @@ export const RepositoryFactory = {
     getInventoryRepository: (): IInventoryRepository => {
         if (!inventoryRepo) {
             const mode = getDomainMode('Inventory', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.OPS);
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
-            inventoryRepo = useRealDb ? new SupabaseInventoryRepository() : new MockInventoryRepository();
+            if (mode === 'API') {
+                inventoryRepo = new ApiInventoryRepository();
+            } else if (!APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE') {
+                inventoryRepo = new SupabaseInventoryRepository();
+            } else {
+                inventoryRepo = new MockInventoryRepository();
+            }
         }
         return inventoryRepo;
     },

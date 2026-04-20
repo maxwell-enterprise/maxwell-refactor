@@ -4,6 +4,7 @@ import {
   GiftAllocation,
   UserEntitlements,
   WalletItem,
+  WalletMemberHub,
   WalletTransactionHistory,
 } from '../../types/access';
 import { apiRequest } from './apiClient';
@@ -71,6 +72,14 @@ export class ApiEntitlementRepository implements IEntitlementRepository {
       `/wallet/history/list?userId=${encodeURIComponent(userId)}`,
     );
     return normalizeWalletHistory(rows);
+  }
+
+  async getWalletMemberHub(_userId: string): Promise<WalletMemberHub | null> {
+    try {
+      return await apiRequest<WalletMemberHub>('/wallet/member-hub');
+    } catch {
+      return null;
+    }
   }
 
   async logWalletTransaction(tx: WalletTransactionHistory): Promise<void> {

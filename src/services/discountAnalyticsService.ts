@@ -29,10 +29,16 @@ export const DiscountAnalyticsService = {
     },
 
     analyzePerformance: async (): Promise<RulePerformance[]> => {
-        const [logs, rules] = await Promise.all([
-            DiscountAnalyticsService.getLogs(),
-            PricingEngine.getRules()
-        ]);
+        let logs: DiscountFinancialLog[] = [];
+        let rules: PricingRule[] = [];
+        try {
+            [logs, rules] = await Promise.all([
+                DiscountAnalyticsService.getLogs(),
+                PricingEngine.getRules(),
+            ]);
+        } catch {
+            return [];
+        }
 
         const stats: Record<string, RulePerformance> = {};
 

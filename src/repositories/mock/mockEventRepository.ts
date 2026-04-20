@@ -29,8 +29,9 @@ export class MockEventRepository implements IEventRepository {
         return events.find(e => e.id === id) || null;
     }
 
-    async upsert(event: Event): Promise<void> {
+    async upsert(event: Event): Promise<Event> {
         await DevDatabase.add('events', event);
+        return event;
     }
 
     async delete(id: string): Promise<void> {

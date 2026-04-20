@@ -65,8 +65,8 @@ const MyTribe: React.FC = () => {
 
                     {!loading && members.length === 0 && (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                            Data member untuk fitur ini saat ini belum tersedia.
-                            {tribeDataSourceMode === 'UNWIRED' && ' Tim sedang menyiapkan koneksi backend untuk menu ini.'}
+                            Member data for this feature is not available yet.
+                            {tribeDataSourceMode === 'UNWIRED' && ' The team is wiring up the backend for this screen.'}
                         </div>
                     )}
 
@@ -138,7 +138,7 @@ const MyTribe: React.FC = () => {
                             <Calendar size={18} className="mr-2 text-slate-500"/> Upcoming Sessions
                         </h3>
                         <div className="space-y-4">
-                            {sessions.length === 0 ? <p className="text-sm text-slate-400 text-center py-4">Sesi belum tersedia saat ini.</p> :
+                            {sessions.length === 0 ? <p className="text-sm text-slate-400 text-center py-4">No sessions available right now.</p> :
                              sessions.map(sess => (
                                 <div key={sess.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                                     <div className="flex justify-between items-start mb-1">

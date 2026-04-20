@@ -6,12 +6,14 @@ import { EntitlementService } from '../../services/entitlementService'; // NEW
 import { CreditTagMaster, WalletItem } from '../../types/access';
 import { Event, Member } from '../../types/index';
 import { useToast } from '../../context/ToastContext';
+import { useDialog } from '../../context/DialogContext';
 import { Tag, Plus, Edit3, Trash2, X, Save, Zap, Info, Link, ArrowRight, Layers, Ticket, Unlink, CheckCircle2, Lock, Key, AlertCircle, AlertTriangle, Users, Wallet } from 'lucide-react';
 import EventForm from '../ops/events/EventForm'; 
 import { CertificationService } from '../../services/certificationService';
 
 const TagManagement: React.FC = () => {
     const { showToast } = useToast();
+    const { confirm } = useDialog();
     
     // Data Stores
     const [tags, setTags] = useState<CreditTagMaster[]>([]);
@@ -138,11 +140,31 @@ const TagManagement: React.FC = () => {
         setIsEditing(true);
     };
 
-    const handleDelete = async (id: string) => {
-        if (confirm("Are you sure you want to delete this tag? Ensure it is not used in active Events or Products.")) {
-            await CreditTagService.deleteTag(id);
+    const handleDelete = async (tag: CreditTagMaster) => {
+        const ok = await confirm({
+            title: 'Delete credit tag?',
+            variant: 'danger',
+            confirmLabel: 'Delete tag',
+            message: (
+                <span>
+                    Delete <strong className="font-mono text-slate-800">{tag.code}</strong> ({tag.name})?
+                    <br />
+                    <span className="text-xs text-slate-500">
+                        Make sure the tag is not used on active events, tiers, or products — removing it can break access and sales flows.
+                    </span>
+                </span>
+            ),
+        });
+        if (!ok) return;
+        try {
+            await CreditTagService.deleteTag(tag.id);
             showToast('Tag deleted successfully', 'success');
-            loadData();
+            await loadData();
+        } catch (e) {
+            showToast(
+                e instanceof Error ? e.message : 'Could not delete tag.',
+                'error',
+            );
         }
     };
 
@@ -239,7 +261,18 @@ const TagManagement: React.FC = () => {
 
     const handleRemoveTagFromEvent = async (event: Event) => {
         if (!selectedTagForAssignment) return;
-        if (!confirm(`Remove access requirement "${selectedTagForAssignment.name}" from event "${event.name}"?`)) return;
+        const ok = await confirm({
+            title: 'Remove access requirement?',
+            variant: 'warning',
+            confirmLabel: 'Remove',
+            message: (
+                <span>
+                    Remove access requirement <strong>{selectedTagForAssignment.name}</strong> from event{' '}
+                    <strong>{event.name}</strong>?
+                </span>
+            ),
+        });
+        if (!ok) return;
 
         const currentTags = event.creditTags || [];
         const updatedTags = currentTags.filter(t => t !== selectedTagForAssignment.code);
@@ -251,7 +284,20 @@ const TagManagement: React.FC = () => {
 
     const handleRemoveTagFromTier = async (event: Event, tierId: string) => {
          if (!selectedTagForAssignment) return;
-         if (!confirm(`Stop granting "${selectedTagForAssignment.name}" on this tier?`)) return;
+         const tierName =
+             event.tiers?.find((t) => t.id === tierId)?.name ?? 'this tier';
+         const ok = await confirm({
+             title: 'Stop granting this tag?',
+             variant: 'warning',
+             confirmLabel: 'Remove grant',
+             message: (
+                 <span>
+                     Stop granting tag <strong>{selectedTagForAssignment.name}</strong> via tier{' '}
+                     <strong>{tierName}</strong> on event <strong>{event.name}</strong>?
+                 </span>
+             ),
+         });
+         if (!ok) return;
 
          const updatedTiers = event.tiers?.map(t => {
             if (t.id === tierId) {
@@ -369,7 +415,7 @@ const TagManagement: React.FC = () => {
                                                 <td className="p-4 text-right">
                                                     <div className="flex justify-end gap-2">
                                                         <button onClick={() => handleEdit(tag)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Edit3 size={16}/></button>
-                                                        <button onClick={() => handleDelete(tag.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
+                                                        <button type="button" onClick={() => void handleDelete(tag)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded" aria-label={`Delete tag ${tag.code}`}><Trash2 size={16}/></button>
                                                     </div>
                                                 </td>
                                             </tr>

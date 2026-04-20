@@ -97,7 +97,7 @@ const UnassignedTicketMonitor: React.FC = () => {
             return;
         }
 
-        const message = `Hi ${row.ownerName}, kami melihat Anda memiliki ${row.quantity} tiket "${row.eventName}" yang masih "Unassigned" (belum dipakai/dikirim). Mohon login ke aplikasi dan gunakan fitur "My Wallet" jika tiket ini untuk kerabat. Terima kasih!`;
+        const message = `Hi ${row.ownerName}, you still have ${row.quantity} "${row.eventName}" ticket(s) marked Unassigned (not used or sent yet). Please sign in and use My Wallet to assign or send them if they are for someone else. Thanks!`;
         const link = WhatsAppService.generateLink(row.ownerPhone, message);
         window.open(link, '_blank');
         showToast('WhatsApp opened.', 'success');

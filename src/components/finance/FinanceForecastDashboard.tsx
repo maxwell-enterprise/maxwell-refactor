@@ -61,7 +61,7 @@ export const FinanceForecastDashboard: React.FC<Props> = ({
     (async () => {
       if (APP_CONFIG.DOMAINS.TRANSACTIONS !== 'API') {
         setError(
-          'Forecast memakai data server. Set `NEXT_PUBLIC_API_BASE_URL` ke Nest `/fe` dan pastikan Nest + DB aktif.',
+          'Forecast uses server data. Set `NEXT_PUBLIC_API_BASE_URL` to the Nest `/fe` base URL and ensure Nest and the database are running.',
         );
         setData(null);
         return;

@@ -35,12 +35,14 @@ import { CampaignAttributionService } from '../../services/campaignAttributionSe
 import { UserVoucherService } from '../../services/userVoucherService';
 import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
 import { formatStorePriceIdr } from '../../utils/formatStorePrice';
+import { useDialog } from '../../context/DialogContext';
 
 const PAGE_SIZE = 18;
 
 const Storefront: React.FC = () => {
-    const { user, userRole, refreshSession } = useAuth();
+    const { user, userRole } = useAuth();
     const { showToast } = useToast();
+    const { confirm } = useDialog();
     const { can } = useAccess('ops_inventory'); 
     
     const canManageStore = can('WRITE');
@@ -444,14 +446,13 @@ const Storefront: React.FC = () => {
     };
 
     const addToCart = (product: Product, specificVariantId?: string) => {
-        if (product.category === 'Token' && !getWorkspaceToken()) {
-            if (user) {
-                showToast('Menyambungkan sesi pembayaran…', 'info');
-                void refreshSession();
-            } else {
-                showToast('Silakan login untuk melanjutkan pembelian token.', 'info');
-                window.location.assign('/');
-            }
+        /** Token = wallet credits: require a real account (not guest). Workspace JWT is preferred for API calls but not the only signal — signed-in members should not be blocked if the tab has a valid session without JWT yet. */
+        const canPurchaseToken =
+            Boolean(getWorkspaceToken()) ||
+            (Boolean(user?.id) && userRole !== UserRole.GUEST);
+        if (product.category === 'Token' && !canPurchaseToken) {
+            showToast('Please sign in to purchase wallet credits.', 'info');
+            window.location.assign('/');
             return;
         }
         if (product.isActive === false) {
@@ -532,11 +533,27 @@ const Storefront: React.FC = () => {
         setIsProductModalOpen(true);
     };
 
-    const handleDeleteProduct = async (productId: string) => {
-        if (window.confirm('Are you sure you want to permanently delete this product?')) {
-            await DataService.deleteProduct(productId);
-            showToast('Product deleted.', 'info');
+    const handleDeleteProduct = async (product: Product) => {
+        const ok = await confirm({
+            title: 'Delete this product?',
+            variant: 'danger',
+            confirmLabel: 'Delete product',
+            cancelLabel: 'Cancel',
+            message: (
+                <span className="text-sm text-slate-600">
+                    Permanently delete{' '}
+                    <strong className="text-slate-900">{product.title}</strong>? This cannot be undone and may affect
+                    orders or access tied to this catalog item.
+                </span>
+            ),
+        });
+        if (!ok) return;
+        try {
+            await DataService.deleteProduct(product.id);
+            showToast('Product deleted.', 'success');
             await refetchFirstPage();
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Could not delete product.', 'error');
         }
     };
 
@@ -658,7 +675,7 @@ const Storefront: React.FC = () => {
                                         </button>
                                         <button 
                                             type="button"
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteProduct(product.id); }}
+                                            onClick={(e) => { e.stopPropagation(); void handleDeleteProduct(product); }}
                                             className="touch-target rounded-lg border border-slate-200 bg-white/90 p-1.5 text-red-600 shadow-sm backdrop-blur hover:bg-red-50"
                                             title="Delete"
                                             aria-label="Delete product"
@@ -783,11 +800,17 @@ const Storefront: React.FC = () => {
             <PaymentModal 
                 isOpen={isPaymentModalOpen}
                 onClose={() => setIsPaymentModalOpen(false)}
-                onPaymentSuccess={() => setCart([])}
+                onPaymentSuccess={() => {
+                    setCart([]);
+                    showToast('Payment successful. Your order has been recorded.', 'success');
+                }}
                 cart={cart}
                 products={products}
                 userEmail={user?.email || 'guest@example.com'}
                 userRole={userRole}
+                walletUserId={
+                  user && userRole !== UserRole.GUEST ? user.id : undefined
+                }
                 onUpdateQuantity={updateCartQuantity}
                 onRemoveItem={removeFromCart}
                 preAppliedDiscountCode={

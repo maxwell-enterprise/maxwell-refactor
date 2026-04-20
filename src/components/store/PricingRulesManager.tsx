@@ -21,9 +21,15 @@ const PricingRulesManager: React.FC = () => {
 
     const loadRules = async () => {
         setLoading(true);
-        const data = await PricingEngine.getRules();
-        setRules(data);
-        setLoading(false);
+        try {
+            const data = await PricingEngine.getRules();
+            setRules(Array.isArray(data) ? data : []);
+        } catch {
+            setRules([]);
+            showToast('Could not load pricing rules.', 'error');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleNew = () => {

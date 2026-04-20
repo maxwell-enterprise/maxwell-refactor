@@ -1,18 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
-import { QRService } from '../../services/qrService';
 import { AttendanceService } from '../../services/attendanceService';
 import { DataService } from '../../services/dataService';
 import { ScanResult } from '../../types/qr';
-import { Member, Event } from '../../types/index';
-import { GateDefinition, ScanValidationResult, EventGateConfig } from '../../types/attendance';
-import { Camera, X, CheckCircle, AlertTriangle, ShieldCheck, User, Calendar, ChevronDown, RefreshCw, LogIn, Lock } from 'lucide-react';
+import { Event, UserRole } from '../../types/index';
+import { ScanValidationResult, EventGateConfig } from '../../types/attendance';
+import { Camera, X, CheckCircle, AlertTriangle, ShieldCheck, ChevronDown, LogIn, Lock } from 'lucide-react';
 import QRScanner from '../common/QRScanner';
-import UpsellPrompt from './UpsellPrompt'; 
 import { useAuth } from '../../context/AuthContext';
+import { useDialog } from '../../context/DialogContext';
 
 const GateScannerView: React.FC = () => {
   const { user } = useAuth();
+  const { confirm } = useDialog();
   // CONFIGURATION STATE (The Setup Phase)
   const [config, setConfig] = useState<{ eventId: string; gateId: string } | null>(null);
   
@@ -20,8 +20,6 @@ const GateScannerView: React.FC = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [validationResult, setValidationResult] = useState<ScanValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showUpsell, setShowUpsell] = useState(false); // Legacy: For guests
-  
   // DATA STATE
   const [activeEvents, setActiveEvents] = useState<Event[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -47,9 +45,16 @@ const GateScannerView: React.FC = () => {
       if (event) {
           // If event has custom gate config, use it. Filter by assigned user.
           if (event.gates && event.gates.length > 0) {
-              const myGates = event.gates.filter(g => 
-                  g.isActive && (g.assignedUserIds.includes(user.id) || user.role === 'Super Admin')
-              );
+              const myGates = event.gates.filter((g) => {
+                  if (!g.isActive) return false;
+                  if (
+                      user.role === UserRole.SUPER_ADMIN ||
+                      user.role === UserRole.OPERATIONS
+                  ) {
+                      return true;
+                  }
+                  return g.assignedUserIds.includes(user.id);
+              });
               setAvailableGates(myGates);
               
               // Auto-select if only one
@@ -70,20 +75,19 @@ const GateScannerView: React.FC = () => {
       const allEvents = await DataService.getEvents();
       
       // STRICT FILTERING LOGIC
-      const relevant = allEvents.filter(e => {
-          // 1. Admins see all future events
-          if (user?.role === 'Super Admin') return true;
-
-          // 2. Assigned Gatekeepers ONLY see events they are assigned to
-          if (e.gates && e.gates.length > 0) {
-             const isAssigned = e.gates.some(g => g.isActive && g.assignedUserIds.includes(user?.id || ''));
-             return isAssigned;
-          }
-          
-          // 3. Fallback: If no gate logic exists, we hide it from the "Gate Scanner" view
-          // because Gate Keepers should only work on assigned events.
-          return false; 
-      }).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const relevant = allEvents
+          .filter((e) => {
+              if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.OPERATIONS) {
+                  return true;
+              }
+              if (e.gates && e.gates.length > 0) {
+                  return e.gates.some(
+                      (g) => g.isActive && g.assignedUserIds.includes(user?.id || ''),
+                  );
+              }
+              return false;
+          })
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       setActiveEvents(relevant);
       
@@ -101,33 +105,45 @@ const GateScannerView: React.FC = () => {
       setShowScanner(true); // Auto-start
   };
 
-  const handleExitConfiguration = () => {
-      if (confirm("Exit Scanner Mode?")) {
-          setConfig(null);
-          setShowScanner(false);
-          setValidationResult(null);
-      }
+  const handleExitConfiguration = async () => {
+      const ok = await confirm({
+          title: 'Leave Gate Scanner?',
+          message: 'Event and gate configuration will be reset.',
+          variant: 'warning',
+          confirmLabel: 'Leave',
+      });
+      if (!ok) return;
+      setConfig(null);
+      setShowScanner(false);
+      setValidationResult(null);
   };
 
   const handleScan = async (result: ScanResult) => {
     setError(null);
     setValidationResult(null);
-    setShowUpsell(false);
-
     if (!result.success) {
       setError(result.message);
       return;
     }
-    
+
+    const raw =
+      typeof result.qrPayload === 'string' && result.qrPayload.trim()
+        ? result.qrPayload.trim()
+        : typeof result.message === 'string' && result.message.includes(':')
+          ? result.message.trim()
+          : '';
+    if (!raw) {
+      setError('QR is invalid or empty.');
+      return;
+    }
+
     if (!config) return;
 
     try {
-        // SMART VALIDATION CALL
-        // Dynamic gate id comes from DB-backed event.gates.
         const validation = await AttendanceService.validateGateEntry(
-            result.message, 
-            config.eventId, 
-            config.gateId
+            raw,
+            config.eventId,
+            config.gateId,
         );
         
         setValidationResult(validation);
@@ -239,7 +255,7 @@ const GateScannerView: React.FC = () => {
                       <span className="text-xs text-slate-300">{activeGateName}</span>
                   </div>
               </div>
-              <button onClick={handleExitConfiguration} className="p-2 bg-white/10 rounded-full text-slate-400 hover:text-white">
+              <button type="button" onClick={() => void handleExitConfiguration()} className="p-2 bg-white/10 rounded-full text-slate-400 hover:text-white">
                   <Lock size={16}/>
               </button>
           </div>
@@ -329,7 +345,8 @@ const GateScannerView: React.FC = () => {
         )}
       </div>
 
-      <QRScanner 
+      <QRScanner
+        purpose="gate"
         isOpen={showScanner}
         onClose={() => setShowScanner(false)}
         onScan={handleScan}

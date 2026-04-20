@@ -112,12 +112,18 @@ export const AttendanceService = {
             } else if (event.admissionPolicy === 'ON_SITE_DEDUCTION') {
                  // Check if member has credits matching ANY valid tag (Child or Parent)
                  const wallet = await EntitlementService.getWalletItems(memberId);
-                 const pass = wallet.find(w => 
-                    w.type === 'CREDIT_PASS' && 
-                    w.status === 'ACTIVE' && 
-                    validAccessTags.includes(w.meta?.tag) && // Use Expanded Tag List
-                    w.meta?.credits > 0
-                 );
+                 const passTag = (w: { meta?: { creditTag?: string; tag?: string } }) =>
+                     w.meta?.creditTag ?? w.meta?.tag;
+                 const pass = wallet.find((w) => {
+                     const tag = passTag(w);
+                     return (
+                         w.type === 'CREDIT_PASS' &&
+                         w.status === 'ACTIVE' &&
+                         typeof tag === 'string' &&
+                         validAccessTags.includes(tag) &&
+                         (w.meta?.isUnlimited || (w.meta?.credits ?? 0) > 0)
+                     );
+                 });
                  
                  if (!pass) return { status: 'DENIED', message: 'No valid credits found.' };
                  
@@ -181,12 +187,16 @@ export const AttendanceService = {
         ExcelHelper.exportToExcel(data, filename, 'Attendance');
     },
 
-    recordAttendance: async (member: Member, event: Event, method: 'SELF_SCAN' | 'ADMIN_OVERRIDE'): Promise<AttendanceRecord> => {
+    recordAttendance: async (
+        member: Member,
+        event: Event,
+        method: 'SELF_SCAN' | 'ADMIN_OVERRIDE' | 'LINK_CLICKED',
+    ): Promise<AttendanceRecord> => {
         if (useApiAttendance()) {
             return ApiAttendanceService.recordAttendance(member, event, method);
         }
 
-        if (method === 'SELF_SCAN') {
+        if (method === 'SELF_SCAN' || method === 'LINK_CLICKED') {
             const wallet = await EntitlementService.getWalletItems(member.id);
             const ticket = wallet.find(w => w.type === 'TICKET' && w.meta?.eventId === event.id && w.status === 'ACTIVE');
             

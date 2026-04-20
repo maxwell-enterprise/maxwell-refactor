@@ -1,12 +1,17 @@
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { EntitlementService } from '../services/entitlementService';
-import { WalletItem } from '../types/access';
+import { WALLET_REFRESH_EVENT } from '../services/paymentService';
+import {
+  readWalletSessionCache,
+  writeWalletSessionCache,
+} from '../lib/walletSessionCache';
+import { WalletItem, WalletMemberHub } from '../types/access';
 import { ViewState } from '../types/index';
 import { 
     QrCode, Ticket, Calendar, Zap, 
-    X, ShieldCheck, Clock, Search, Share2, Users, Layers
+    ShieldCheck, Clock, Search, Share2, Package, ExternalLink
 } from 'lucide-react';
 import QRCodeDisplay from './common/QRCodeDisplay';
 import { useToast } from '../context/ToastContext';
@@ -23,8 +28,9 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [items, setItems] = useState<WalletItem[]>([]);
+  const [memberHub, setMemberHub] = useState<WalletMemberHub | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'ASSETS' | 'TICKETS' | 'HISTORY'>('TICKETS');
+  const [activeTab, setActiveTab] = useState<'ASSETS' | 'TICKETS' | 'PHYSICAL' | 'HISTORY'>('TICKETS');
 
   // Replaced simple QR state with full item state
   const [viewingTicket, setViewingTicket] = useState<WalletItem | null>(null);
@@ -32,28 +38,73 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   // Distribution State
   const [distributionContext, setDistributionContext] = useState<WalletItem[] | null>(null);
 
-  useEffect(() => {
-    if (user) {
-        loadWallet();
-    }
-  }, [user]);
-
-  const loadWallet = async () => {
-      setLoading(true);
-      if(user) {
-          const walletData = await EntitlementService.getMyWallet(user.id);
-          setItems(walletData);
-          setLoading(false);
+  /**
+   * `full` = blocking load (spinner) for cold open or after payment.
+   * `background` = silent revalidate; keeps last snapshot on screen (smooth A→B→A).
+   */
+  const loadWallet = useCallback(
+    async (mode: 'full' | 'background' = 'full') => {
+      if (!user) return;
+      if (mode === 'full') {
+        setLoading(true);
       }
-  };
+      try {
+        const [walletData, hub] = await Promise.all([
+          EntitlementService.getMyWallet(user.id),
+          EntitlementService.getWalletMemberHub(user.id),
+        ]);
+        setItems(walletData);
+        setMemberHub(hub);
+        writeWalletSessionCache(user.id, walletData, hub);
+      } finally {
+        if (mode === 'full') {
+          setLoading(false);
+        }
+      }
+    },
+    [user],
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    const snap = readWalletSessionCache(user.id);
+    if (snap) {
+      setItems(snap.items);
+      setMemberHub(snap.memberHub);
+      setLoading(false);
+      void loadWallet('background');
+    } else {
+      void loadWallet('full');
+    }
+  }, [user, loadWallet]);
+
+  useEffect(() => {
+    if (!user) return;
+    const onRefresh = () => {
+      void loadWallet('full');
+    };
+    window.addEventListener(WALLET_REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(WALLET_REFRESH_EVENT, onRefresh);
+  }, [user, loadWallet]);
+
+  /** Unassigned transferable tickets (Smart Redeem “Draft” + bulk) — same rules as Event Catalogue “Draft tickets”. */
+  const isUnassignedTransferableTicket = useCallback((t: WalletItem) => {
+      return (
+          t.type === 'TICKET' &&
+          t.status === 'ACTIVE' &&
+          t.isTransferable === true &&
+          !t.meta?.recipientEmail
+      );
+  }, []);
 
   // --- GROUPING LOGIC FOR TICKETS ---
   const groupedTickets = useMemo(() => {
-      const tickets = items.filter(i => i.type === 'TICKET' && i.status !== 'EXPIRED' && i.status !== 'USED'); // Show Active + Gift Pending
+      const tickets = items.filter(
+          (i) => i.type === 'TICKET' && i.status !== 'EXPIRED' && i.status !== 'USED',
+      );
       const groups: Record<string, WalletItem[]> = {};
 
-      tickets.forEach(t => {
-          // Group by Event ID. If no event ID, fallback to ID (singles)
+      tickets.forEach((t) => {
           const key = t.meta?.eventId || t.id;
           if (!groups[key]) groups[key] = [];
           groups[key].push(t);
@@ -64,6 +115,16 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   
   const creditPasses = useMemo(() => {
        return items.filter(i => i.type === 'CREDIT_PASS' && i.status === 'ACTIVE');
+  }, [items]);
+
+  const digitalItems = useMemo(() => {
+      return items.filter(
+          (i) => i.type === 'DIGITAL_CONTENT' && i.status === 'ACTIVE',
+      );
+  }, [items]);
+
+  const physicalOrders = useMemo(() => {
+      return items.filter((i) => i.type === 'PHYSICAL_ORDER');
   }, [items]);
 
   // DATE FORMATTER FOR BIG DISPLAY
@@ -107,12 +168,64 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
             )}
         </div>
 
+        {/* Digital membership card — entitlement hub (Nest GET /wallet/member-hub) */}
+        {memberHub && (
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-stretch sm:justify-between">
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Digital membership
+                </p>
+                <h2 className="truncate text-lg font-bold text-slate-900 sm:text-xl">
+                  {memberHub.displayName || user?.fullName || 'Member'}
+                </h2>
+                <p className="truncate text-xs text-slate-500">{memberHub.email || user?.email}</p>
+                <div className="flex flex-wrap gap-2 pt-1 text-[11px] text-slate-600">
+                  {memberHub.memberPublicId && (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono font-semibold">
+                      Member ID: {memberHub.memberPublicId}
+                    </span>
+                  )}
+                  {memberHub.membershipTier && (
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-bold text-indigo-800">
+                      Tier: {memberHub.membershipTier}
+                    </span>
+                  )}
+                  {memberHub.cardNumber && (
+                    <span className="rounded-full bg-slate-50 px-2.5 py-1 font-mono text-slate-700">
+                      {memberHub.cardNumber}
+                    </span>
+                  )}
+                </div>
+                {memberHub.gamification && (
+                  <p className="text-xs text-slate-600">
+                    <span className="font-semibold text-slate-800">Gamification:</span> Level{' '}
+                    {memberHub.gamification.currentLevel} · {memberHub.gamification.totalPoints} pts
+                    {memberHub.gamification.rank != null
+                      ? ` · Rank #${memberHub.gamification.rank}`
+                      : ''}
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:min-w-[140px]">
+                <p className="text-center text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Gate scan
+                </p>
+                <div className="rounded-xl bg-white p-2 shadow-inner">
+                  <QRCodeDisplay data={memberHub.gateScanQrPayload} size={112} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Centered pill tabs — matches reference */}
         <div className="flex w-full justify-center">
           <div className="w-full max-w-xl overflow-x-scroll-touch rounded-2xl bg-slate-100 p-1 shadow-inner sm:max-w-2xl">
             <div className="flex min-w-0 gap-1">
               <button type="button" onClick={() => setActiveTab('TICKETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'TICKETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>My Tickets</button>
-              <button type="button" onClick={() => setActiveTab('ASSETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'ASSETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Program Credits</button>
+              <button type="button" onClick={() => setActiveTab('ASSETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'ASSETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Credits & Digital</button>
+              <button type="button" onClick={() => setActiveTab('PHYSICAL')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'PHYSICAL' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Orders</button>
               <button type="button" onClick={() => setActiveTab('HISTORY')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'HISTORY' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Activity</button>
             </div>
           </div>
@@ -123,9 +236,9 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
 
             {activeTab === 'ASSETS' && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {creditPasses.length === 0 && (
+                    {creditPasses.length === 0 && digitalItems.length === 0 && (
                       <div className={`col-span-full ${emptyShell}`}>
-                        <p className="text-base font-medium text-slate-600">No active program credits.</p>
+                        <p className="text-base font-medium text-slate-600">No program credits or digital access yet.</p>
                       </div>
                     )}
                     {creditPasses.map((item) => (
@@ -139,7 +252,9 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                         <Zap size={24} className="text-white" />
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-4xl font-black">{item.meta?.credits}</div>
+                                        <div className="text-4xl font-black">
+                                            {item.meta?.isUnlimited ? '∞' : item.meta?.credits}
+                                        </div>
                                         <div className="text-[10px] uppercase font-bold text-blue-200">Available Credits</div>
                                     </div>
                                 </div>
@@ -163,6 +278,86 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                              </div>
                         </div>
                     ))}
+                    {digitalItems.map((item) => {
+                        const url = typeof item.meta?.url === 'string' ? item.meta.url.trim() : '';
+                        const openDigital = () => {
+                            if (!url) {
+                                showToast('Access link is not available yet.', 'error');
+                                return;
+                            }
+                            let href = url;
+                            if (!/^https?:\/\//i.test(href)) href = `https://${href}`;
+                            window.open(href, '_blank', 'noopener,noreferrer');
+                        };
+                        return (
+                            <div
+                                key={item.id}
+                                className="relative overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-sm"
+                            >
+                                <div className="mb-4 flex items-start justify-between gap-3">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                                        <ExternalLink size={22} />
+                                    </div>
+                                    {item.expiryDate && (
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            Exp: {item.expiryDate}
+                                        </span>
+                                    )}
+                                </div>
+                                <h3 className="mb-1 text-lg font-bold text-slate-900">{item.title}</h3>
+                                <p className="mb-6 text-xs text-slate-500">{item.subtitle}</p>
+                                <button
+                                    type="button"
+                                    onClick={openDigital}
+                                    className="w-full rounded-xl bg-slate-900 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition-colors hover:bg-slate-800"
+                                >
+                                    Open access
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {activeTab === 'PHYSICAL' && (
+                <div className="space-y-4">
+                    {physicalOrders.length === 0 ? (
+                        <div className={emptyShell}>
+                            <Package size={44} strokeWidth={1.25} className="mx-auto mb-4 text-slate-300" />
+                            <p className="font-bold text-slate-800">No merchandise orders</p>
+                            <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
+                                Physical items from checkout appear here with fulfillment status.
+                            </p>
+                        </div>
+                    ) : (
+                        physicalOrders.map((item) => (
+                            <div
+                                key={item.id}
+                                className="flex items-center gap-4 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm"
+                            >
+                                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
+                                    <Package size={26} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <h3 className="truncate font-bold text-slate-900">{item.title}</h3>
+                                    <p className="truncate text-xs text-slate-500">
+                                        {item.meta?.skuRef ? `SKU: ${item.meta.skuRef}` : item.subtitle}
+                                    </p>
+                                </div>
+                                <span
+                                    className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
+                                        item.status === 'DELIVERED'
+                                            ? 'bg-green-50 text-green-700'
+                                            : item.status === 'SHIPPED'
+                                              ? 'bg-blue-50 text-blue-700'
+                                              : 'bg-amber-50 text-amber-800'
+                                    }`}
+                                >
+                                    {item.status === 'PROCESSING' ? 'Preparing' : item.status}
+                                </span>
+                            </div>
+                        ))
+                    )}
                 </div>
             )}
 
@@ -175,93 +370,101 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                              <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">Acquired tickets will appear here for you to use or share.</p>
                         </div>
                     ) : groupedTickets.map((group, idx) => {
-                        // 1. Regular Ticket (The first one, assumed for Self)
-                        const selfTicket = group[0];
-                        const dateInfo = formatEventDate(selfTicket.expiryDate);
-                        
-                        // 2. Shared Bundle (The rest)
-                        const bundleTickets = group.slice(1);
-                        
+                        const pool = group.filter(isUnassignedTransferableTicket);
+                        const personal = group.filter((t) => !pool.includes(t));
+                        const anchor = group[0];
+                        const dateInfo = formatEventDate(anchor.expiryDate);
+
                         return (
-                            <div key={idx} className="space-y-4">
-                                {/* HEADER FOR GROUP (Optional, if multiple events) */}
+                            <div key={anchor.meta?.eventId ?? anchor.id ?? idx} className="space-y-4">
                                 {groupedTickets.length > 1 && (
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest pl-2 border-l-4 border-indigo-500 ml-1">
-                                        {selfTicket.title}
+                                    <h3 className="ml-1 border-l-4 border-indigo-500 pl-2 text-sm font-bold uppercase tracking-widest text-slate-400">
+                                        {anchor.title}
                                     </h3>
                                 )}
 
-                                {/* CARD 1: REGULAR TICKET (SELF) - OPENS MODAL ON CLICK */}
-                                <div 
-                                    onClick={() => setViewingTicket(selfTicket)}
-                                    className="bg-white rounded-[2.5rem] p-1 shadow-sm border border-slate-200 cursor-pointer hover:shadow-xl transition-all group overflow-hidden"
-                                >
-                                    <div className="bg-slate-50 rounded-[2rem] p-5 flex items-stretch relative overflow-hidden">
-                                        {/* Left: Date */}
-                                        <div className="flex flex-col items-center justify-center pr-5 border-r-2 border-dashed border-slate-200 mr-5 min-w-[90px]">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{dateInfo.weekday}</span>
-                                            <span className="text-4xl font-black text-slate-800 leading-none">{dateInfo.day}</span>
-                                            <span className="text-sm font-bold text-slate-400 uppercase tracking-wider mt-1">{dateInfo.month}</span>
+                                {personal.map((ticket) => {
+                                    const ticketDate = formatEventDate(ticket.expiryDate);
+                                    return (
+                                    <div
+                                        key={ticket.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => setViewingTicket(ticket)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                setViewingTicket(ticket);
+                                            }
+                                        }}
+                                        className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
+                                    >
+                                        <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-slate-50 p-5">
+                                            <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-slate-200 pr-5">
+                                                <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{ticketDate.weekday}</span>
+                                                <span className="text-4xl font-black leading-none text-slate-800">{ticketDate.day}</span>
+                                                <span className="mt-1 text-sm font-bold uppercase tracking-wider text-slate-400">{ticketDate.month}</span>
+                                            </div>
+                                            <div className="flex min-w-0 flex-1 flex-col justify-center">
+                                                <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{ticket.title}</h3>
+                                                <p className="mb-2 truncate text-xs text-slate-500">{ticket.subtitle}</p>
+                                                <p className="flex items-center text-[10px] font-medium text-slate-400">
+                                                    <Calendar size={10} className="mr-1.5" /> {ticketDate.full}
+                                                </p>
+                                                {ticket.status === 'PENDING_CLAIM' && (
+                                                    <span className="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
+                                                        Pending claim
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 translate-y-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg transition-transform group-hover:scale-110">
+                                                <QrCode size={24} className="-translate-x-1 -translate-y-1" />
+                                            </div>
                                         </div>
-                                        
-                                        {/* Right: Info */}
-                                        <div className="flex-1 flex flex-col justify-center min-w-0">
-                                            <h3 className="font-bold text-lg text-slate-900 truncate leading-tight mb-1">{selfTicket.title}</h3>
-                                            <p className="text-xs text-slate-500 mb-2 truncate">{selfTicket.subtitle}</p>
-                                            <p className="text-[10px] text-slate-400 flex items-center font-medium">
-                                                <Calendar size={10} className="mr-1.5"/> {dateInfo.full}
-                                            </p>
-                                        </div>
-
-                                        {/* Absolute QR Icon */}
-                                        <div className="absolute right-[-10px] bottom-[-10px] bg-slate-900 text-white w-20 h-20 flex items-center justify-center rounded-full shadow-lg group-hover:scale-110 transition-transform">
-                                            <QrCode size={24} className="-translate-x-1 -translate-y-1"/>
+                                        <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                            <span>Personal entry</span>
+                                            <span className="flex items-center text-green-600">
+                                                <ShieldCheck size={12} className="mr-1" /> Valid
+                                            </span>
                                         </div>
                                     </div>
-                                    
-                                    {/* Footer Strip */}
-                                    <div className="px-6 py-3 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                        <span>Personal Entry Pass</span>
-                                        <span className="text-green-600 flex items-center"><ShieldCheck size={12} className="mr-1"/> Valid</span>
-                                    </div>
-                                </div>
+                                    );
+                                })}
 
-                                {/* CARD 2: SHARED TICKET (BUNDLE) - Only if > 1 ticket */}
-                                {bundleTickets.length > 0 && (
+                                {pool.length > 0 && (
                                     <div className="relative group/bundle">
-                                        {/* Stack Effect Layers */}
-                                        <div className="absolute top-2 left-2 right-2 bottom-0 bg-white border border-slate-200 rounded-[2.5rem] shadow-sm transform scale-[0.95] translate-y-2 z-0"></div>
-                                        <div className="absolute top-4 left-4 right-4 bottom-0 bg-white border border-slate-200 rounded-[2.5rem] shadow-sm transform scale-[0.9] translate-y-4 z-0"></div>
-
-                                        <div className="bg-white rounded-[2.5rem] p-1 shadow-md border border-slate-200 relative z-10 overflow-hidden">
-                                             <div className="bg-indigo-50 rounded-[2rem] p-5 flex items-stretch relative overflow-hidden">
-                                                {/* Left: Date (Same visual style but indigo theme) */}
-                                                <div className="flex flex-col items-center justify-center pr-5 border-r-2 border-dashed border-indigo-200 mr-5 min-w-[90px]">
-                                                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">{dateInfo.weekday}</span>
-                                                    <span className="text-4xl font-black text-indigo-900 leading-none">{dateInfo.day}</span>
-                                                    <span className="text-sm font-bold text-indigo-400 uppercase tracking-wider mt-1">{dateInfo.month}</span>
+                                        <div className="absolute bottom-0 left-2 right-2 top-2 z-0 scale-[0.95] translate-y-2 transform rounded-[2.5rem] border border-slate-200 bg-white shadow-sm" />
+                                        <div className="absolute bottom-0 left-4 right-4 top-4 z-0 scale-[0.9] translate-y-4 transform rounded-[2.5rem] border border-slate-200 bg-white shadow-sm" />
+                                        <div className="relative z-10 overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-1 shadow-md">
+                                            <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-indigo-50 p-5">
+                                                <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-indigo-200 pr-5">
+                                                    <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-indigo-400">{dateInfo.weekday}</span>
+                                                    <span className="text-4xl font-black leading-none text-indigo-900">{dateInfo.day}</span>
+                                                    <span className="mt-1 text-sm font-bold uppercase tracking-wider text-indigo-400">{dateInfo.month}</span>
                                                 </div>
-
-                                                {/* Right: Info */}
-                                                <div className="flex-1 flex flex-col justify-center min-w-0">
-                                                    <div className="flex items-center mb-1">
-                                                        <span className="bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider mr-2">Distribution Pack</span>
+                                                <div className="flex min-w-0 flex-1 flex-col justify-center">
+                                                    <div className="mb-1 flex items-center">
+                                                        <span className="mr-2 rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                                                            Assign recipients
+                                                        </span>
                                                     </div>
-                                                    <h3 className="font-bold text-lg text-indigo-900 truncate leading-tight mb-1">{selfTicket.title}</h3>
-                                                    <p className="text-xs text-indigo-600 mb-2 truncate">You have <span className="font-black bg-white px-1.5 rounded">{bundleTickets.length}</span> unassigned tickets.</p>
+                                                    <h3 className="mb-1 truncate text-lg font-bold leading-tight text-indigo-900">{anchor.title}</h3>
+                                                    <p className="mb-2 truncate text-xs text-indigo-600">
+                                                        <span className="rounded bg-white px-1.5 font-black">{pool.length}</span>{' '}
+                                                        {pool.length === 1 ? 'ticket needs a guest' : 'tickets need guests'} (draft / bulk).
+                                                    </p>
                                                 </div>
-
-                                                {/* Action Button (Replacing QR) */}
                                                 <div className="flex items-center pl-2">
-                                                    <button 
+                                                    <button
                                                         type="button"
-                                                        onClick={() => openDistribution(bundleTickets)}
-                                                        className="bg-indigo-600 text-white p-4 rounded-xl shadow-lg hover:bg-indigo-700 transition-all active:scale-95 group-hover/bundle:scale-105"
+                                                        onClick={() => openDistribution(pool)}
+                                                        className="rounded-xl bg-indigo-600 p-4 text-white shadow-lg transition-all hover:bg-indigo-700 active:scale-95 group-hover/bundle:scale-105"
+                                                        aria-label="Open ticket distribution"
                                                     >
-                                                        <Share2 size={20}/>
+                                                        <Share2 size={20} />
                                                     </button>
                                                 </div>
-                                             </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}

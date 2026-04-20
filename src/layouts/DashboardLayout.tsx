@@ -7,9 +7,14 @@ import { ViewState, UserRole } from '../types/index';
 import { Menu, Search, UserCircle, ChevronDown, CheckCircle, RefreshCw } from 'lucide-react';
 import { BellIcon } from '../components/ui/bell';
 import { useAuth } from '../context/AuthContext';
-import { TaskService, UnifiedTask } from '../services/taskService';
+import {
+  TaskService,
+  UnifiedTask,
+  MAXWELL_TASKS_UPDATED_EVENT,
+} from '../services/taskService';
 import PersonaSwitcherModal from '../components/auth/PersonaSwitcherModal'; // NEW IMPORT
 import { useToast } from '../context/ToastContext';
+import { useDialog } from '../context/DialogContext';
 import { markRbacInboxRead } from '../lib/rbacInboxClient';
 
 interface DashboardLayoutProps {
@@ -23,6 +28,7 @@ interface DashboardLayoutProps {
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView, onNavigate, isPersonalZone, onToggleZone }) => {
   const { user, userRole, logout } = useAuth();
   const { showToast } = useToast();
+  const { confirm } = useDialog();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Replace simple menu state with modal state
@@ -62,14 +68,23 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
       return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Tasks for header bell: role changes matter; view switches should not re-hit all backends.
   useEffect(() => {
-      // Poll for tasks for notifications
       if (userRole !== UserRole.GUEST) {
           TaskService.getMyTasks(userRole).then(tasks => {
               setPendingTasks(tasks);
           });
       }
-  }, [userRole, currentView]); 
+  }, [userRole]);
+
+  useEffect(() => {
+      if (userRole === UserRole.GUEST) return;
+      const syncBell = () => {
+          TaskService.getMyTasks(userRole).then(setPendingTasks);
+      };
+      window.addEventListener(MAXWELL_TASKS_UPDATED_EVENT, syncBell);
+      return () => window.removeEventListener(MAXWELL_TASKS_UPDATED_EVENT, syncBell);
+  }, [userRole]);
 
   const highPriorityCount = pendingTasks.filter(t => t.priority === 'HIGH').length;
 
@@ -77,12 +92,22 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
     markNotificationsAsSeen();
     const inboxId = task.metadata?.rbacInboxId;
     if (task.source === 'SYSTEM' && inboxId) {
+      const ok = await confirm({
+        title: 'Your access has changed',
+        variant: 'warning',
+        confirmLabel: 'Mark read & sign out',
+        cancelLabel: 'Cancel',
+        message: (
+          <span>
+            To apply your updated access rights, this session will end and you will need to{' '}
+            <strong>sign in again</strong>. Continue?
+          </span>
+        ),
+      });
+      if (!ok) return;
       setShowNotifications(false);
       await markRbacInboxRead(inboxId);
-      showToast(
-        'Akun Anda diarahkan ke RBAC: kami mengeluarkan sesi ini supaya login berikutnya memuat role baru.',
-        'info',
-      );
+      showToast('Please sign in again so your menus and permissions stay up to date.', 'info');
       await logout();
       return;
     }

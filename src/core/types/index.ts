@@ -239,7 +239,16 @@ export interface Event {
   sessions?: OperationalSession[];
 }
 
-export type ProductEntitlementType = 'PHYSICAL' | 'TICKET' | 'EVENT_CREDIT' | 'DIGITAL_LINK' | 'RECURRING_PASS';
+export type ProductEntitlementType =
+  | 'PHYSICAL'
+  | 'TICKET'
+  | 'EVENT_CREDIT'
+  | 'DIGITAL_LINK'
+  | 'RECURRING_PASS'
+  | 'TOKEN'
+  | 'CREDIT'
+  | 'FLEX_CREDIT'
+  | 'WALLET_CREDIT';
 
 export interface ProductItem {
     id: string;
@@ -637,7 +646,7 @@ export interface AttendanceRecord {
     memberName: string;
     memberEmail: string;
     scannedAt: string;
-    method: 'GATE_SCAN' | 'SELF_SCAN' | 'ADMIN_OVERRIDE';
+    method: 'GATE_SCAN' | 'SELF_SCAN' | 'ADMIN_OVERRIDE' | 'LINK_CLICKED';
     verificationCode: string;
     eventColor: string;
     gateId?: string;

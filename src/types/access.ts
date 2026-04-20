@@ -136,3 +136,20 @@ export interface WalletTransactionHistory {
     referenceName?: string; // "IMC 2025" or "Order #123"
     timestamp: string;
 }
+
+/** GET /wallet/member-hub — digital membership + CRM id + gamification for My Wallet hub. */
+export interface WalletMemberHub {
+    appUserId: string;
+    displayName: string | null;
+    email: string | null;
+    memberPublicId: string | null;
+    gateScanQrPayload: string;
+    membershipTier: string | null;
+    cardNumber: string | null;
+    gamification: {
+        totalPoints: number;
+        currentLevel: string;
+        rank: number | null;
+    } | null;
+    card?: Record<string, unknown> | null;
+}

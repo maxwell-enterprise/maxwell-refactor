@@ -7,7 +7,7 @@ export default function NotFound() {
         href="/"
         className="absolute left-6 top-6 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
       >
-        Keluar
+        Home
       </Link>
 
       <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white px-8 py-6 shadow-sm">
@@ -19,7 +19,7 @@ export default function NotFound() {
         <div className="text-left">
           <h1 className="text-2xl font-bold text-slate-900">Page not found</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Halaman ini tidak tersedia atau link sudah tidak berlaku.
+            This page is unavailable or the link is no longer valid.
           </p>
         </div>
       </div>

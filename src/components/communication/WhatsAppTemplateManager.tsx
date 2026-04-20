@@ -146,7 +146,7 @@ const WhatsAppTemplateManager: React.FC = () => {
             setSelectedTemplate(finalForm);
         } catch (e) {
             showToast(
-                e instanceof Error ? e.message : 'Gagal menyimpan template',
+                e instanceof Error ? e.message : 'Failed to save template',
                 'error',
             );
         } finally {
@@ -167,7 +167,7 @@ const WhatsAppTemplateManager: React.FC = () => {
             setIsEditing(false);
         } catch (e) {
             showToast(
-                e instanceof Error ? e.message : 'Gagal reset template',
+                e instanceof Error ? e.message : 'Failed to reset templates',
                 'error',
             );
         } finally {
@@ -275,14 +275,14 @@ const WhatsAppTemplateManager: React.FC = () => {
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-14 text-slate-500 gap-2 px-2">
                             <MessageSquare className="text-green-400 animate-pulse" size={28} />
-                            <span className="text-xs font-medium text-center">Memuat template dari database…</span>
+                            <span className="text-xs font-medium text-center">Loading templates from database…</span>
                         </div>
                     ) : templates.length === 0 ? (
                         <div className="flex flex-col items-center text-center py-12 px-3 text-slate-600">
                             <FileCode className="text-slate-200 mb-2" size={36} />
-                            <p className="text-xs font-bold text-slate-800">Belum ada template</p>
+                            <p className="text-xs font-bold text-slate-800">No templates yet</p>
                             <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                                Database mengembalikan 0 template. Klik <span className="font-semibold text-green-700">+</span> untuk buat baru, atau ikon reset untuk memuat template default.
+                                The database returned 0 templates. Click <span className="font-semibold text-green-700">+</span> to create one, or use the reset icon to load defaults.
                             </p>
                         </div>
                     ) : (
@@ -517,9 +517,9 @@ const WhatsAppTemplateManager: React.FC = () => {
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-center px-8 text-slate-500">
                         <MessageSquare className="text-slate-200 mb-3" size={40} />
-                        <p className="text-sm font-semibold text-slate-700">Pilih template di panel kiri</p>
+                        <p className="text-sm font-semibold text-slate-700">Select a template in the left panel</p>
                         <p className="text-xs text-slate-400 mt-2 max-w-sm">
-                            Jika daftar kosong, tambah template baru atau reset default dari ikon di atas daftar.
+                            If the list is empty, add a new template or reset defaults using the icons above the list.
                         </p>
                     </div>
                 )}

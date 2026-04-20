@@ -126,7 +126,8 @@ const MemberAttendanceScanner: React.FC = () => {
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pt-4">Powered by Maxwell Wisdom Engine</p>
         </div>
 
-        <QRScanner 
+        <QRScanner
+            purpose="legacy"
             isOpen={showScanner}
             onClose={() => setShowScanner(false)}
             onScan={handleScan}

@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { MasterTier } from '../../../types/reference';
 import { ReferenceService } from '../../../services/referenceService';
 import { useToast } from '../../../context/ToastContext';
-import { Trash2, Plus, Edit3, X, Layers } from 'lucide-react';
+import { Trash2, Plus, Edit3, X, Layers, Loader2 } from 'lucide-react';
+import { EmptyStatePlaceholder } from '../../store/EmptyStatePlaceholder';
 
 const MasterTierConfig: React.FC = () => {
     const { showToast } = useToast();
@@ -90,33 +91,46 @@ const MasterTierConfig: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-auto p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {tiers.map(tier => (
-                        <div key={tier.id} className="p-4 border border-slate-200 rounded-xl hover:shadow-md transition-shadow relative group">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase border bg-slate-50 border-slate-200 text-slate-500">
-                                    Master Tier
-                                </span>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => handleEdit(tier)} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 rounded"><Edit3 size={14}/></button>
-                                    <button onClick={() => handleDelete(tier)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded"><Trash2 size={14}/></button>
+                {loading ? (
+                    <div className="flex min-h-[min(50vh,320px)] flex-col items-center justify-center gap-3 text-slate-500" role="status" aria-live="polite">
+                        <Loader2 className="h-9 w-9 shrink-0 animate-spin text-indigo-500" aria-hidden />
+                        <p className="text-sm">Loading master tiers…</p>
+                    </div>
+                ) : tiers.length === 0 ? (
+                    <EmptyStatePlaceholder
+                        icon={Layers}
+                        minHeightClass="min-h-[min(50vh,320px)]"
+                        message="No master tiers yet. Add your first tier to standardize ticket types across all events."
+                    />
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {tiers.map((tier) => (
+                            <div key={tier.id} className="p-4 border border-slate-200 rounded-xl hover:shadow-md transition-shadow relative group">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase border bg-slate-50 border-slate-200 text-slate-500">
+                                        Master Tier
+                                    </span>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button type="button" onClick={() => handleEdit(tier)} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 rounded"><Edit3 size={14}/></button>
+                                        <button type="button" onClick={() => handleDelete(tier)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded"><Trash2 size={14}/></button>
+                                    </div>
                                 </div>
-                            </div>
-                            <h4 className="font-bold text-slate-900">{tier.name}</h4>
-                            <div className="flex items-center mt-2">
-                                <span className="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 rounded">{tier.id}</span>
-                            </div>
-                            {tier.description && (
-                                <p className="mt-3 text-xs text-slate-500 line-clamp-2">{tier.description}</p>
-                            )}
-                            {tier.basePriceIdr !== undefined && (
-                                <div className="mt-3 text-xs font-semibold text-slate-700">
-                                    Base price: Rp {tier.basePriceIdr.toLocaleString('id-ID')}
+                                <h4 className="font-bold text-slate-900">{tier.name}</h4>
+                                <div className="flex items-center mt-2">
+                                    <span className="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 rounded">{tier.id}</span>
                                 </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
+                                {tier.description && (
+                                    <p className="mt-3 text-xs text-slate-500 line-clamp-2">{tier.description}</p>
+                                )}
+                                {tier.basePriceIdr !== undefined && (
+                                    <div className="mt-3 text-xs font-semibold text-slate-700">
+                                        Base price: Rp {tier.basePriceIdr.toLocaleString('id-ID')}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* EDIT MODAL */}
