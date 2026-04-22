@@ -40,6 +40,9 @@ const toIsoOrNow = (value: unknown): string => {
   return new Date().toISOString();
 };
 
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
 export const PaymentService = {
   
   initiateTransaction: async (
@@ -93,6 +96,33 @@ export const PaymentService = {
     // Each line must include variantId when the cart has a variant so `itemsSnapshot` matches the
     // correct BOM (VIP vs Regular, etc.). Nest persists this and CheckoutEntitlementsService expands
     // the right lines — not the legacy client `EntitlementService.processTransactionEntitlements`.
+    const checkoutItems = payload.items.map((i) => {
+      const productId = typeof i.id === 'string' ? i.id.trim() : '';
+      if (!productId) {
+        throw new Error('Invalid checkout item: missing product id');
+      }
+      if (!Number.isFinite(i.quantity) || i.quantity <= 0) {
+        throw new Error(`Invalid checkout quantity for product ${productId}`);
+      }
+      const normalizedVariantId = isNonEmptyString(i.variantId)
+        ? i.variantId.trim()
+        : undefined;
+      return {
+        productId,
+        quantity: i.quantity,
+        ...(normalizedVariantId ? { variantId: normalizedVariantId } : {}),
+      };
+    });
+
+    const normalizedGuestEmail = payload.customerEmail.trim();
+    if (!normalizedGuestEmail) {
+      throw new Error('Missing customer email for checkout');
+    }
+
+    const normalizedAttributionSource = isNonEmptyString(payload.attributionSource)
+      ? payload.attributionSource.trim()
+      : undefined;
+
     const res = await apiRequest<{ transaction: any; snapToken: string }>(
       '/transactions/midtrans/snap',
       {
@@ -101,16 +131,14 @@ export const PaymentService = {
           'x-idempotency-key': buildPaymentIdempotencyKey(),
         },
         body: JSON.stringify({
-          items: payload.items.map((i) => ({
-            productId: i.id,
-            quantity: i.quantity,
-            variantId: i.variantId,
-          })),
+          items: checkoutItems,
           voucherCode: payload.discountCode,
           paymentMethod: payload.method,
           // Controller uses `guestEmail` when userId is null.
-          guestEmail: payload.customerEmail,
-          attributionSource: payload.attributionSource,
+          guestEmail: normalizedGuestEmail,
+          ...(normalizedAttributionSource
+            ? { attributionSource: normalizedAttributionSource }
+            : {}),
         }),
       },
     );

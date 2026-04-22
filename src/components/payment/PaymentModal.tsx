@@ -30,6 +30,9 @@ const MIDTRANS_UI_DISABLED = (() => {
   return v !== 'false' && v !== '0';
 })();
 
+const isValidCheckoutEmail = (value: string): boolean =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -256,9 +259,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   const handleInitiatePayment = async () => {
     if (snapPayInFlightRef.current) return; // prevent double snap.pay while popup is still open
-    if (!customerEmail || !customerEmail.includes('@')) {
-        alert("Please enter a valid email address for the receipt.");
-        return;
+    const normalizedEmail = customerEmail.trim();
+    if (!isValidCheckoutEmail(normalizedEmail)) {
+      alert('Please enter a valid email address for the receipt.');
+      return;
     }
 
     flushSync(() => {
@@ -286,7 +290,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         discountCode: appliedDiscount?.discount.code,
         discountAmount: appliedDiscount?.amount,
         totalAmount,
-        customerEmail,
+        customerEmail: normalizedEmail,
         method: selectedMethod,
         attributionSource,
         isInstallment: payMode === 'INSTALLMENT',
