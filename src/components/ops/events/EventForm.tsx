@@ -11,6 +11,7 @@ import TierManager from './TierManager';
 import SessionLogisticsManager from './SessionLogisticsManager';
 import { useToast } from '../../../context/ToastContext';
 import { uploadEventBannerImage } from '../../../lib/eventBannerUpload';
+import { ClipLoader } from 'react-spinners';
 
 interface EventFormProps {
     isOpen: boolean;
@@ -28,6 +29,7 @@ interface EventFormProps {
 
     onClose: () => void;
     onSave: (data: Partial<Event>) => void;
+    isSaving?: boolean;
 }
 
 /** Keeps controlled inputs stable (never undefined → defined on first keystroke). */
@@ -61,7 +63,7 @@ function normalizeEventFormData(data: Partial<Event>): Partial<Event> {
 const EventForm: React.FC<EventFormProps> = ({ 
     isOpen, isEditing, initialData, masterDoneTags, availableCreditTags,
     bundleableEvents, availableContainers, orphanEvents, linkedChildren, onManageChild,
-    onClose, onSave 
+    onClose, onSave, isSaving = false
 }) => {
     const { showToast } = useToast();
     const bannerFileInputRef = useRef<HTMLInputElement>(null);
@@ -133,6 +135,7 @@ const EventForm: React.FC<EventFormProps> = ({
     }, [formData.tiers]);
 
     const handleSave = () => {
+        if (isSaving) return;
         // STRICT VALIDATION
         if (formData.type === 'SESSION') {
             if (!formData.parentEventId) {
@@ -556,15 +559,26 @@ const EventForm: React.FC<EventFormProps> = ({
                 <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-200 rounded-xl transition-colors text-sm">Cancel</button>
                     <button 
+                        disabled={isSaving}
                         onClick={handleSave} 
                         className={`px-8 py-2.5 text-white rounded-xl shadow-lg flex items-center transition-all text-sm font-bold
                             ${(formData.type === 'SESSION' && !formData.parentEventId) 
                                 ? 'bg-slate-400 cursor-not-allowed opacity-70' 
                                 : 'bg-slate-900 hover:bg-slate-800'
                             }
+                            ${isSaving ? 'cursor-not-allowed opacity-75' : ''}
                         `}
                     >
-                        <Save size={18} className="mr-2"/> Save Event
+                        {isSaving ? (
+                            <>
+                                <ClipLoader size={16} color="#ffffff" className="mr-2" />
+                                Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Save size={18} className="mr-2"/> Save Event
+                            </>
+                        )}
                     </button>
                 </div>
              </div>
