@@ -56,6 +56,14 @@ export const AutomationQueueService = {
 
     // 2. GET PENDING ITEMS (For Admin UI)
     getPendingItems: async (): Promise<AutomationQueueItem[]> => {
+        const items = await AutomationQueueService.getQueueItems();
+        // Filter only Pending and sort by oldest first (FIFO)
+        return items
+            .filter(i => i.status === 'PENDING' || i.status === 'FAILED')
+            .sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    },
+
+    getQueueItems: async (): Promise<AutomationQueueItem[]> => {
         let items: AutomationQueueItem[] = [];
         if (isSystemApiMode()) {
             try {
@@ -80,11 +88,8 @@ export const AutomationQueueService = {
             const { data } = await supabase.from('automation_queue').select('*');
             items = data || [];
         }
-
-        // Filter only Pending and sort by oldest first (FIFO)
         return items
-            .filter(i => i.status === 'PENDING' || i.status === 'FAILED')
-            .sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     },
 
     // 3. PROCESS SINGLE ITEM (The "Worker" Logic)

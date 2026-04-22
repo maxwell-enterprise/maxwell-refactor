@@ -87,6 +87,12 @@ export type AutomationTriggerApiRow = {
   variables: Array<{ key: string; label: string; example: string }>;
 };
 
+export type AutomationSimulateResult = {
+  ok: true;
+  queueId: string;
+  backgroundJobId: string;
+};
+
 /** Nest `/fe/system/*` — use when `DOMAINS.SYSTEM === 'API'`. */
 export const systemApi = {
   getSecurityLogs: () =>
@@ -120,6 +126,15 @@ export const systemApi = {
 
   getAutomationTriggers: () =>
     requestJson<AutomationTriggerApiRow[]>('/system/automation-triggers'),
+
+  postAutomationSimulate: (body: {
+    triggerId: string;
+    payload: Record<string, unknown>;
+  }) =>
+    requestJson<AutomationSimulateResult>('/automations/simulate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   postBackgroundJob: (body: {
     id?: string;
@@ -193,6 +208,13 @@ export const systemApi = {
         aiUsageLogs: number;
       };
     }>('/system/maintenance/status'),
+
+  getAutomationStreamUrl: (): string | null => {
+    const token = getWorkspaceToken();
+    if (!token) return null;
+    const url = `${base()}/automations/stream`;
+    return `${url}?token=${encodeURIComponent(token)}`;
+  },
 };
 
 export function isSystemApiMode(): boolean {
