@@ -47,6 +47,11 @@ export function defaultAppRoleForNewUser(email: string): string {
 export function parseAppRoleString(
   value: string | null | undefined,
 ): UserRole {
+  const list = parseAppRoleList(value);
+  if (list.length > 0) {
+    return list[0];
+  }
+
   const v = (value ?? '').trim();
   if (ROLE_VALUES.has(v as UserRole)) {
     return v as UserRole;
@@ -67,6 +72,66 @@ export function parseAppRoleString(
   }
 
   return UserRole.MEMBER;
+}
+
+export function parseAppRoleList(
+  value: string | null | undefined,
+): UserRole[] {
+  const raw = String(value ?? '').trim();
+  if (!raw) return [UserRole.MEMBER];
+
+  const unique = new Set<UserRole>();
+  const push = (token: string) => {
+    const parsed = parseAppRoleStringSingle(token);
+    if (parsed) unique.add(parsed);
+  };
+
+  if (raw.startsWith('[') && raw.endsWith(']')) {
+    try {
+      const parsedJson = JSON.parse(raw);
+      if (Array.isArray(parsedJson)) {
+        parsedJson.forEach((item) => {
+          if (typeof item === 'string') push(item);
+        });
+      }
+    } catch {
+      /* ignore and continue with delimiter parsing */
+    }
+  }
+
+  if (unique.size === 0) {
+    raw.split(/[,\n;|]+/).forEach(push);
+  }
+
+  if (unique.size === 0) {
+    return [parseAppRoleStringSingle(raw) ?? UserRole.MEMBER];
+  }
+
+  return Array.from(unique).slice(0, 2);
+}
+
+function parseAppRoleStringSingle(value: string): UserRole | null {
+  const v = (value ?? '').trim();
+  if (!v) return null;
+  if (ROLE_VALUES.has(v as UserRole)) {
+    return v as UserRole;
+  }
+
+  const key = normalizeRoleKey(v);
+  for (const canonical of Object.values(UserRole)) {
+    if (normalizeRoleKey(canonical) === key) {
+      return canonical;
+    }
+  }
+
+  if (key === 'admin' || key === 'superadmin' || key === 'super admin') {
+    return UserRole.SUPER_ADMIN;
+  }
+  if (key === 'gatekeeper' || key === 'gate keeper') {
+    return UserRole.GATE_KEEPER;
+  }
+
+  return null;
 }
 
 export function assertAssignableRole(value: string): UserRole {

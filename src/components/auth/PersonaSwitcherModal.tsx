@@ -2,11 +2,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserRole, UserProfile, Member } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { UserService } from '../../services/userService';
 import { DataService } from '../../services/dataService';
+import { workspaceFetch } from '../../lib/workspaceApi';
+import { setWorkspaceToken } from '../../lib/workspaceAuthToken';
 import { 
     X, Search, ShieldCheck, Users, Briefcase, Crown, 
-    Star, User, UserPlus, CheckCircle2, RefreshCw 
+    Star, User, UserPlus, CheckCircle2, RefreshCw, ArrowRightCircle
 } from 'lucide-react';
 
 interface PersonaSwitcherModalProps {
@@ -15,9 +18,11 @@ interface PersonaSwitcherModalProps {
 
 const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) => {
     const { user: currentUser } = useAuth();
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'INTERNAL' | 'JOURNEY'>('INTERNAL');
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [switchingRole, setSwitchingRole] = useState<string | null>(null);
     
     // Data Stores
     const [staffUsers, setStaffUsers] = useState<UserProfile[]>([]);
@@ -39,9 +44,12 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
 
             // Filter purely internal staff (exclude members who might be in the user table)
             // Note: In mock logic, UserService.getAllUsers might merge them, so we separate them visually.
-            const pureStaff = users.filter(u => 
-                [UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.OPERATIONS, UserRole.MARKETING, UserRole.SALES, UserRole.GATE_KEEPER].includes(u.role)
-            );
+            const pureStaff = users.filter(u => {
+                const assignedRoles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+                return assignedRoles.some(role =>
+                    [UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.OPERATIONS, UserRole.MARKETING, UserRole.SALES, UserRole.GATE_KEEPER].includes(role)
+                );
+            });
             
             // Map members to UserProfiles for consistent rendering
             const memberProfiles: UserProfile[] = members.map(m => ({
@@ -87,9 +95,61 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
         return source.filter(u => 
             u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            u.role.toLowerCase().includes(searchTerm.toLowerCase())
+            (Array.isArray(u.roles) && u.roles.length > 0
+                ? u.roles.some(role => role.toLowerCase().includes(searchTerm.toLowerCase()))
+                : u.role.toLowerCase().includes(searchTerm.toLowerCase()))
         );
     }, [activeTab, staffUsers, allUserProfiles, searchTerm]);
+
+    const internalPersonas = useMemo(() => {
+        return filteredUsers.flatMap(user => {
+            const assignedRoles = Array.isArray(user.roles) && user.roles.length > 0 ? user.roles : [user.role];
+            return assignedRoles
+                .filter(role => role !== UserRole.MEMBER)
+                .map(role => ({
+                    ...user,
+                    role,
+                    roles: assignedRoles,
+                    personaKey: `${user.id}:${role}`,
+                }));
+        });
+    }, [filteredUsers]);
+
+    const handleSwitchRole = async (role: UserRole) => {
+        if (!currentUser || currentUser.role === role) return;
+        try {
+            setSwitchingRole(role);
+            const res = await workspaceFetch('/me/active-role', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role }),
+            });
+            if (!res.ok) {
+                let message = 'Failed to switch role.';
+                try {
+                    const payload = await res.json() as { message?: string | string[] };
+                    if (typeof payload?.message === 'string') message = payload.message;
+                    else if (Array.isArray(payload?.message)) message = payload.message.join(', ');
+                } catch {
+                    /* ignore */
+                }
+                showToast(message, 'error');
+                return;
+            }
+            const payload = await res.json() as { token?: string };
+            if (typeof payload.token !== 'string' || !payload.token.trim()) {
+                showToast('Workspace token was not returned.', 'error');
+                return;
+            }
+            setWorkspaceToken(payload.token);
+            showToast(`Switched to ${role}`, 'success');
+            onClose();
+        } catch {
+            showToast('Network error while switching role.', 'error');
+        } finally {
+            setSwitchingRole(null);
+        }
+    };
 
     // Grouping for Journey Tab
     // Fix: Explicitly type useMemo and avoid returning {} to ensure proper type inference in JSX
@@ -122,7 +182,7 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                         <h2 className="text-lg font-bold text-slate-900 flex items-center">
                             <RefreshCw size={18} className="mr-2 text-indigo-600"/> Switch Persona
                         </h2>
-                        <p className="text-xs text-slate-500 mt-1">Select an identity to simulate.</p>
+                        <p className="text-xs text-slate-500 mt-1">View identities and switch your active role.</p>
                     </div>
 
                     <div className="p-3 space-y-1">
@@ -134,7 +194,7 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                 <ShieldCheck size={16} className="mr-2"/> Internal Team
                             </span>
                             <span className="text-xs bg-slate-200 px-2 py-0.5 rounded-full text-slate-600">
-                                {staffUsers.length}
+                                {internalPersonas.length}
                             </span>
                         </button>
                         <button 
@@ -159,7 +219,11 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                  </div>
                                  <div className="overflow-hidden">
                                      <p className="text-xs font-bold text-slate-900 truncate w-32">{currentUser?.fullName}</p>
-                                     <p className="text-[10px] text-slate-500 truncate w-32">{currentUser?.role}</p>
+                                      <p className="text-[10px] text-slate-500 truncate w-32">
+                                          {Array.isArray(currentUser?.roles) && currentUser.roles.length > 0
+                                              ? currentUser.roles.join(', ')
+                                              : currentUser?.role}
+                                      </p>
                                  </div>
                              </div>
                          </div>
@@ -182,7 +246,7 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                             />
                         </div>
                         <span className="ml-4 text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full">
-                            Read-only (active session)
+                            Role-aware session
                         </span>
                         <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-900 rounded-full transition-colors ml-4">
                             <X size={20} />
@@ -200,10 +264,14 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                             <>
                                 {activeTab === 'INTERNAL' && (
                                     <div className="grid grid-cols-2 gap-3">
-                                        {filteredUsers.map(user => (
+                                        {internalPersonas.map(user => {
+                                            const isCurrentPersona = currentUser?.id === user.id && currentUser.role === user.role;
+                                            const canSwitch = currentUser?.id === user.id && !isCurrentPersona;
+                                            const isSwitchingThisRole = switchingRole === user.role;
+                                            return (
                                             <div
-                                                key={user.id}
-                                                className={`flex items-center p-3 rounded-xl border text-left transition-all group ${currentUser?.id === user.id ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200'}`}
+                                                key={user.personaKey}
+                                                className={`flex items-center p-3 rounded-xl border text-left transition-all group ${isCurrentPersona ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200'}`}
                                             >
                                                 <img src={user.avatarUrl} alt={user.fullName} className="w-10 h-10 rounded-full border border-slate-100 mr-3" />
                                                 <div className="flex-1 min-w-0">
@@ -213,11 +281,26 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                                         <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 uppercase">
                                                             {user.role}
                                                         </span>
-                                                        {currentUser?.id === user.id && <span className="ml-2 text-[10px] font-bold text-indigo-600 flex items-center"><CheckCircle2 size={10} className="mr-1"/> Active</span>}
+                                                        {isCurrentPersona && <span className="ml-2 text-[10px] font-bold text-indigo-600 flex items-center"><CheckCircle2 size={10} className="mr-1"/> Active</span>}
+                                                        {canSwitch && (
+                                                            <button
+                                                                type="button"
+                                                                disabled={isSwitchingThisRole}
+                                                                onClick={() => void handleSwitchRole(user.role)}
+                                                                className="ml-2 inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed"
+                                                            >
+                                                                {isSwitchingThisRole ? (
+                                                                    <RefreshCw size={10} className="mr-1 animate-spin" />
+                                                                ) : (
+                                                                    <ArrowRightCircle size={10} className="mr-1" />
+                                                                )}
+                                                                Switch
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
                                 )}
 
