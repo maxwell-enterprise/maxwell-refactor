@@ -102,6 +102,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     const [selectedSku, setSelectedSku] = useState('');
     const [selectedEventId, setSelectedEventId] = useState('');
     const [selectedEventTier, setSelectedEventTier] = useState('');
+    const [ticketHierarchyFilter, setTicketHierarchyFilter] = useState('ALL');
     const [creditTag, setCreditTag] = useState('');
     const [digitalUrl, setDigitalUrl] = useState('');
     const [itemLabel, setItemLabel] = useState('');
@@ -431,6 +432,23 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     };
 
     const currentSelectedEvent = events.find(e => e.id === selectedEventId);
+    const ticketSelectableEvents = events
+        .filter((event) => !event.isRecurring)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const ticketHierarchyContainers = ticketSelectableEvents
+        .filter((event) => event.type === 'CONTAINER')
+        .sort((a, b) => a.name.localeCompare(b.name));
+    const visibleTicketEvents = ticketSelectableEvents.filter((event) => {
+        if (ticketHierarchyFilter === 'ALL') {
+            return true;
+        }
+
+        if (ticketHierarchyFilter === 'INDEPENDENT') {
+            return event.type === 'SOLO';
+        }
+
+        return event.id === ticketHierarchyFilter || event.parentEventId === ticketHierarchyFilter;
+    });
     const activeItemsList = formData.hasVariants && activeVariantIndex >= 0 
         ? formData.variants?.[activeVariantIndex]?.items || [] 
         : formData.items || [];
@@ -444,6 +462,33 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
             if (evt && evt.date < today) return true;
         }
         return false;
+    };
+
+    useEffect(() => {
+        if (itemType !== 'TICKET' || !selectedEventId) {
+            return;
+        }
+
+        const stillVisible = visibleTicketEvents.some((event) => event.id === selectedEventId);
+        if (!stillVisible) {
+            setSelectedEventId('');
+            setSelectedEventTier('');
+        }
+    }, [itemType, selectedEventId, visibleTicketEvents]);
+
+    const formatTicketEventOptionLabel = (event: Event) => {
+        const eventDate = new Date(event.date).toLocaleDateString();
+        if (event.type === 'CONTAINER') {
+            return `${event.name} [Series Container] (${eventDate})`;
+        }
+
+        if (!event.parentEventId) {
+            return `${event.name} (${eventDate})`;
+        }
+
+        const parentName =
+            events.find((candidate) => candidate.id === event.parentEventId)?.name || 'Unknown Parent';
+        return `${event.name} [Sub Event of ${parentName}] (${eventDate})`;
     };
 
     return (
@@ -802,6 +847,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                             {itemType === 'TICKET' && (
                                                 <div className="space-y-3">
                                                     <div>
+                                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Filter Hierarchy Event</label>
+                                                        <select
+                                                            className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
+                                                            value={ticketHierarchyFilter}
+                                                            onChange={e => setTicketHierarchyFilter(e.target.value)}
+                                                        >
+                                                            <option value="ALL">All Event</option>
+                                                            <option value="INDEPENDENT">Independent Event</option>
+                                                            {ticketHierarchyContainers.map((event) => (
+                                                                <option key={event.id} value={event.id}>{event.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div>
                                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Select Event</label>
                                                         <select 
                                                             className="w-full p-2 border border-slate-300 rounded text-sm bg-white" 
@@ -809,10 +868,15 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                                             onChange={e => { setSelectedEventId(e.target.value); setSelectedEventTier(''); }}
                                                         >
                                                             <option value="">-- Choose Event --</option>
-                                                            {events.filter(e => !e.isRecurring).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(ev => (
-                                                                <option key={ev.id} value={ev.id}>{ev.name} ({new Date(ev.date).toLocaleDateString()})</option>
+                                                            {visibleTicketEvents.map(ev => (
+                                                                <option key={ev.id} value={ev.id}>{formatTicketEventOptionLabel(ev)}</option>
                                                             ))}
                                                         </select>
+                                                        {visibleTicketEvents.length === 0 && (
+                                                            <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                                                                No events match the selected filter.
+                                                            </p>
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Event Tier</label>
