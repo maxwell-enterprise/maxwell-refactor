@@ -12,7 +12,7 @@ import { UserRole, UserProfile } from '../types/index';
 import { AuthService } from '../services/authService';
 import { APP_CONFIG } from '../lib/config';
 import { supabase } from '../lib/supabaseClient';
-import { parseAppRoleString } from '../lib/appRole';
+import { parseAppRoleList, parseAppRoleString } from '../lib/appRole';
 import {
   getWorkspaceToken,
   getWorkspaceTokenChangedEventName,
@@ -87,6 +87,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
             name: string | null;
             image: string | null;
             role: string;
+            roles?: string[];
             phone?: string | null;
           } | null;
         }
@@ -110,6 +111,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
             name: string | null;
             image: string | null;
             role: string;
+            roles?: string[];
             phone?: string | null;
           } | null;
         };
@@ -141,6 +143,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     const email = data.user.email;
+    const assignedRoles = Array.isArray(data.user.roles) && data.user.roles.length > 0
+      ? data.user.roles.map((role) => parseAppRoleString(role))
+      : parseAppRoleList(data.user.role);
     const phone =
       typeof data.user.phone === 'string' && data.user.phone.trim()
         ? data.user.phone.trim()
@@ -150,6 +155,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       email,
       fullName: data.user.name?.trim() || email,
       role: parseAppRoleString(data.user.role),
+      roles: assignedRoles,
       avatarUrl: data.user.image || undefined,
       phone,
       provider: 'email',

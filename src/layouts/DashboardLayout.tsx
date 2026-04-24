@@ -87,6 +87,24 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   }, [userRole]);
 
   const highPriorityCount = pendingTasks.filter(t => t.priority === 'HIGH').length;
+  const personaRoles = useMemo(() => {
+    const assignedRoles = Array.isArray(user?.roles) && user.roles.length > 0
+      ? user.roles
+      : user?.role
+        ? [user.role]
+        : [];
+    return assignedRoles.filter((role) =>
+      [
+        UserRole.SUPER_ADMIN,
+        UserRole.FINANCE,
+        UserRole.OPERATIONS,
+        UserRole.MARKETING,
+        UserRole.SALES,
+        UserRole.GATE_KEEPER,
+      ].includes(role),
+    );
+  }, [user]);
+  const canOpenPersonaSwitcher = personaRoles.length > 1;
 
   const handleNotificationItemClick = async (task: UnifiedTask) => {
     markNotificationsAsSeen();
@@ -240,11 +258,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                 </div>
 
                 {/* --- NEW PERSONA SWITCHER --- */}
+                {canOpenPersonaSwitcher && (
                 <div className="hidden md:block">
                     <button 
                         onClick={() => setShowPersonaModal(true)}
                         className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-full text-xs font-medium text-slate-600 transition-all hover:border-indigo-300 hover:shadow-md shadow-sm group"
-                        title="Switch User Persona"
+                        title="Switch Persona"
                     >
                         <RefreshCw size={12} className="text-indigo-500 group-hover:rotate-180 transition-transform duration-500" />
                         <span className="text-slate-400">View as:</span>
@@ -252,9 +271,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                         <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 uppercase">{userRole.replace('Super ','')}</span>
                     </button>
                 </div>
-                
+                )}
+                 
                 {/* Divider */}
-                <div className="hidden md:block w-px h-8 bg-slate-200 mx-1"></div>
+                {canOpenPersonaSwitcher && (
+                  <div className="hidden md:block w-px h-8 bg-slate-200 mx-1"></div>
+                )}
 
                 {/* Notification & Profile Group */}
                 <div className="flex items-center gap-3">

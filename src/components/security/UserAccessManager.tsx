@@ -4,7 +4,7 @@ import { UserRole, UserProfile, Member } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { UserService } from '../../services/userService';
-import { Search, UserCog, Check, XCircle, Mail, Key, UserPlus, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, UserCog, Check, XCircle, Mail, Key, UserPlus, Loader2, Trash2, AlertTriangle, ChevronDown } from 'lucide-react';
 import MemberLookup from '../common/MemberLookup'; // NEW IMPORT
 import { workspaceFetch } from '../../lib/workspaceApi';
 import { ApiRequestError } from '../../repositories/api/apiClient';
@@ -20,14 +20,22 @@ const SECURITY_QUICK_ASSIGN_ROLES: UserRole[] = [
   UserRole.SALES,
 ];
 
+function getAssignedRoles(user: UserProfile): UserRole[] {
+  const roles = Array.isArray(user.roles) && user.roles.length > 0
+    ? user.roles
+    : [user.role];
+  return Array.from(new Set(roles));
+}
+
+function isMemberOnly(user: UserProfile): boolean {
+  const roles = getAssignedRoles(user);
+  return roles.length === 1 && roles[0] === UserRole.MEMBER;
+}
+
 function selectRoleOptionsForUser(user: UserProfile): UserRole[] {
-  if (
-    !SECURITY_QUICK_ASSIGN_ROLES.includes(user.role) &&
-    user.role !== UserRole.MEMBER
-  ) {
-    return [user.role, ...SECURITY_QUICK_ASSIGN_ROLES];
-  }
-  return [...SECURITY_QUICK_ASSIGN_ROLES];
+  return Array.from(
+    new Set([...getAssignedRoles(user), ...SECURITY_QUICK_ASSIGN_ROLES, UserRole.MEMBER]),
+  );
 }
 
 type PendingDeletionRequest = {
@@ -47,6 +55,8 @@ const UserAccessManager: React.FC = () => {
   const [deletionRequests, setDeletionRequests] = useState<PendingDeletionRequest[]>([]);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [openRolePickerUserId, setOpenRolePickerUserId] = useState<string | null>(null);
+  const [savingRoleUserId, setSavingRoleUserId] = useState<string | null>(null);
   
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
 
@@ -171,7 +181,7 @@ const UserAccessManager: React.FC = () => {
     }
   };
 
-  const handleRoleChange = async (user: UserProfile, newRole: UserRole) => {
+  const handleRoleChange = async (user: UserProfile, newRoles: UserRole[]) => {
     const email = user.email?.trim().toLowerCase();
     if (!email) {
       showToast('Selected user has no email address.', 'error');
@@ -179,13 +189,18 @@ const UserAccessManager: React.FC = () => {
     }
 
     try {
+      setSavingRoleUserId(user.id);
       const res = await workspaceFetch('/admin/role-invites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, targetRole: newRole }),
+        body: JSON.stringify({
+          email,
+          targetRoles: newRoles,
+          targetRole: newRoles[0],
+        }),
       });
       if (!res.ok) {
-        let msg = `Failed to update role to ${newRole}.`;
+        let msg = `Failed to update role to ${newRoles.join(', ')}.`;
         try {
           const data = (await res.json()) as { message?: string | string[] };
           if (typeof data?.message === 'string') msg = data.message;
@@ -198,18 +213,28 @@ const UserAccessManager: React.FC = () => {
       }
 
       const payload = (await res.json()) as
-        | {
-            ok?: boolean;
-            mode?: 'updated' | 'pending_signup';
-            actorRelogRequired?: boolean;
-            actorNewRole?: string;
-            actorSessionToken?: string;
-          }
+          | {
+              ok?: boolean;
+              mode?: 'updated' | 'pending_signup';
+              actorRelogRequired?: boolean;
+              actorNewRole?: string;
+              actorSessionToken?: string;
+              userRoles?: string[];
+            }
         | undefined;
 
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+      const finalRoles =
+        Array.isArray(payload?.userRoles) && payload.userRoles.length > 0
+          ? (payload.userRoles as UserRole[])
+          : newRoles;
+      setUsers(prev => prev.map(u => u.id === user.id ? {
+        ...u,
+        role: finalRoles[0],
+        roles: finalRoles,
+      } : u));
+      setOpenRolePickerUserId(null);
       const isSuperAdminHandover =
-        newRole === UserRole.SUPER_ADMIN && user.id !== authUser?.id;
+        finalRoles.includes(UserRole.SUPER_ADMIN) && user.id !== authUser?.id;
       const shouldRelogActor =
         payload?.actorRelogRequired === true || isSuperAdminHandover;
       if (shouldRelogActor) {
@@ -227,10 +252,35 @@ const UserAccessManager: React.FC = () => {
         return;
       }
 
-      showToast(`User role updated to ${newRole}`, 'success');
+      showToast(`User role updated to ${finalRoles.join(', ')}`, 'success');
     } catch {
       showToast('Network error while updating role.', 'error');
+    } finally {
+      setSavingRoleUserId(null);
     }
+  };
+
+  const handleToggleRole = async (user: UserProfile, selectedRole: UserRole) => {
+    const currentRoles = getAssignedRoles(user);
+    let nextRoles: UserRole[];
+
+    if (selectedRole === UserRole.MEMBER) {
+      nextRoles = [UserRole.MEMBER];
+    } else if (currentRoles.includes(selectedRole)) {
+      nextRoles = currentRoles.filter((role) => role !== selectedRole);
+      if (nextRoles.length === 0) {
+        nextRoles = [UserRole.MEMBER];
+      }
+    } else {
+      const withoutMember = currentRoles.filter((role) => role !== UserRole.MEMBER);
+      if (withoutMember.length >= 2) {
+        showToast('Maximum 2 roles per user.', 'error');
+        return;
+      }
+      nextRoles = [...withoutMember, selectedRole];
+    }
+
+    await handleRoleChange(user, nextRoles);
   };
 
   const handlePromoteMember = async (member: Member) => {
@@ -276,10 +326,12 @@ const UserAccessManager: React.FC = () => {
 
   /** API excludes Member; mock mode may merge CRM — drop Member. Super Admin first. */
   const staffDirectory = [...users]
-    .filter((u) => u.role !== UserRole.MEMBER)
+    .filter((u) => !isMemberOnly(u))
     .sort((a, b) => {
-      if (a.role === UserRole.SUPER_ADMIN && b.role !== UserRole.SUPER_ADMIN) return -1;
-      if (b.role === UserRole.SUPER_ADMIN && a.role !== UserRole.SUPER_ADMIN) return 1;
+      const aIsSuperAdmin = getAssignedRoles(a).includes(UserRole.SUPER_ADMIN);
+      const bIsSuperAdmin = getAssignedRoles(b).includes(UserRole.SUPER_ADMIN);
+      if (aIsSuperAdmin && !bIsSuperAdmin) return -1;
+      if (bIsSuperAdmin && !aIsSuperAdmin) return 1;
       return a.email.localeCompare(b.email, undefined, { sensitivity: 'base' });
     });
 
@@ -293,10 +345,10 @@ const UserAccessManager: React.FC = () => {
   });
 
   const handleRevokeAccess = async (user: UserProfile) => {
-    if (user.role === UserRole.MEMBER) return;
+    if (isMemberOnly(user)) return;
     const ok = window.confirm(`Revoke staff access for ${user.fullName}? This user will be changed to MEMBER and removed from Internal Staff list.`);
     if (!ok) return;
-    await handleRoleChange(user, UserRole.MEMBER);
+    await handleRoleChange(user, [UserRole.MEMBER]);
   };
 
   const getRoleColor = (role: UserRole) => {
@@ -376,8 +428,10 @@ const UserAccessManager: React.FC = () => {
                             </tr>
                         ) : null}
                         {filteredUsers.map((user) => {
-                            const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
+                            const assignedRoles = getAssignedRoles(user);
+                            const isSuperAdmin = assignedRoles.includes(UserRole.SUPER_ADMIN);
                             const roleSelectOptions = selectRoleOptionsForUser(user);
+                            const isSavingRole = savingRoleUserId === user.id;
                             return (
                             <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                 <td className="px-6 py-4">
@@ -392,17 +446,59 @@ const UserAccessManager: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <select 
-                                        className={`text-xs font-bold py-1.5 pl-2 pr-8 rounded-lg border appearance-none cursor-pointer outline-none focus:ring-2 focus:ring-blue-500/20 transition-all ${getRoleColor(user.role)}`}
-                                        value={user.role}
-                                        onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
-                                    >
-                                        {roleSelectOptions.map((role) => (
-                                            <option key={role} value={role} className="bg-white text-slate-700">
-                                                {role}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="relative inline-block min-w-[15rem]">
+                                        <button
+                                            type="button"
+                                            disabled={isSavingRole}
+                                            onClick={() => setOpenRolePickerUserId(prev => prev === user.id ? null : user.id)}
+                                            className="flex min-h-[2.75rem] w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition-all hover:border-blue-200 disabled:cursor-not-allowed disabled:opacity-70"
+                                        >
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {assignedRoles.map((role) => (
+                                                    <span
+                                                        key={role}
+                                                        className={`inline-flex items-center rounded-lg border px-2 py-1 text-[11px] font-bold ${getRoleColor(role)}`}
+                                                    >
+                                                        {role}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            {isSavingRole ? (
+                                                <Loader2 size={14} className="shrink-0 animate-spin text-slate-400" />
+                                            ) : (
+                                                <ChevronDown size={14} className="shrink-0 text-slate-400" />
+                                            )}
+                                        </button>
+                                        {openRolePickerUserId === user.id && !isSavingRole && (
+                                            <div className="absolute left-0 top-full z-20 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                                                <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                                    Select up to 2 roles
+                                                </p>
+                                                <div className="space-y-1">
+                                                    {roleSelectOptions.map((role) => {
+                                                        const checked = assignedRoles.includes(role);
+                                                        return (
+                                                            <button
+                                                                key={role}
+                                                                type="button"
+                                                                onClick={() => void handleToggleRole(user, role)}
+                                                                className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs transition-colors ${
+                                                                    checked ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+                                                                }`}
+                                                            >
+                                                                <span className="font-semibold">{role}</span>
+                                                                <span className={`flex h-4 w-4 items-center justify-center rounded border ${
+                                                                    checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-transparent'
+                                                                }`}>
+                                                                    <Check size={11} />
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">

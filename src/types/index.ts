@@ -82,6 +82,7 @@ export interface UserProfile {
   email: string;
   fullName: string;
   role: UserRole;
+  roles?: UserRole[];
   avatarUrl?: string;
   /** From Nest session / `User.abacContext.selfProfile.phone` */
   phone?: string;

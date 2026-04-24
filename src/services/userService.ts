@@ -5,7 +5,7 @@ import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { DataService } from './dataService'; 
 import { apiRequest } from '../repositories/api/apiClient';
-import { parseAppRoleString } from '../lib/appRole';
+import { parseAppRoleList, parseAppRoleString } from '../lib/appRole';
 
 // INITIAL SEED DATA BASED ON ORG CHART
 const SEED_USERS: UserProfile[] = [
@@ -47,18 +47,25 @@ export const UserService = {
                     email: string;
                     fullName: string;
                     role: string;
+                    roles?: string[];
                     avatarUrl?: string | null;
                     provider?: 'email' | 'google';
                 }>>('/admin/internal-users');
                 const list = Array.isArray(rows) ? rows : [];
-                return list.map((r) => ({
-                    id: r.id,
-                    email: r.email,
-                    fullName: r.fullName,
-                    role: parseAppRoleString(r.role),
-                    avatarUrl: r.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.fullName)}&background=random`,
-                    provider: r.provider ?? 'email',
-                }));
+                return list.map((r) => {
+                    const roles = Array.isArray(r.roles) && r.roles.length > 0
+                        ? r.roles.map((role) => parseAppRoleString(role))
+                        : parseAppRoleList(r.role);
+                    return {
+                        id: r.id,
+                        email: r.email,
+                        fullName: r.fullName,
+                        role: parseAppRoleString(r.role),
+                        roles,
+                        avatarUrl: r.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.fullName)}&background=random`,
+                        provider: r.provider ?? 'email',
+                    };
+                });
             } catch (e) {
                 console.error('UserService API-only fallback error', e);
                 if (opts?.rethrowApiError) throw e;
