@@ -61,7 +61,12 @@ function resolveApiBaseUrl(): string {
       : LOCAL_API_BASE_URL;
   }
   const looksLocal = looksLikeLocalApiUrl(raw);
-  if (looksLocal && (browserOnRemoteHost || isLikelyProductionRuntime())) {
+  /**
+   * Preserve explicit localhost API when browser is also local (including `next start`
+   * on a developer machine). Only force production API when the app is opened from
+   * a non-local host that cannot call localhost.
+   */
+  if (looksLocal && browserOnRemoteHost) {
     return PRODUCTION_API_BASE_URL;
   }
   return raw;

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { DataService } from '../services/dataService';
 import { ReferenceService } from '../services/referenceService';
 import { CertificationService } from '../services/certificationService'; 
@@ -37,6 +37,9 @@ const EventsAdmin: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [expandedSeries, setExpandedSeries] = useState<string[]>([]); 
   const [isDeleteInFlight, setIsDeleteInFlight] = useState(false);
+  const deleteInFlightRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const [isSaveInFlight, setIsSaveInFlight] = useState(false);
   
   // New/Edit Event State
   const [isEditing, setIsEditing] = useState(false);
@@ -169,6 +172,8 @@ const EventsAdmin: React.FC = () => {
   };
 
   const processDelete = async (id: string) => {
+      if (deleteInFlightRef.current) return;
+      deleteInFlightRef.current = true;
       setIsDeleteInFlight(true);
       try {
           await DataService.deleteEvent(id);
@@ -177,11 +182,14 @@ const EventsAdmin: React.FC = () => {
       } catch (e) {
           showToast(readErrorMessage(e, 'Failed to delete event'), 'error');
       } finally {
+          deleteInFlightRef.current = false;
           setIsDeleteInFlight(false);
       }
   };
 
   const handleSeriesDelete = async (seriesId: string, strategy: 'CASCADE' | 'ORPHAN') => {
+      if (deleteInFlightRef.current) return;
+      deleteInFlightRef.current = true;
       setIsDeleteInFlight(true);
       try {
           await DataService.deleteSeries(seriesId, strategy);
@@ -190,6 +198,7 @@ const EventsAdmin: React.FC = () => {
       } catch (e) {
           showToast(readErrorMessage(e, 'Failed to process series deletion'), 'error');
       } finally {
+          deleteInFlightRef.current = false;
           setIsDeleteInFlight(false);
       }
   };
@@ -290,10 +299,18 @@ const EventsAdmin: React.FC = () => {
         };
     }
 
-    await DataService.upsertEvent(eventToSave);
-    showToast(isEditing ? 'Event updated' : 'Event created', 'success');
-    setShowCreateModal(false);
-    await loadEvents();
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    setIsSaveInFlight(true);
+    try {
+      await DataService.upsertEvent(eventToSave);
+      showToast(isEditing ? 'Event updated' : 'Event created', 'success');
+      setShowCreateModal(false);
+      await loadEvents();
+    } finally {
+      saveInFlightRef.current = false;
+      setIsSaveInFlight(false);
+    }
   };
 
   const toggleSeriesExpand = (seriesId: string) => {
@@ -504,6 +521,7 @@ const EventsAdmin: React.FC = () => {
 
           onClose={() => setShowCreateModal(false)}
           onSave={handleSaveEvent}
+          isSaving={isSaveInFlight}
       />
     </div>
   );
