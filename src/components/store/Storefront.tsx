@@ -39,6 +39,29 @@ import { useDialog } from '../../context/DialogContext';
 
 const PAGE_SIZE = 18;
 
+function parseCampaignCheckoutSearch(search: string): {
+    querySource: string | null;
+    queryProductId: string | null;
+    queryDiscount: string;
+    queryAutoCheckout: boolean;
+} {
+    const params = new URLSearchParams(search);
+    const querySource = params.get('source');
+    const queryProductId = params.get('productId') || params.get('product') || null;
+    const queryDiscountTrim = params.get('discount')?.trim().toUpperCase() || '';
+    const queryAutoCheckout =
+        params.get('checkout') === '1' ||
+        params.get('autocheckout') === '1' ||
+        (Boolean(queryProductId) && Boolean(queryDiscountTrim));
+
+    return {
+        querySource,
+        queryProductId: queryProductId?.trim() || null,
+        queryDiscount: queryDiscountTrim,
+        queryAutoCheckout,
+    };
+}
+
 const Storefront: React.FC = () => {
     const { user, userRole } = useAuth();
     const { showToast } = useToast();
@@ -73,6 +96,7 @@ const Storefront: React.FC = () => {
     const [stickyVoucher, setStickyVoucher] = useState<{ code: string; productId?: string } | null>(null);
     const [autoCheckoutProductId, setAutoCheckoutProductId] = useState<string | null>(null);
     const [autoCheckoutArmed, setAutoCheckoutArmed] = useState(false);
+    const [campaignVoucherDismissed, setCampaignVoucherDismissed] = useState(false);
 
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
@@ -95,6 +119,7 @@ const Storefront: React.FC = () => {
     const listFetchGenRef = useRef(0);
     const fetchedEventIdsRef = useRef<Set<string>>(new Set());
     const pageRef = useRef(1);
+    const campaignTargetSeenInCartRef = useRef(false);
 
     useEffect(() => {
         const t = window.setTimeout(() => setDebouncedSearch(searchTerm), 350);
@@ -102,41 +127,55 @@ const Storefront: React.FC = () => {
     }, [searchTerm]);
 
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const querySource = params.get('source');
-        const queryProductId = params.get('productId') || params.get('product') || null;
-        const queryDiscountTrim = params.get('discount')?.trim();
-        const queryAutoCheckout =
-            params.get('checkout') === '1' ||
-            params.get('autocheckout') === '1' ||
-            (Boolean(queryProductId) && Boolean(queryDiscountTrim));
+        if (typeof window === 'undefined') return;
 
-        if (queryDiscountTrim) {
-            setAutoAppliedDiscount(queryDiscountTrim.toUpperCase());
-        }
-        if (queryProductId) {
-          setAutoCheckoutProductId(queryProductId.trim());
-        }
-        if (queryAutoCheckout) {
-          setAutoCheckoutArmed(true);
-        }
+        const syncCampaignContextFromUrl = () => {
+            const {
+                querySource,
+                queryProductId,
+                queryDiscount,
+                queryAutoCheckout,
+            } = parseCampaignCheckoutSearch(window.location.search);
 
-        const sourceFromStorage = CampaignAttributionService.getSource();
-        if (!querySource) {
-            setAttributionSource(sourceFromStorage);
-            return;
-        }
+            setCampaignVoucherDismissed(false);
+            setAutoAppliedDiscount(queryDiscount);
+            setAutoCheckoutProductId(queryProductId);
+            setAutoCheckoutArmed(queryAutoCheckout);
+            campaignTargetSeenInCartRef.current = false;
 
-        const normalizedSource = CampaignAttributionService.saveSource(querySource);
-        setAttributionSource(normalizedSource || sourceFromStorage);
+            const sourceFromStorage = CampaignAttributionService.getSource();
+            if (!querySource) {
+                setAttributionSource(sourceFromStorage);
+                return;
+            }
 
-        if (!normalizedSource || !CampaignAttributionService.shouldTrackClick(normalizedSource)) {
-            return;
-        }
+            const normalizedSource = CampaignAttributionService.saveSource(querySource);
+            setAttributionSource(normalizedSource || sourceFromStorage);
 
-        CampaignService.trackClick(normalizedSource).catch((error) => {
-            console.warn('[Campaign] Failed to track click:', error);
-        });
+            if (!normalizedSource || !CampaignAttributionService.shouldTrackClick(normalizedSource)) {
+                return;
+            }
+
+            CampaignService.trackClick(normalizedSource).catch((error) => {
+                console.warn('[Campaign] Failed to track click:', error);
+            });
+        };
+
+        syncCampaignContextFromUrl();
+        window.addEventListener('popstate', syncCampaignContextFromUrl);
+        return () => window.removeEventListener('popstate', syncCampaignContextFromUrl);
+    }, []);
+
+    const clearCampaignCheckoutParams = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        const url = new URL(window.location.href);
+        url.searchParams.delete('discount');
+        url.searchParams.delete('product');
+        url.searchParams.delete('productId');
+        url.searchParams.delete('checkout');
+        url.searchParams.delete('autocheckout');
+        url.searchParams.delete('source');
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
     }, []);
 
     // Load sticky voucher from backend (per-account)
@@ -155,6 +194,37 @@ const Storefront: React.FC = () => {
         }
       })();
     }, [user?.id]);
+
+    useEffect(() => {
+      if (!autoAppliedDiscount || !autoCheckoutProductId) return;
+      const hasTargetInCart = cart.some(
+        (item) => item.productId === autoCheckoutProductId,
+      );
+      if (hasTargetInCart) {
+        campaignTargetSeenInCartRef.current = true;
+        return;
+      }
+      if (!campaignTargetSeenInCartRef.current) return;
+
+      setCampaignVoucherDismissed(true);
+      setAutoAppliedDiscount('');
+      setAutoCheckoutArmed(false);
+      campaignTargetSeenInCartRef.current = false;
+      setStickyVoucher((prev) => {
+        if (!prev) return prev;
+        const sameCode =
+          prev.code.trim().toUpperCase() === autoAppliedDiscount.trim().toUpperCase();
+        const sameProduct =
+          !prev.productId || prev.productId === autoCheckoutProductId;
+        return sameCode && sameProduct ? null : prev;
+      });
+      clearCampaignCheckoutParams();
+    }, [
+      autoAppliedDiscount,
+      autoCheckoutProductId,
+      cart,
+      clearCampaignCheckoutParams,
+    ]);
 
     const buildListQuery = useCallback(
         (pageNum: number) => ({
@@ -814,12 +884,13 @@ const Storefront: React.FC = () => {
                 onUpdateQuantity={updateCartQuantity}
                 onRemoveItem={removeFromCart}
                 preAppliedDiscountCode={
-                  // Prefer sticky voucher when cart is for its product; else fall back to URL discount.
-                  stickyVoucher?.code &&
-                  (!stickyVoucher.productId ||
-                    cart.some((c) => c.productId === stickyVoucher.productId))
-                    ? stickyVoucher.code
-                    : autoAppliedDiscount
+                  campaignVoucherDismissed
+                    ? undefined
+                    : stickyVoucher?.code &&
+                        (!stickyVoucher.productId ||
+                          cart.some((c) => c.productId === stickyVoucher.productId))
+                      ? stickyVoucher.code
+                      : autoAppliedDiscount
                 }
                 attributionSource={attributionSource} 
             />

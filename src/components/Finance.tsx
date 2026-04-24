@@ -43,23 +43,25 @@ const Finance: React.FC = () => {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in relative pb-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 pb-20 pt-4 animate-fade-in relative sm:px-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Treasury & Settlements</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Treasury & Settlements</h1>
           <p className="text-slate-500 mt-1">Unified ledger for AR, AP, and performance-based commissions.</p>
         </div>
         
-        <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner">
-          <button onClick={() => setActiveTab('DASHBOARD')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'DASHBOARD' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Forecast</button>
-          <button onClick={() => setActiveTab('UNIFIED_LEDGER')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center ${activeTab === 'UNIFIED_LEDGER' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>
+        <div className="-mx-1 overflow-x-auto pb-1">
+          <div className="flex min-w-max bg-slate-100 p-1 rounded-xl shadow-inner">
+          <button onClick={() => setActiveTab('DASHBOARD')} className={`px-3 py-2 text-sm font-bold rounded-lg transition-all whitespace-nowrap sm:px-4 ${activeTab === 'DASHBOARD' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Forecast</button>
+          <button onClick={() => setActiveTab('UNIFIED_LEDGER')} className={`px-3 py-2 text-sm font-bold rounded-lg transition-all flex items-center whitespace-nowrap sm:px-4 ${activeTab === 'UNIFIED_LEDGER' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>
               <BookOpen size={14} className="mr-1.5"/> Ledger
           </button>
-          <button onClick={() => setActiveTab('LEDGER_HUB')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'LEDGER_HUB' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Settlement Hub</button>
-          <button onClick={() => setActiveTab('PAYOUTS')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'PAYOUTS' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Payouts</button>
-          <button onClick={() => setActiveTab('EXCEPTIONS')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center ${activeTab === 'EXCEPTIONS' ? 'bg-white shadow text-rose-700' : 'text-slate-500'}`}>
+          <button onClick={() => setActiveTab('LEDGER_HUB')} className={`px-3 py-2 text-sm font-bold rounded-lg transition-all whitespace-nowrap sm:px-4 ${activeTab === 'LEDGER_HUB' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Settlement Hub</button>
+          <button onClick={() => setActiveTab('PAYOUTS')} className={`px-3 py-2 text-sm font-bold rounded-lg transition-all whitespace-nowrap sm:px-4 ${activeTab === 'PAYOUTS' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Payouts</button>
+          <button onClick={() => setActiveTab('EXCEPTIONS')} className={`px-3 py-2 text-sm font-bold rounded-lg transition-all flex items-center whitespace-nowrap sm:px-4 ${activeTab === 'EXCEPTIONS' ? 'bg-white shadow text-rose-700' : 'text-slate-500'}`}>
               <AlertTriangle size={12} className="mr-1.5"/> Exceptions
           </button>
+          </div>
         </div>
       </div>
 

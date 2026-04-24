@@ -61,7 +61,11 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
         const res = await fetch(workspaceApiUrl('/auth/email/send'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({
+            email,
+            returnSearch:
+              typeof window !== 'undefined' ? window.location.search || '' : '',
+          }),
         });
         if (!res.ok) {
           let msg =

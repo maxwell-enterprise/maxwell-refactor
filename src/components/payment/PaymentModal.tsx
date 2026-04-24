@@ -92,6 +92,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   // Voucher State
   const [voucherCode, setVoucherCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<{ discount: Discount, amount: number } | null>(null);
+  const [appliedDiscountOrigin, setAppliedDiscountOrigin] = useState<'auto' | 'manual' | null>(null);
   const [voucherError, setVoucherError] = useState('');
   const [isCheckingVoucher, setIsCheckingVoucher] = useState(false);
   
@@ -165,7 +166,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
   const applyVoucherCode = useCallback(
-    async (codeRaw: string) => {
+    async (codeRaw: string, origin: 'auto' | 'manual' = 'manual') => {
       const codeToUse = codeRaw.trim();
       if (!codeToUse || cart.length === 0) return;
 
@@ -177,6 +178,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         if (!discount) {
           setVoucherError('Invalid voucher code.');
           setAppliedDiscount(null);
+          setAppliedDiscountOrigin(null);
           return;
         }
 
@@ -188,6 +190,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         if (!validation.valid) {
           setVoucherError(validation.reason || 'Voucher not applicable.');
           setAppliedDiscount(null);
+          setAppliedDiscountOrigin(null);
           return;
         }
 
@@ -218,12 +221,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             'Voucher code is valid but not applicable to items in your cart.',
           );
           setAppliedDiscount(null);
+          setAppliedDiscountOrigin(null);
         } else {
           setAppliedDiscount({ discount, amount: totalDiscount });
+          setAppliedDiscountOrigin(origin);
         }
       } catch (error) {
         console.error('Voucher check failed', error);
         setVoucherError('Error checking voucher.');
+        setAppliedDiscountOrigin(null);
       } finally {
         setIsCheckingVoucher(false);
       }
@@ -236,7 +242,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       voucherCode.trim() ||
       preAppliedDiscountCode?.trim() ||
       '';
-    return applyVoucherCode(code);
+    return applyVoucherCode(code, 'manual');
   }, [applyVoucherCode, preAppliedDiscountCode, voucherCode]);
 
   /** Campaign / deep-link codes: wait for cart lines before applying. */
@@ -245,17 +251,25 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     if (cart.length === 0) return;
     setVoucherCode((v) => v || preAppliedDiscountCode);
     const t = window.setTimeout(() => {
-      void applyVoucherCode(preAppliedDiscountCode);
+      void applyVoucherCode(preAppliedDiscountCode, 'auto');
     }, 0);
     return () => clearTimeout(t);
   }, [preAppliedDiscountCode, appliedDiscount, cart.length, applyVoucherCode]);
+
+  useEffect(() => {
+    if (preAppliedDiscountCode || appliedDiscountOrigin !== 'auto') return;
+    setAppliedDiscount(null);
+    setAppliedDiscountOrigin(null);
+    setVoucherCode('');
+    setVoucherError('');
+  }, [preAppliedDiscountCode, appliedDiscountOrigin]);
 
   /** Recompute line discounts when the cart changes but a code is already applied. */
   useEffect(() => {
     const code = appliedDiscount?.discount.code?.trim();
     if (!code || cart.length === 0) return;
-    void applyVoucherCode(code);
-  }, [cart, appliedDiscount?.discount.code, applyVoucherCode]);
+    void applyVoucherCode(code, appliedDiscountOrigin ?? 'manual');
+  }, [cart, appliedDiscount?.discount.code, appliedDiscountOrigin, applyVoucherCode]);
 
   const handleInitiatePayment = async () => {
     if (snapPayInFlightRef.current) return; // prevent double snap.pay while popup is still open
@@ -707,7 +721,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   />
               </div>
               {appliedDiscount ? (
-                  <button onClick={() => { setAppliedDiscount(null); setVoucherCode(''); }} className="px-4 py-2 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200">
+                  <button onClick={() => { setAppliedDiscount(null); setAppliedDiscountOrigin(null); setVoucherCode(''); setVoucherError(''); }} className="px-4 py-2 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200">
                       Remove
                   </button>
               ) : (
@@ -951,52 +965,54 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           aria-modal="true"
           aria-labelledby="payment-sim-success-title"
         >
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-600 to-green-500 px-6 py-5 text-white">
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-white/20 p-2.5">
-                  <CheckCircle className="h-7 w-7" aria-hidden />
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="border-b border-slate-100 bg-white px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full border border-emerald-200 bg-emerald-50 p-2 text-emerald-600">
+                  <CheckCircle className="h-6 w-6" aria-hidden />
                 </div>
                 <div className="text-left">
                   <h3
                     id="payment-sim-success-title"
-                    className="text-lg font-bold leading-tight"
+                    className="text-lg font-bold leading-tight text-slate-900"
                   >
                     Payment Successful
                   </h3>
-                  <p className="text-xs text-emerald-50">
+                  <p className="mt-1 text-sm text-slate-500">
                     Your order has been confirmed and recorded.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-4 p-6">
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-left">
+            <div className="space-y-4 bg-slate-50/70 p-6">
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-left">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">
                   Payment Summary
                 </p>
-                <p className="mt-1 text-sm text-emerald-800">
+                <p className="mt-1 text-sm leading-6 text-slate-700">
                   We have received your payment confirmation. Your access/entitlement will be available in your account.
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Total Paid
-                  </p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {formatIDR(transaction.totalAmount)}
-                  </p>
-                </div>
-                <div className="mt-3 border-t border-slate-200 pt-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Order Reference
-                  </p>
-                  <p className="mt-1 break-all rounded-md bg-white px-2.5 py-2 font-mono text-[11px] text-slate-600">
-                    {transaction.orderId}
-                  </p>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Order Reference
+                    </p>
+                    <p className="mt-1 break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-600">
+                      {transaction.orderId}
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Total Paid
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-slate-900">
+                      {formatIDR(transaction.totalAmount)}
+                    </p>
+                  </div>
                 </div>
               </div>
 

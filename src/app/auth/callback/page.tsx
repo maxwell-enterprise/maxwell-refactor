@@ -39,7 +39,8 @@ export default function AuthCallbackPage() {
     if (token) {
       setWorkspaceToken(token);
       window.clearTimeout(watchdog);
-      const resume = consumeOAuthReturnSearch();
+      const resume =
+        queryParams.get('returnTo') || consumeOAuthReturnSearch();
       const qs = resume.startsWith('?')
         ? resume.slice(1)
         : resume.startsWith('&')

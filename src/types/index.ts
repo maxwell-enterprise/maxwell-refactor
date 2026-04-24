@@ -296,7 +296,14 @@ export interface CartItem {
 }
 
 export type DiscountType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'BUNDLE_VOLUME';
-export type DiscountScope = 'GLOBAL' | 'CATEGORY_SPECIFIC' | 'Product_SPECIFIC' | 'EVENT_SPECIFIC' | 'USER_ROLE_SPECIFIC' | 'ABAC_COMPLEX';
+export type DiscountScope =
+  | 'GLOBAL'
+  | 'CATEGORY_SPECIFIC'
+  | 'PRODUCT_SPECIFIC'
+  | 'Product_SPECIFIC'
+  | 'EVENT_SPECIFIC'
+  | 'USER_ROLE_SPECIFIC'
+  | 'ABAC_COMPLEX';
 
 export interface Discount {
   id: string;

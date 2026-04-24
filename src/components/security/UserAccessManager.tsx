@@ -677,11 +677,11 @@ const UserAccessManager: React.FC = () => {
             {deletionRequests.length === 0 ? (
               <p className="text-xs text-slate-600">No pending requests.</p>
             ) : (
-              <ul className="space-y-3 max-h-72 overflow-y-auto">
+              <ul className="h-[10.5rem] space-y-3 overflow-y-auto pr-1 snap-y snap-mandatory">
                 {deletionRequests.map((r) => (
                   <li
                     key={r.id}
-                    className="rounded-lg border border-amber-200 bg-white p-3 text-xs shadow-sm"
+                    className="h-[10.5rem] snap-start rounded-lg border border-amber-200 bg-white p-3 text-xs shadow-sm"
                   >
                     <div className="flex flex-wrap justify-between gap-2 font-semibold text-slate-900">
                       <span>{r.user.fullName}</span>
