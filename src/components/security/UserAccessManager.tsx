@@ -45,7 +45,6 @@ const UserAccessManager: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletionRequests, setDeletionRequests] = useState<PendingDeletionRequest[]>([]);
-  const [deletionLoading, setDeletionLoading] = useState(false);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   
@@ -58,7 +57,6 @@ const UserAccessManager: React.FC = () => {
 
   const loadDeletionRequests = useCallback(async () => {
     if (authUser?.role !== UserRole.SUPER_ADMIN) return;
-    setDeletionLoading(true);
     try {
       const res = await workspaceFetch('/admin/account-deletion-requests');
       if (!res.ok) {
@@ -69,8 +67,6 @@ const UserAccessManager: React.FC = () => {
       setDeletionRequests(Array.isArray(data) ? data : []);
     } catch {
       setDeletionRequests([]);
-    } finally {
-      setDeletionLoading(false);
     }
   }, [authUser?.role]);
 
@@ -456,11 +452,7 @@ const UserAccessManager: React.FC = () => {
               <Trash2 size={16} className="text-amber-700" />
               Account deletion requests (Super Admin)
             </h4>
-            {deletionLoading ? (
-              <div className="flex justify-center py-6">
-                <Loader2 className="animate-spin text-slate-400" />
-              </div>
-            ) : deletionRequests.length === 0 ? (
+            {deletionRequests.length === 0 ? (
               <p className="text-xs text-slate-600">No pending requests.</p>
             ) : (
               <ul className="space-y-3 max-h-72 overflow-y-auto">

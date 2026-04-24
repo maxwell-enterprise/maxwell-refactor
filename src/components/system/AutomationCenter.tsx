@@ -7,6 +7,8 @@ import { GamificationService } from '../../services/gamificationService';
 import { AutomationQueueService } from '../../services/automationQueueService';
 import { loadTriggerDefinitions } from '../../services/triggerDefinitions';
 import { EventBus } from '../../services/eventBus';
+import { isSystemApiMode, systemApi } from '../../lib/systemApi';
+import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
 import type { TriggerDefinition } from '../../types/automation';
 import type { SystemTriggerType } from '../../types/ops';
 import { WhatsAppTemplate } from '../../types/index';
@@ -25,20 +27,106 @@ const QueueMonitor = () => {
     const [queue, setQueue] = useState<AutomationQueueItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
+    const pendingOrFailed = queue.filter(
+        (item) => item.status === 'PENDING' || item.status === 'FAILED',
+    );
 
     useEffect(() => { loadQueue(); }, []);
 
+    useEffect(() => {
+        if (!isSystemApiMode()) return;
+        const streamUrl = systemApi.getAutomationStreamUrl();
+        if (!streamUrl) return;
+
+        let source: EventSource | null = null;
+        let reconnectTimer: number | null = null;
+        let disposed = false;
+
+        const connect = () => {
+            source = new EventSource(streamUrl);
+            source.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data) as {
+                        jobId?: string;
+                        triggerType?: string;
+                        status?: 'queued' | 'processing' | 'completed' | 'failed';
+                        message?: string;
+                        errorLog?: string;
+                        timestamp?: string;
+                    };
+                    if (!data.jobId || !data.status) return;
+                    const statusMap: Record<string, AutomationQueueItem['status']> = {
+                        queued: 'PENDING',
+                        processing: 'PROCESSING',
+                        completed: 'COMPLETED',
+                        failed: 'FAILED',
+                    };
+                    const nextStatus = statusMap[data.status];
+                    if (!nextStatus) return;
+
+                    setQueue((prev) => {
+                        const idx = prev.findIndex((item) => item.id === data.jobId);
+                        if (idx === -1) {
+                            const row: AutomationQueueItem = {
+                                id: data.jobId!,
+                                triggerType: data.triggerType || 'UNKNOWN',
+                                contextData: {},
+                                status: nextStatus,
+                                createdAt: data.timestamp || new Date().toISOString(),
+                                processedAt: nextStatus === 'COMPLETED' || nextStatus === 'FAILED'
+                                    ? (data.timestamp || new Date().toISOString())
+                                    : undefined,
+                                errorLog: data.errorLog,
+                                description: data.message || 'Automation event update',
+                            };
+                            return [row, ...prev];
+                        }
+                        const updated = [...prev];
+                        const current = updated[idx];
+                        updated[idx] = {
+                            ...current,
+                            status: nextStatus,
+                            triggerType: data.triggerType || current.triggerType,
+                            description: data.message || current.description,
+                            errorLog: data.errorLog ?? current.errorLog,
+                            processedAt:
+                                nextStatus === 'COMPLETED' || nextStatus === 'FAILED'
+                                    ? (data.timestamp || new Date().toISOString())
+                                    : current.processedAt,
+                        };
+                        return updated;
+                    });
+                } catch {
+                    // Ignore malformed SSE payload.
+                }
+            };
+            source.onerror = () => {
+                source?.close();
+                source = null;
+                if (disposed) return;
+                reconnectTimer = window.setTimeout(connect, 2000);
+            };
+        };
+
+        connect();
+        return () => {
+            disposed = true;
+            if (reconnectTimer != null) window.clearTimeout(reconnectTimer);
+            source?.close();
+        };
+    }, []);
+
     const loadQueue = async () => {
         setLoading(true);
-        const data = await AutomationQueueService.getPendingItems();
+        const data = await AutomationQueueService.getQueueItems();
         setQueue(data);
         setLoading(false);
     };
 
     const handleProcessBatch = async () => {
-        if (queue.length === 0) return;
+        if (pendingOrFailed.length === 0) return;
         setProcessing(true);
-        await AutomationQueueService.processBatch(queue, () => {}); // Simplified progress for compact view
+        await AutomationQueueService.processBatch(pendingOrFailed, () => {}); // Simplified progress for compact view
         showToast('Batch processed.', 'success');
         setProcessing(false);
         loadQueue();
@@ -62,15 +150,19 @@ const QueueMonitor = () => {
                     <button
                         type="button"
                         onClick={handleProcessBatch}
-                        disabled={processing || queue.length === 0}
+                        disabled={processing || pendingOrFailed.length === 0}
                         className="min-h-[44px] w-full shrink-0 rounded-lg bg-slate-900 px-3 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-50 sm:min-h-0 sm:w-auto sm:py-2"
                     >
-                        {processing ? 'Processing…' : `Run Batch (${queue.length})`}
+                        {processing ? 'Processing…' : `Run Batch (${pendingOrFailed.length})`}
                     </button>
                 </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-0">
-                {queue.length === 0 ? (
+                {loading ? (
+                    <div className="p-6 text-center text-sm text-slate-400 sm:p-8">
+                        Loading queue...
+                    </div>
+                ) : queue.length === 0 ? (
                     <div className="p-6 text-center text-sm text-slate-400 sm:p-8">
                         <CheckCircle2 size={24} className="mx-auto mb-2 text-green-300" aria-hidden />
                         All systems operational. Queue empty.
@@ -91,7 +183,15 @@ const QueueMonitor = () => {
                                     <td className="p-3 font-mono text-blue-600">{item.triggerType}</td>
                                     <td className="p-3 text-slate-600 truncate max-w-[200px]">{item.description}</td>
                                     <td className="p-3 text-right">
-                                        <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">
+                                        <span className={`px-1.5 py-0.5 rounded font-bold ${
+                                            item.status === 'COMPLETED'
+                                                ? 'bg-green-100 text-green-700'
+                                                : item.status === 'FAILED'
+                                                    ? 'bg-rose-100 text-rose-700'
+                                                    : item.status === 'PROCESSING'
+                                                        ? 'bg-blue-100 text-blue-700'
+                                                        : 'bg-amber-100 text-amber-700'
+                                        }`}>
                                             {item.status}
                                         </span>
                                     </td>
@@ -130,13 +230,31 @@ const EventSimulator = () => {
 
     const definition = triggerDefs.find((e) => e.id === selectedEventId);
 
+    const resolveCurrentWorkspaceUserId = (): string => {
+        const token = getWorkspaceToken();
+        if (!token) return 'M0002';
+        try {
+            const parts = token.split('.');
+            if (parts.length < 2) return 'M0002';
+            const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+            const payload = JSON.parse(atob(padded)) as { sub?: string };
+            return typeof payload.sub === 'string' && payload.sub.trim() ? payload.sub : 'M0002';
+        } catch {
+            return 'M0002';
+        }
+    };
+
     // Reset payload when event changes
     useEffect(() => {
         if (definition) {
+            const workspaceUserId = resolveCurrentWorkspaceUserId();
             const defaults: Record<string, string> = {};
             definition.variables.forEach(v => defaults[v.key] = v.example);
-            // Always add standard context keys
-            defaults['memberId'] = 'M0002'; // David Pratomo (Seed)
+            // Always add standard context keys. Use active workspace JWT subject to
+            // avoid RBAC false positives on simulator-triggered profile updates.
+            defaults['memberId'] = workspaceUserId;
+            defaults['userId'] = workspaceUserId;
             defaults['name'] = 'David Pratomo';
             defaults['email'] = 'david@example.com';
             defaults['phone'] = '628123456789';
@@ -153,8 +271,19 @@ const EventSimulator = () => {
         if (finalPayload.amount) finalPayload['amount'] = parseInt(finalPayload.amount.replace(/\D/g, '')) as any;
 
         try {
-            await EventBus.emit(definition.id as SystemTriggerType, finalPayload);
-            showToast(`Event ${definition.id} fired successfully. Check logs/queue.`, 'success');
+            if (isSystemApiMode()) {
+                const res = await systemApi.postAutomationSimulate({
+                    triggerId: definition.id,
+                    payload: finalPayload as Record<string, unknown>,
+                });
+                showToast(
+                    `Event ${definition.id} logged to queue (${res.queueId}). Check logs/queue.`,
+                    'success',
+                );
+            } else {
+                await EventBus.emit(definition.id as SystemTriggerType, finalPayload);
+                showToast(`Event ${definition.id} fired successfully. Check logs/queue.`, 'success');
+            }
         } catch (e) {
             showToast('Failed to fire event.', 'error');
         }

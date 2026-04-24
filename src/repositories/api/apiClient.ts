@@ -22,9 +22,27 @@ async function parseHttpErrorBody(response: Response): Promise<string> {
     const j = JSON.parse(trimmed) as {
       message?: string | string[];
       error?: string;
+      errors?: Array<{ field?: string; message?: string }>;
     };
     if (Array.isArray(j.message)) {
       return j.message.join('; ');
+    }
+    if (Array.isArray(j.errors) && j.errors.length > 0) {
+      const validationDetails = j.errors
+        .map((entry) => {
+          const field = typeof entry.field === 'string' ? entry.field : '';
+          const message = typeof entry.message === 'string' ? entry.message : '';
+          if (field && message) return `${field}: ${message}`;
+          return field || message;
+        })
+        .filter(Boolean)
+        .join('; ');
+      if (validationDetails) {
+        if (typeof j.message === 'string' && j.message) {
+          return `${j.message} (${validationDetails})`;
+        }
+        return validationDetails;
+      }
     }
     if (typeof j.message === 'string' && j.message) {
       return j.message;
