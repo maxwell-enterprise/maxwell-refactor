@@ -34,7 +34,11 @@ function isMemberOnly(user: UserProfile): boolean {
 
 function selectRoleOptionsForUser(user: UserProfile): UserRole[] {
   return Array.from(
-    new Set([...getAssignedRoles(user), ...SECURITY_QUICK_ASSIGN_ROLES, UserRole.MEMBER]),
+    new Set(
+      [...getAssignedRoles(user), ...SECURITY_QUICK_ASSIGN_ROLES].filter(
+        (role) => role !== UserRole.MEMBER,
+      ),
+    ),
   );
 }
 
@@ -43,6 +47,49 @@ type PendingDeletionRequest = {
   createdAt: string;
   reason: string;
   user: { id: string; email: string; fullName: string; role: string };
+};
+
+function getAvatarInitials(fullName: string, email: string): string {
+  const source = fullName.trim() || email.trim() || 'U';
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return `${parts[0].slice(0, 1)}${parts[1].slice(0, 1)}`.toUpperCase();
+}
+
+function buildInlineInitialAvatar(fullName: string, email: string): string {
+  const initials = getAvatarInitials(fullName, email);
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'><rect width='96' height='96' rx='48' fill='#e2e8f0'/><text x='50%' y='50%' text-anchor='middle' dominant-baseline='central' font-family='Arial, Helvetica, sans-serif' font-size='34' font-weight='700' fill='#334155'>${initials}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const UserAvatar: React.FC<{
+  src?: string;
+  fullName: string;
+  email: string;
+}> = ({ src, fullName, email }) => {
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [src, fullName, email]);
+
+  const avatarSrc =
+    !loadFailed && src?.trim()
+      ? src
+      : buildInlineInitialAvatar(fullName, email);
+
+  return (
+    <img
+      src={avatarSrc}
+      alt={fullName}
+      referrerPolicy="no-referrer"
+      className="w-9 h-9 rounded-full mr-3 shadow-sm border border-slate-200 object-cover bg-slate-100"
+      onError={() => {
+        if (!loadFailed) setLoadFailed(true);
+      }}
+    />
+  );
 };
 
 const UserAccessManager: React.FC = () => {
@@ -57,7 +104,10 @@ const UserAccessManager: React.FC = () => {
   const [rejectNote, setRejectNote] = useState('');
   const [openRolePickerUserId, setOpenRolePickerUserId] = useState<string | null>(null);
   const [savingRoleUserId, setSavingRoleUserId] = useState<string | null>(null);
-  
+  const [pendingSuperAdminHandover, setPendingSuperAdminHandover] = useState<{
+    user: UserProfile;
+    nextRoles: UserRole[];
+  } | null>(null);
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
 
   // Load from Service
@@ -262,11 +312,21 @@ const UserAccessManager: React.FC = () => {
 
   const handleToggleRole = async (user: UserProfile, selectedRole: UserRole) => {
     const currentRoles = getAssignedRoles(user);
+    const currentNonMemberRoles = currentRoles.filter(
+      (role) => role !== UserRole.MEMBER,
+    );
+    const isTryingNewRole = !currentRoles.includes(selectedRole);
     let nextRoles: UserRole[];
 
-    if (selectedRole === UserRole.MEMBER) {
-      nextRoles = [UserRole.MEMBER];
-    } else if (currentRoles.includes(selectedRole)) {
+    if (isTryingNewRole && currentNonMemberRoles.length >= 2) {
+      showToast(
+        'Maksimal 2 role. Lepas salah satu role dulu untuk mengganti role ini.',
+        'error',
+      );
+      return;
+    }
+
+    if (currentRoles.includes(selectedRole)) {
       nextRoles = currentRoles.filter((role) => role !== selectedRole);
       if (nextRoles.length === 0) {
         nextRoles = [UserRole.MEMBER];
@@ -280,6 +340,25 @@ const UserAccessManager: React.FC = () => {
       nextRoles = [...withoutMember, selectedRole];
     }
 
+    const isSuperAdminHandoverAttempt =
+      selectedRole === UserRole.SUPER_ADMIN &&
+      !currentRoles.includes(UserRole.SUPER_ADMIN) &&
+      authUser?.role === UserRole.SUPER_ADMIN &&
+      !!authUser?.id &&
+      user.id !== authUser.id;
+
+    if (isSuperAdminHandoverAttempt) {
+      setPendingSuperAdminHandover({ user, nextRoles });
+      return;
+    }
+
+    await handleRoleChange(user, nextRoles);
+  };
+
+  const handleConfirmSuperAdminHandover = async () => {
+    if (!pendingSuperAdminHandover) return;
+    const { user, nextRoles } = pendingSuperAdminHandover;
+    setPendingSuperAdminHandover(null);
     await handleRoleChange(user, nextRoles);
   };
 
@@ -348,7 +427,33 @@ const UserAccessManager: React.FC = () => {
     if (isMemberOnly(user)) return;
     const ok = window.confirm(`Revoke staff access for ${user.fullName}? This user will be changed to MEMBER and removed from Internal Staff list.`);
     if (!ok) return;
-    await handleRoleChange(user, [UserRole.MEMBER]);
+    try {
+      setSavingRoleUserId(user.id);
+      const res = await workspaceFetch('/admin/users/revoke-staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email }),
+      });
+      if (!res.ok) {
+        let msg = 'Failed to revoke staff access.';
+        try {
+          const data = (await res.json()) as { message?: string | string[] };
+          if (typeof data?.message === 'string') msg = data.message;
+          else if (Array.isArray(data?.message)) msg = data.message.join(', ');
+        } catch {
+          /* ignore */
+        }
+        showToast(msg, 'error');
+        return;
+      }
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      setOpenRolePickerUserId(null);
+      showToast('Staff access revoked. User is now Member.', 'success');
+    } catch {
+      showToast('Network error while revoking staff access.', 'error');
+    } finally {
+      setSavingRoleUserId(null);
+    }
   };
 
   const getRoleColor = (role: UserRole) => {
@@ -436,7 +541,11 @@ const UserAccessManager: React.FC = () => {
                             <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                 <td className="px-6 py-4">
                                     <div className="flex items-center">
-                                        <img src={user.avatarUrl} alt={user.fullName} className="w-9 h-9 rounded-full mr-3 shadow-sm border border-slate-200" />
+                                        <UserAvatar
+                                          src={user.avatarUrl}
+                                          fullName={user.fullName}
+                                          email={user.email}
+                                        />
                                         <div>
                                             <div className="font-bold text-slate-900">{user.fullName}</div>
                                             <div className="text-xs text-slate-500 flex items-center mt-0.5">
@@ -477,13 +586,30 @@ const UserAccessManager: React.FC = () => {
                                                 <div className="space-y-1">
                                                     {roleSelectOptions.map((role) => {
                                                         const checked = assignedRoles.includes(role);
+                                                        const selectedNonMemberCount = assignedRoles.filter(
+                                                          (assignedRole) => assignedRole !== UserRole.MEMBER,
+                                                        ).length;
+                                                        const disabledByLimit =
+                                                          !checked &&
+                                                          role !== UserRole.MEMBER &&
+                                                          selectedNonMemberCount >= 2;
                                                         return (
                                                             <button
                                                                 key={role}
                                                                 type="button"
                                                                 onClick={() => void handleToggleRole(user, role)}
+                                                                aria-disabled={disabledByLimit}
+                                                                title={
+                                                                  disabledByLimit
+                                                                    ? 'Lepas satu role dulu untuk memilih role ini'
+                                                                    : undefined
+                                                                }
                                                                 className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs transition-colors ${
-                                                                    checked ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+                                                                    checked
+                                                                      ? 'bg-blue-50 text-blue-700'
+                                                                      : disabledByLimit
+                                                                        ? 'cursor-not-allowed text-slate-400'
+                                                                        : 'text-slate-700 hover:bg-slate-50'
                                                                 }`}
                                                             >
                                                                 <span className="font-semibold">{role}</span>
@@ -630,6 +756,82 @@ const UserAccessManager: React.FC = () => {
                 >
                   Send decline
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pendingSuperAdminHandover && (
+          <div className="fixed inset-0 z-[120] bg-slate-900/35 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-600">
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
+                      Sensitive Role Transfer
+                    </p>
+                    <h3 className="mt-1 text-lg font-bold text-slate-900">
+                      Transfer Super Admin?
+                    </h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      This action will transfer the highest workspace access to another user.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 px-5 py-5">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                    Target User
+                  </p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <UserAvatar
+                      src={pendingSuperAdminHandover.user.avatarUrl}
+                      fullName={pendingSuperAdminHandover.user.fullName}
+                      email={pendingSuperAdminHandover.user.email}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-slate-900">
+                        {pendingSuperAdminHandover.user.fullName}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {pendingSuperAdminHandover.user.email}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    After you continue:
+                  </p>
+                  <div className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
+                    <p>Only one account will remain the active `Super Admin`.</p>
+                    <p>Your `Super Admin` access will be moved away from this account.</p>
+                    <p>Your session will be adjusted automatically after the transfer completes.</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-1">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                    onClick={() => setPendingSuperAdminHandover(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+                    onClick={() => void handleConfirmSuperAdminHandover()}
+                  >
+                    Confirm Transfer
+                  </button>
+                </div>
               </div>
             </div>
           </div>

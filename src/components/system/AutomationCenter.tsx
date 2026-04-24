@@ -16,8 +16,8 @@ import { AutomationQueueItem } from '../../types/automation';
 import { OpsTemplate } from '../../types/ops';
 import { PointRule } from '../../types/gamification';
 import { 
-    Activity, Zap, MessageSquare, ClipboardList, Trophy, 
-    Play, RotateCw, CheckCircle2, AlertCircle, Clock, List
+    Activity, MessageSquare, ClipboardList, Trophy, 
+    Play, RotateCw, CheckCircle2
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
@@ -35,84 +35,27 @@ const QueueMonitor = () => {
 
     useEffect(() => {
         if (!isSystemApiMode()) return;
-        const streamUrl = systemApi.getAutomationStreamUrl();
-        if (!streamUrl) return;
-
-        let source: EventSource | null = null;
-        let reconnectTimer: number | null = null;
         let disposed = false;
+        let timer: number | null = null;
 
-        const connect = () => {
-            source = new EventSource(streamUrl);
-            source.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data) as {
-                        jobId?: string;
-                        triggerType?: string;
-                        status?: 'queued' | 'processing' | 'completed' | 'failed';
-                        message?: string;
-                        errorLog?: string;
-                        timestamp?: string;
-                    };
-                    if (!data.jobId || !data.status) return;
-                    const statusMap: Record<string, AutomationQueueItem['status']> = {
-                        queued: 'PENDING',
-                        processing: 'PROCESSING',
-                        completed: 'COMPLETED',
-                        failed: 'FAILED',
-                    };
-                    const nextStatus = statusMap[data.status];
-                    if (!nextStatus) return;
-
-                    setQueue((prev) => {
-                        const idx = prev.findIndex((item) => item.id === data.jobId);
-                        if (idx === -1) {
-                            const row: AutomationQueueItem = {
-                                id: data.jobId!,
-                                triggerType: data.triggerType || 'UNKNOWN',
-                                contextData: {},
-                                status: nextStatus,
-                                createdAt: data.timestamp || new Date().toISOString(),
-                                processedAt: nextStatus === 'COMPLETED' || nextStatus === 'FAILED'
-                                    ? (data.timestamp || new Date().toISOString())
-                                    : undefined,
-                                errorLog: data.errorLog,
-                                description: data.message || 'Automation event update',
-                            };
-                            return [row, ...prev];
-                        }
-                        const updated = [...prev];
-                        const current = updated[idx];
-                        updated[idx] = {
-                            ...current,
-                            status: nextStatus,
-                            triggerType: data.triggerType || current.triggerType,
-                            description: data.message || current.description,
-                            errorLog: data.errorLog ?? current.errorLog,
-                            processedAt:
-                                nextStatus === 'COMPLETED' || nextStatus === 'FAILED'
-                                    ? (data.timestamp || new Date().toISOString())
-                                    : current.processedAt,
-                        };
-                        return updated;
-                    });
-                } catch {
-                    // Ignore malformed SSE payload.
+        const tick = async () => {
+            if (disposed) return;
+            try {
+                const data = await AutomationQueueService.getQueueItems();
+                if (!disposed) setQueue(data);
+            } catch {
+                // Keep previous queue state on transient network issues.
+            } finally {
+                if (!disposed) {
+                    timer = window.setTimeout(tick, 5000);
                 }
-            };
-            source.onerror = () => {
-                source?.close();
-                source = null;
-                if (disposed) return;
-                reconnectTimer = window.setTimeout(connect, 2000);
-            };
+            }
         };
 
-        connect();
+        timer = window.setTimeout(tick, 5000);
         return () => {
             disposed = true;
-            if (reconnectTimer != null) window.clearTimeout(reconnectTimer);
-            source?.close();
+            if (timer != null) window.clearTimeout(timer);
         };
     }, []);
 
@@ -284,20 +227,20 @@ const EventSimulator = () => {
                 await EventBus.emit(definition.id as SystemTriggerType, finalPayload);
                 showToast(`Event ${definition.id} fired successfully. Check logs/queue.`, 'success');
             }
-        } catch (e) {
+        } catch {
             showToast('Failed to fire event.', 'error');
         }
         setIsFiring(false);
     };
 
     return (
-        <div className="bg-slate-900 text-white rounded-xl shadow-lg overflow-hidden flex flex-col h-full border border-slate-700">
+        <div className="bg-slate-900 text-white rounded-xl shadow-lg overflow-hidden flex flex-col h-auto lg:h-full border border-slate-700">
             <div className="p-4 border-b border-slate-700 bg-slate-950 flex items-center gap-2">
                 <Play size={18} className="text-green-400 fill-green-400" />
                 <h3 className="font-bold">Event Simulator (DevTools)</h3>
             </div>
             
-            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+            <div className="p-6 max-h-[65vh] overflow-y-auto space-y-6 lg:max-h-none lg:flex-1">
                 <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Select Trigger</label>
                     <select 
@@ -410,7 +353,7 @@ const AutomationCenter: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden lg:flex-row">
+            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-visible lg:flex-row lg:overflow-hidden">
                 
                 {/* MAIN CONTENT — below queue on mobile (order-2), left column on desktop */}
                 <div className="order-2 min-h-0 min-w-0 flex-1 overflow-y-auto lg:order-1 lg:pr-2">
@@ -509,7 +452,7 @@ const AutomationCenter: React.FC = () => {
                 </div>
 
                 {/* SIDEBAR: queue / simulator — top on mobile, right column on desktop */}
-                <div className="order-1 flex w-full shrink-0 flex-col gap-6 lg:order-2 lg:w-80 lg:min-w-[18rem]">
+                <div className="order-1 flex w-full shrink-0 flex-col gap-6 min-h-0 lg:order-2 lg:w-80 lg:min-w-[18rem]">
                     
                     {activeTab === 'SIMULATOR' ? (
                         <EventSimulator />

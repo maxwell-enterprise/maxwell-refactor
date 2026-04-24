@@ -209,12 +209,6 @@ export const systemApi = {
       };
     }>('/system/maintenance/status'),
 
-  getAutomationStreamUrl: (): string | null => {
-    const token = getWorkspaceToken();
-    if (!token) return null;
-    const url = `${base()}/automations/stream`;
-    return `${url}?token=${encodeURIComponent(token)}`;
-  },
 };
 
 export function isSystemApiMode(): boolean {

@@ -59,6 +59,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
         backend_unreachable:
           'The app lost contact with the server. Check that the API is running, then sign in again.',
       };
+
       const message =
         messages[authError] ??
         'Sign-in did not complete. Try email link or Google again.';
