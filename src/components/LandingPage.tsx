@@ -14,17 +14,9 @@ import ModernLogin from "./auth/ModernLogin";
 import { useToast } from "../context/ToastContext";
 import {
   LANDING_FOOTER,
-  LANDING_GALLERY_TOP,
-  LANDING_GALLERY_WIDE,
   LANDING_HERO_SLIDES,
-  LANDING_INDONESIA_READY,
-  LANDING_IMC,
   LANDING_NAV,
-  LANDING_QUOTE_STRIP,
-  LANDING_TESTIMONIALS,
-  LANDING_FEATURE_VIDEOS,
   type LandingFooterSocial,
-  type LandingHeroSlide,
 } from "../content/landingPublicContent";
 
 interface LandingPageProps {
@@ -63,81 +55,12 @@ function FooterSocialIcon({ item }: { item: LandingFooterSocial }) {
   }
 }
 
-function HeroSection({ slide }: { slide: LandingHeroSlide }) {
-  const overlay =
-    slide.overlayClassName ?? "from-black/75 via-black/55 to-black/35";
-  const ctaBase =
-    "mt-8 inline-flex items-center justify-center rounded-full px-8 py-3.5 text-sm md:text-base font-semibold shadow-lg transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
-  return (
-    <section
-      id={slide.id}
-      className="relative flex min-h-[min(78vh,680px)] flex-col justify-center scroll-mt-[4.5rem] pt-[4.5rem]"
-    >
-      <div className="absolute inset-0 z-0">
-        <img
-          src={slide.image}
-          alt=""
-          className="h-full w-full scale-105 object-cover object-center"
-        />
-        <div
-          className={`absolute inset-0 bg-gradient-to-r ${overlay}`}
-          aria-hidden
-        />
-      </div>
-
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 md:py-24 lg:px-8">
-        <div className="max-w-xl text-left">
-          {slide.kicker ? (
-            <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-white/80">
-              {slide.kicker}
-            </p>
-          ) : null}
-          <h2
-            className={`text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl md:leading-[1.1] ${
-              slide.titleAsQuote ? "font-serif italic" : ""
-            }`}
-          >
-            {slide.title}
-          </h2>
-          {slide.subtitle ? (
-            <p className="mt-4 text-lg font-normal leading-relaxed text-white/90 md:text-xl">
-              {slide.subtitle}
-            </p>
-          ) : null}
-          {slide.body ? (
-            <p className="mt-4 max-w-lg text-base leading-relaxed text-white/90 md:text-lg">
-              {slide.body}
-            </p>
-          ) : null}
-          {slide.attribution ? (
-            <p className="mt-4 text-sm font-bold uppercase tracking-[0.2em] text-white">
-              {slide.attribution}
-            </p>
-          ) : null}
-          {slide.cta ? (
-            <a
-              href={slide.cta.href}
-              className={
-                slide.cta.variant === "white"
-                  ? `${ctaBase} bg-white text-neutral-900 hover:bg-neutral-100 focus-visible:outline-white`
-                  : `${ctaBase} bg-[#3a2a6d] text-white hover:bg-[#2d2158] focus-visible:outline-[#3a2a6d]`
-              }
-            >
-              {slide.cta.label}
-            </a>
-          ) : null}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const { showToast } = useToast();
 
-  const [heroLeadership, heroJohn, heroKeynote] = LANDING_HERO_SLIDES;
+  const [heroLeadership] = LANDING_HERO_SLIDES;
 
   const [dynamicGreeting, setDynamicGreeting] = useState({
     title: heroLeadership.title,
@@ -293,7 +216,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
 
       <section
         id="hero"
-        className="relative flex min-h-[min(78vh,680px)] flex-col justify-center scroll-mt-[4.5rem] pt-[4.5rem]"
+        className="relative flex min-h-[min(78vh,680px)] flex-col justify-center scroll-mt-[4.5rem] border-b border-slate-200 pt-[4.5rem]"
       >
         <div className="absolute inset-0 z-0">
           <img
@@ -307,180 +230,55 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
           />
         </div>
         <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 md:py-24 lg:px-8">
-          <div className="max-w-xl text-left">
-            <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl md:leading-[1.1]">
+          <div className="mx-auto max-w-3xl text-center">
+            {heroLeadership.kicker ? (
+              <p className="inline-flex rounded-full bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-[#1e3a5f]">
+                {heroLeadership.kicker}
+              </p>
+            ) : null}
+            <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl md:text-6xl md:leading-[1.1]">
               {dynamicGreeting.title}
             </h1>
-            <p className="mt-4 text-lg font-normal leading-relaxed text-white/90 md:text-xl">
+            <p className="mt-4 text-lg font-normal leading-relaxed text-slate-700 md:text-xl">
               {dynamicGreeting.subtitle}
             </p>
-            <a
-              href={
-                heroTitleIsPersonalized
-                  ? "#programs"
-                  : (heroLeadership.cta?.href ?? "#leadership-quote")
-              }
-              className="mt-8 inline-flex items-center justify-center rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-neutral-900 shadow-lg transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:text-base"
-            >
-              {heroTitleIsPersonalized ? "Continue to programs" : "Learn More"}
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="quote-strip"
-        className="scroll-mt-[4.5rem] bg-[#5c5854] py-14 md:py-16"
-        aria-label="Featured quote"
-      >
-        <div className="mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8">
-          <p className="font-serif text-2xl italic leading-snug text-white md:text-3xl lg:text-4xl">
-            {LANDING_QUOTE_STRIP.text}
-          </p>
-        </div>
-      </section>
-
-      <HeroSection slide={heroJohn} />
-
-      <section
-        id={LANDING_INDONESIA_READY.id}
-        className="scroll-mt-[4.5rem] bg-[#f4f4f5] py-16 md:py-20"
-      >
-        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold tracking-tight text-[#3e3a6d] md:text-4xl">
-            {LANDING_INDONESIA_READY.title}
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-[#3e3a6d]/90 md:text-lg">
-            {LANDING_INDONESIA_READY.subtitle}
-          </p>
-        </div>
-        <div className="mx-auto mt-12 grid max-w-6xl gap-6 px-4 sm:px-6 md:grid-cols-2 lg:px-8">
-          {LANDING_FEATURE_VIDEOS.map((v) => (
-            <div
-              key={v.id}
-              className="overflow-hidden rounded-xl border border-neutral-200 bg-black shadow-md"
-            >
-              <div className="aspect-video w-full">
-                <iframe
-                  title={v.title}
-                  src={`https://www.youtube.com/embed/${v.youtubeId}`}
-                  className="h-full w-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-              <p className="border-t border-white/10 bg-neutral-900 px-3 py-2 text-sm text-white/90">
-                {v.title}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <HeroSection slide={heroKeynote} />
-
-      <section id="imc" className="scroll-mt-[4.5rem] bg-white">
-        <div className="relative max-w-[100rem]">
-          <div className="relative aspect-[21/9] min-h-[200px] w-full sm:aspect-[21/8]">
-            <img
-              src={LANDING_IMC.heroImage}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/35" aria-hidden />
-            <div className="absolute left-4 top-4 z-10 sm:left-8 sm:top-8 lg:left-12 lg:top-12">
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <a
-                href={LANDING_IMC.eyebrowCta.href}
-                className="inline-flex items-center rounded-full bg-[#3a2a6d] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#2d2158] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                href={
+                  heroTitleIsPersonalized
+                    ? "#programs"
+                    : (heroLeadership.cta?.href ?? "#programs")
+                }
+                className="inline-flex items-center justify-center rounded-full bg-[#0f1b46] px-8 py-3.5 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-[#0d1638] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f1b46] md:text-base"
               >
-                {LANDING_IMC.eyebrowCta.label}
+                {heroTitleIsPersonalized ? "Continue to Programs" : "Start Your Journey"}
+              </a>
+              <a
+                href="#programs"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-8 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 md:text-base"
+              >
+                Explore Programs
               </a>
             </div>
-          </div>
-        </div>
-        <div className="mx-auto max-w-4xl px-4 py-14 text-center sm:px-6 lg:px-8 lg:py-16">
-          <h2 className="text-3xl font-bold italic tracking-tight text-neutral-900 md:text-4xl">
-            {LANDING_IMC.title}
-          </h2>
-          <p className="mt-3 text-lg font-semibold text-neutral-800">
-            {LANDING_IMC.dateLine}
-          </p>
-          <p className="mx-auto mt-6 max-w-3xl text-pretty text-base leading-relaxed text-neutral-600 md:text-lg">
-            {LANDING_IMC.body}
-          </p>
-        </div>
-        <div className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-            {LANDING_GALLERY_TOP.map((img) => (
-              <div
-                key={img.id}
-                className="aspect-[3/4] overflow-hidden rounded-lg bg-neutral-200"
-              >
-                <img
-                  src={img.src}
-                  alt={img.alt}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                />
+            <div className="mx-auto mt-12 grid max-w-2xl grid-cols-2 gap-y-6 border-t border-slate-200 pt-8 text-left sm:grid-cols-4">
+              <div>
+                <p className="text-3xl font-bold text-slate-900">5M+</p>
+                <p className="text-sm text-slate-600">Leaders Trained</p>
               </div>
-            ))}
+              <div>
+                <p className="text-3xl font-bold text-slate-900">160+</p>
+                <p className="text-sm text-slate-600">Countries</p>
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-slate-900">40+</p>
+                <p className="text-sm text-slate-600">Years of Legacy</p>
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-slate-900">#1</p>
+                <p className="text-sm text-slate-600">Leadership Brand</p>
+              </div>
+            </div>
           </div>
-          <div className="mt-3 overflow-hidden rounded-lg bg-neutral-200 md:mt-4">
-            <img
-              src={LANDING_GALLERY_WIDE.src}
-              alt={LANDING_GALLERY_WIDE.alt}
-              className="aspect-[21/9] w-full object-cover sm:aspect-[24/9]"
-              loading="lazy"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="testimonials"
-        className="scroll-mt-[4.5rem] border-y border-neutral-200 bg-white py-16 md:py-20"
-      >
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-center font-serif text-3xl font-bold text-neutral-900 md:text-4xl">
-            Certified Team Member Testimonials
-          </h2>
-          <div className="mt-12 grid gap-10 md:grid-cols-2 md:gap-12">
-            {LANDING_TESTIMONIALS.map((t) => (
-              <blockquote
-                key={t.id}
-                className="border-l-4 border-[#3a2a6d]/40 pl-6 text-neutral-800"
-              >
-                <p className="font-serif text-lg italic leading-relaxed md:text-xl">
-                  &ldquo;{t.quote}&rdquo;
-                </p>
-                <footer className="mt-4 text-sm font-bold text-neutral-900">
-                  — {t.author}
-                </footer>
-              </blockquote>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="corporate"
-        className="scroll-mt-[4.5rem] bg-slate-100 py-14 md:py-16"
-      >
-        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold text-slate-900 md:text-3xl">
-            Corporate Solutions
-          </h2>
-          <p className="mt-4 text-pretty text-slate-600 md:text-lg">
-            From leadership pipelines to culture transformation, we design learning
-            journeys that align with your business outcomes — workshops, DISC, and
-            sustained coaching for teams who want measurable growth.
-          </p>
-          <a
-            href="#programs"
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#3a2a6d] px-6 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#2d2158]"
-          >
-            Explore programs
-          </a>
         </div>
       </section>
 

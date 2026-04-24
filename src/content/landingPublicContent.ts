@@ -52,48 +52,23 @@ export type LandingFooterSocial = {
 };
 
 export const LANDING_NAV: LandingNavItem[] = [
-  { href: "#hero", label: "Home" },
-  { href: "#leadership-quote", label: "Events" },
-  { href: "#programs", label: "Certification" },
-  { href: "#corporate", label: "Corporate Solutions" },
-  { href: "#about", label: "About Us" },
+  { href: "#offers", label: "Offers" },
+  { href: "#programs", label: "Programs" },
   { href: "#store", label: "Shop" },
+  { href: "#articles", label: "Insights" },
 ];
 
 export const LANDING_HERO_SLIDES: LandingHeroSlide[] = [
   {
     id: "hero",
     image:
-      "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?auto=format&fit=crop&q=80&w=2400",
-    overlayClassName: "from-slate-950/85 via-slate-900/65 to-slate-800/40",
-    title: "What is your size?",
-    subtitle: "Find out your leadership capacity",
-    cta: { label: "Learn More", href: "#leadership-quote", variant: "white" },
-  },
-  {
-    id: "leadership-quote",
-    image:
-      "https://images.unsplash.com/photo-1560439514-4e9645031d3b?auto=format&fit=crop&q=80&w=2400",
-    overlayClassName: "from-black/80 via-black/55 to-black/35",
-    title: "Everything rises and falls on leadership.",
-    body: "Leadership is not a title — it is influence. When you grow your influence with intention, your team, family, and community rise with you.",
-    attribution: "John C. Maxwell",
-    cta: { label: "Learn More", href: "#indonesia-ready", variant: "white" },
-  },
-  {
-    id: "keynote",
-    image:
-      "https://images.unsplash.com/photo-1540575467063-27a17d016531?auto=format&fit=crop&q=80&w=2400",
-    overlayClassName: "from-black/80 via-black/60 to-black/40",
-    title:
-      "If you prepare only in the time of your need, you are already too late.",
-    titleAsQuote: true,
-    body: "Indonesia Emas 2045 needs leaders who build capacity before the moment of crisis. We partner with organizations and communities to develop values-driven leaders who can steward the future with clarity and courage.",
-    cta: {
-      label: "Book David To Speak At Your Event",
-      href: "#corporate",
-      variant: "indigo",
-    },
+      "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=2400",
+    overlayClassName: "from-slate-50/95 via-slate-100/90 to-slate-200/70",
+    kicker: "Elevate your influence",
+    title: "Leaders Change the World",
+    subtitle:
+      "Join the world's most influential leadership community. Access proven strategies, connect with mentors, and grow your potential.",
+    cta: { label: "Start Your Journey", href: "#programs", variant: "indigo" },
   },
 ];
 
