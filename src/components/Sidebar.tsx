@@ -72,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
         { id: ViewState.CERTIFICATION_RULES, label: 'Cert. Rules', icon: <Award size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS] },
         { id: ViewState.TAG_MANAGEMENT, label: 'Tag Master', icon: <Tag size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.MARKETING] },
         { id: ViewState.CONTRACTS, label: 'Contracts', icon: <FileText size={18} />, resourceId: 'sys_contracts', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.SALES, UserRole.FINANCE] },
-        { id: ViewState.STORE_ADMIN, label: 'Product', icon: <Store size={18} />, resourceId: 'ops_inventory', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS] },
+        { id: ViewState.STORE_ADMIN, label: 'Product', icon: <Store size={18} />, resourceId: 'ops_inventory', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.MARKETING] },
         { id: ViewState.FINANCE, label: 'Finance', icon: <Banknote size={18} />, resourceId: 'fin_invoices', roleReq: [UserRole.SUPER_ADMIN, UserRole.FINANCE] },
         { id: ViewState.COMMISSION_CONFIG, label: 'Commissions', icon: <Percent size={18} />, resourceId: 'fin_invoices', roleReq: [UserRole.SUPER_ADMIN, UserRole.FINANCE] }, 
       ]

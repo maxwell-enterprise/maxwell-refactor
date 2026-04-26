@@ -73,8 +73,7 @@ const Storefront: React.FC = () => {
     const isStoreAdmin = useMemo(
         () =>
             userRole === UserRole.SUPER_ADMIN ||
-            userRole === UserRole.OPERATIONS ||
-            userRole === UserRole.MARKETING,
+            userRole === UserRole.OPERATIONS,
         [userRole],
     );
 
