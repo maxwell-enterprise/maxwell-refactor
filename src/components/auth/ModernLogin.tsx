@@ -13,6 +13,8 @@ import { stashOAuthReturnSearch } from '../../lib/postAuthNavigation';
 const USE_WORKSPACE =
   typeof process !== 'undefined' &&
   process.env.NEXT_PUBLIC_USE_WORKSPACE_AUTH !== 'false';
+const RECENT_EMAILS_KEY = 'maxwell_recent_login_emails';
+const RECENT_EMAILS_LIMIT = 6;
 
 interface ModernLoginProps {
   onLogin: (role: UserRole, provider: 'google' | 'email') => void;
@@ -26,6 +28,7 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
   const [step, setStep] = useState<'INPUT' | 'OTP' | 'EMAIL_SENT' | 'SENT' | 'DEV_SELECT'>('INPUT');
   const [isLoading, setIsLoading] = useState(false);
   const [otp, setOtp] = useState('');
+  const [recentEmails, setRecentEmails] = useState<string[]>([]);
   
   // Dev Mode Data
   const [devUsers, setDevUsers] = useState<UserProfile[]>([]);
@@ -35,6 +38,21 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
   const lastGoogleHintAt = useRef(0);
 
   useEffect(() => {
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem(RECENT_EMAILS_KEY);
+          const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+          if (Array.isArray(parsed)) {
+            const cleaned = parsed
+              .map((v) => String(v ?? '').trim().toLowerCase())
+              .filter(Boolean)
+              .slice(0, RECENT_EMAILS_LIMIT);
+            setRecentEmails(cleaned);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       if (USE_WORKSPACE) return;
       const loadDevUsers = async () => {
           const [users, members] = await Promise.all([
@@ -49,9 +67,27 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
       void loadDevUsers();
   }, []);
 
+  const rememberEmail = (value: string) => {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || !normalized.includes('@')) return;
+    const next = [normalized, ...recentEmails.filter((e) => e !== normalized)].slice(
+      0,
+      RECENT_EMAILS_LIMIT,
+    );
+    setRecentEmails(next);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(RECENT_EMAILS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+    rememberEmail(email);
 
     if (USE_WORKSPACE) {
       setIsLoading(true);
@@ -69,7 +105,7 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
         });
         if (!res.ok) {
           let msg =
-            'Could not send email. Check RESEND_API_KEY and EMAIL_FROM in the API .env, then restart the server.';
+            'Could not send email link. Check auth provider configuration on the API and try again.';
           if (res.status === 503) {
             msg =
               'The API could not reach the email provider (network). Fix server internet/DNS or try again later.';
@@ -130,7 +166,7 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
       if (now - lastGoogleHintAt.current > 4000) {
         lastGoogleHintAt.current = now;
         showToast(
-          'For Google: set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and FRONTEND_URL on the API, or use email + OTP (demo: 12345).',
+          'For Google sign-in: ensure auth provider config is complete on the API, or use email + OTP (demo: 12345).',
           'info',
         );
       }
@@ -261,7 +297,25 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
                             <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Email Address</label>
                             <div className="relative">
                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                <input type="email" required placeholder="name@email.com" className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={email} onChange={(e) => setEmail(e.target.value)} />
+                                <input
+                                  type="email"
+                                  required
+                                  name="email"
+                                  autoComplete="email"
+                                  autoCapitalize="none"
+                                  autoCorrect="off"
+                                  spellCheck={false}
+                                  list="recent-login-emails"
+                                  placeholder="name@email.com"
+                                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                  value={email}
+                                  onChange={(e) => setEmail(e.target.value)}
+                                />
+                                <datalist id="recent-login-emails">
+                                  {recentEmails.map((savedEmail) => (
+                                    <option key={savedEmail} value={savedEmail} />
+                                  ))}
+                                </datalist>
                             </div>
                         </div>
                         <button type="submit" disabled={isLoading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center disabled:opacity-70">

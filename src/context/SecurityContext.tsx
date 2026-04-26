@@ -168,6 +168,7 @@ export interface ResourceAccess {
 
 export const useAccess = (resourceId: string): ResourceAccess => {
     const { currentRole } = useSecurity();
+    const { user } = useAuth();
 
     return useMemo(() => {
         const defaultAccess: ResourceAccess = {
@@ -178,6 +179,41 @@ export const useAccess = (resourceId: string): ResourceAccess => {
         };
 
         if (!currentRole) return defaultAccess;
+
+        const customRole = user?.customRole;
+        const activeCustomRoleId = user?.activeCustomRoleId;
+        const customProfileActive =
+            !!customRole && !!activeCustomRoleId && customRole.id === activeCustomRoleId;
+        if (customProfileActive) {
+            if (!customRole.allowedFeatures.includes(resourceId)) {
+                return defaultAccess;
+            }
+            // Custom persona should follow selected features directly, even if
+            // base built-in role does not define this resource in DEFAULT_ROLES.
+            const basePolicy = currentRole.policies?.[resourceId];
+            if (!basePolicy) {
+                return {
+                    can: () => true,
+                    scope: 'ALL',
+                    limit: Infinity,
+                    policy: { resourceId, accessLevel: 'FULL', scope: 'ALL' },
+                };
+            }
+            const levels: Record<AccessLevel, number> = {
+                NONE: 0,
+                READ: 1,
+                WRITE: 2,
+                FULL: 3,
+            };
+            const userLevelScore = levels[basePolicy.accessLevel] || 0;
+            return {
+                can: (requiredLevel: AccessLevel) =>
+                    userLevelScore >= (levels[requiredLevel] || 99),
+                scope: basePolicy.scope,
+                limit: basePolicy.authorityLimit?.maxAmount || 0,
+                policy: basePolicy,
+            };
+        }
 
         if (currentRole.id === 'ROLE_SUPER_ADMIN') {
             return {
@@ -201,5 +237,5 @@ export const useAccess = (resourceId: string): ResourceAccess => {
             policy: policy
         };
 
-    }, [currentRole, resourceId]);
+    }, [currentRole, resourceId, user]);
 };

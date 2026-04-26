@@ -10,6 +10,11 @@ import { resolveView } from './features/dashboard/logic/viewResolver';
 import SessionLoadingScreen from './components/system/SessionLoadingScreen';
 import { CampaignAttributionService } from './services/campaignAttributionService';
 import { CampaignService } from './services/campaignService';
+import {
+  ALWAYS_ON_CUSTOM_VIEWS,
+  CUSTOM_VIEW_FEATURE_BY_VIEW,
+  toViewFeatureId,
+} from './constants/customRoleFeatures';
 
 /** Persists last admin screen so refresh on `/dashboard` returns to the same view (same tab). */
 const VIEW_STORAGE_KEY = 'maxwell_current_view';
@@ -149,6 +154,27 @@ const App: React.FC = () => {
       setIsPersonalZone(false);
     }
   }, [userRole, currentView]);
+
+  useEffect(() => {
+    const customRole = user?.customRole;
+    const activeId = user?.activeCustomRoleId;
+    const customActive = !!customRole && !!activeId && customRole.id === activeId;
+    if (!customActive) return;
+    if (ALWAYS_ON_CUSTOM_VIEWS.has(currentView)) return;
+
+    const viewFeature = CUSTOM_VIEW_FEATURE_BY_VIEW.get(currentView);
+    // Views not part of workspace custom catalog are left untouched.
+    if (!viewFeature) return;
+
+    const keys = [
+      ...(viewFeature.resourceId ? [viewFeature.resourceId] : []),
+      toViewFeatureId(currentView),
+    ];
+    const allowed = keys.some((key) => customRole.allowedFeatures.includes(key));
+    if (!allowed) {
+      setCurrentView(ViewState.DASHBOARD);
+    }
+  }, [currentView, setCurrentView, user?.activeCustomRoleId, user?.customRole]);
 
   useEffect(() => {
     if (!isAuthenticated || typeof window === 'undefined') return;

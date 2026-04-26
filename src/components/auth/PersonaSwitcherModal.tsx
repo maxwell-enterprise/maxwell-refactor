@@ -35,9 +35,16 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
             ].includes(role),
         );
     }, [currentUser]);
+    const customPersona = currentUser?.customRole ?? null;
+    const hasCustomPersona = Boolean(customPersona);
+    const isCustomPersonaActive =
+        Boolean(customPersona) &&
+        currentUser?.activeCustomRoleId === customPersona?.id;
 
     const handleSwitchRole = async (role: UserRole) => {
-        if (!currentUser || currentUser.role === role) return;
+        if (!currentUser) return;
+        // Allow selecting the same base role when custom persona is active.
+        if (!isCustomPersonaActive && currentUser.role === role) return;
         try {
             setSwitchingRole(role);
             const res = await workspaceFetch('/me/active-role', {
@@ -67,6 +74,44 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
             onClose();
         } catch {
             showToast('Network error while switching role.', 'error');
+        } finally {
+            setSwitchingRole(null);
+        }
+    };
+
+    const handleSwitchCustomPersona = async () => {
+        if (!currentUser || !customPersona) return;
+        const targetId = customPersona.id;
+        if (currentUser.activeCustomRoleId === targetId) return;
+        try {
+            setSwitchingRole(targetId);
+            const res = await workspaceFetch('/me/active-role', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customRoleId: targetId }),
+            });
+            if (!res.ok) {
+                let message = 'Failed to switch custom persona.';
+                try {
+                    const payload = await res.json() as { message?: string | string[] };
+                    if (typeof payload?.message === 'string') message = payload.message;
+                    else if (Array.isArray(payload?.message)) message = payload.message.join(', ');
+                } catch {
+                    /* ignore */
+                }
+                showToast(message, 'error');
+                return;
+            }
+            const payload = await res.json() as { token?: string };
+            if (typeof payload.token !== 'string' || !payload.token.trim()) {
+                showToast('Workspace token was not returned.', 'error');
+                return;
+            }
+            setWorkspaceToken(payload.token);
+            showToast(`Switched to custom persona: ${customPersona.name}`, 'success');
+            onClose();
+        } catch {
+            showToast('Network error while switching persona.', 'error');
         } finally {
             setSwitchingRole(null);
         }
@@ -118,7 +163,7 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
 
                         <div className="grid gap-3 md:grid-cols-2">
                             {personaRoles.map((role) => {
-                                const isActive = currentUser?.role === role;
+                                const isActive = !isCustomPersonaActive && currentUser?.role === role;
                                 const isSwitchingThisRole = switchingRole === role;
                                 return (
                                     <button
@@ -137,7 +182,11 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                             <div>
                                                 <p className="text-sm font-bold text-slate-900">{role}</p>
                                                 <p className="mt-1 text-xs text-slate-500">
-                                                    {isActive ? 'Current active role' : 'Click or hover-target this card to switch role'}
+                                                    {isActive
+                                                        ? 'Current active role'
+                                                        : currentUser?.role === role && isCustomPersonaActive
+                                                            ? 'Base role selected. Click to exit custom persona mode'
+                                                            : 'Click or hover-target this card to switch role'}
                                                 </p>
                                             </div>
                                             <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${
@@ -166,6 +215,52 @@ const PersonaSwitcherModal: React.FC<PersonaSwitcherModalProps> = ({ onClose }) 
                                     </button>
                                 );
                             })}
+                            {hasCustomPersona && customPersona && (
+                                <button
+                                    type="button"
+                                    disabled={switchingRole === customPersona.id || currentUser?.activeCustomRoleId === customPersona.id}
+                                    onClick={() => void handleSwitchCustomPersona()}
+                                    className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all ${
+                                        isCustomPersonaActive
+                                            ? 'border-indigo-200 bg-indigo-50 ring-1 ring-indigo-200'
+                                            : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-lg'
+                                    } ${switchingRole === customPersona.id ? 'cursor-progress' : ''}`}
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 to-indigo-500/0 transition-opacity group-hover:from-indigo-500/[0.04] group-hover:to-sky-500/[0.08]" />
+                                    <div className="relative flex items-start justify-between gap-3">
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-900">
+                                                Custom: {customPersona.name}
+                                            </p>
+                                            <p className="mt-1 text-xs text-slate-500">
+                                                Locked access profile ({customPersona.allowedFeatures.length} features)
+                                            </p>
+                                        </div>
+                                        <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${
+                                            isCustomPersonaActive
+                                                ? 'border-indigo-200 bg-indigo-100 text-indigo-700'
+                                                : 'border-slate-200 bg-slate-50 text-slate-600 group-hover:border-indigo-200 group-hover:bg-indigo-50 group-hover:text-indigo-700'
+                                        }`}>
+                                            {isCustomPersonaActive ? (
+                                                <>
+                                                    <CheckCircle2 size={10} className="mr-1" />
+                                                    Active
+                                                </>
+                                            ) : switchingRole === customPersona.id ? (
+                                                <>
+                                                    <RefreshCw size={10} className="mr-1 animate-spin" />
+                                                    Switching
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ArrowRightCircle size={10} className="mr-1" />
+                                                    Switch
+                                                </>
+                                            )}
+                                        </span>
+                                    </div>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

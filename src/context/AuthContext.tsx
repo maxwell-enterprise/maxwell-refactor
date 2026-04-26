@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     let data:
-      | {
+        | {
           user: {
             id: string;
             email: string;
@@ -89,6 +89,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
             role: string;
             roles?: string[];
             phone?: string | null;
+            customRole?: {
+              id: string;
+              name: string;
+              allowedFeatures: string[];
+              createdAt: string;
+              locked: true;
+            } | null;
+            activeCustomRoleId?: string | null;
           } | null;
         }
       | undefined;
@@ -113,6 +121,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
             role: string;
             roles?: string[];
             phone?: string | null;
+            customRole?: {
+              id: string;
+              name: string;
+              allowedFeatures: string[];
+              createdAt: string;
+              locked: true;
+            } | null;
+            activeCustomRoleId?: string | null;
           } | null;
         };
         break;
@@ -156,6 +172,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       fullName: data.user.name?.trim() || email,
       role: parseAppRoleString(data.user.role),
       roles: assignedRoles,
+      customRole: data.user.customRole ?? null,
+      activeCustomRoleId:
+        typeof data.user.activeCustomRoleId === 'string'
+          ? data.user.activeCustomRoleId
+          : null,
       avatarUrl: data.user.image || undefined,
       phone,
       provider: 'email',

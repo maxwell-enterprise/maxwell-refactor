@@ -83,6 +83,14 @@ export interface UserProfile {
   fullName: string;
   role: UserRole;
   roles?: UserRole[];
+  customRole?: {
+    id: string;
+    name: string;
+    allowedFeatures: string[];
+    createdAt: string;
+    locked: true;
+  } | null;
+  activeCustomRoleId?: string | null;
   avatarUrl?: string;
   /** From Nest session / `User.abacContext.selfProfile.phone` */
   phone?: string;
