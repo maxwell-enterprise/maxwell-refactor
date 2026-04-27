@@ -27,12 +27,10 @@ const GiftManagementModal: React.FC<GiftManagementModalProps> = ({ userId, userN
         setLoading(true);
         try {
             const [allGifts, allWallets] = await Promise.all([
-                EntitlementService.getAllGifts(),
+                EntitlementService.getSentGifts(),
                 EntitlementService.getAllWalletItems()
             ]);
-            
-            const myGifts = allGifts.filter(g => g.sourceUserId === userId);
-            setGifts(myGifts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+            setGifts(allGifts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
             const tMap: Record<string, WalletItem> = {};
             allWallets.forEach(w => tMap[w.id] = w);

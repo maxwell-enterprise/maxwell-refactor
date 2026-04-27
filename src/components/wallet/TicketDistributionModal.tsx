@@ -35,7 +35,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     type RowData = {
         ticketId: string;
         allocationId?: string; // If already gifted
-        status: 'AVAILABLE' | 'PENDING' | 'CLAIMED';
+        status: 'AVAILABLE' | 'PENDING' | 'CLAIMED' | 'REVOKED';
         recipientName: string;
         recipientEmail: string;
         recipientPhone: string;
@@ -53,30 +53,58 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
         setLoading(true);
         try {
             // Get existing gifts to populate rows
-            const allGifts = await EntitlementService.getAllGifts();
-            
-            const newRows: RowData[] = selectedTickets.map(ticket => {
-                // Check if this ticket ID is already in a gift allocation
-                const existingGift = allGifts.find(g => g.entitlementId === ticket.id && g.status !== 'REVOKED');
-                
-                // Also check ticket meta for recipient hint if it was a draft (legacy/bulk import)
-                const hintName = ticket.meta?.recipientName || '';
-                const hintEmail = ticket.meta?.recipientEmail || '';
-                const hintPhone = ticket.meta?.recipientPhone || '';
+            const [allGifts, allWalletItems] = await Promise.all([
+                EntitlementService.getSentGifts(),
+                EntitlementService.getAllWalletItems(),
+            ]);
+            const walletMap = new Map(allWalletItems.map((item) => [item.id, item]));
+            const selectedMap = new Map(selectedTickets.map((ticket) => [ticket.id, ticket]));
 
-                return {
+            const assignRows: RowData[] = selectedTickets
+                .filter((ticket) => !allGifts.some((gift) => gift.entitlementId === ticket.id && gift.status === 'PENDING'))
+                .map((ticket) => ({
                     ticketId: ticket.id,
-                    allocationId: existingGift?.id,
-                    status: (existingGift ? existingGift.status : 'AVAILABLE') as any,
-                    recipientName: existingGift?.targetEmail ? (ticket.meta?.recipientName || 'Guest') : hintName,
-                    recipientEmail: existingGift?.targetEmail || hintEmail,
-                    recipientPhone: hintPhone, // In real app, store phone in GiftAllocation too. For now using meta hint or empty.
+                    status: 'AVAILABLE',
+                    recipientName: typeof ticket.meta?.recipientName === 'string' ? ticket.meta.recipientName : '',
+                    recipientEmail: typeof ticket.meta?.recipientEmail === 'string' ? ticket.meta.recipientEmail : '',
+                    recipientPhone: typeof ticket.meta?.recipientPhone === 'string' ? ticket.meta.recipientPhone : '',
                     originalTicket: ticket,
-                    sentAt: existingGift?.createdAt
-                };
-            });
+                }));
 
-            setRows(newRows);
+            const historyRows: RowData[] = allGifts
+                .slice()
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .map((gift) => {
+                    const wallet = walletMap.get(gift.entitlementId) || selectedMap.get(gift.entitlementId);
+                    const recipientName =
+                        typeof wallet?.meta?.recipientName === 'string' && wallet.meta.recipientName.trim()
+                            ? wallet.meta.recipientName.trim()
+                            : gift.targetEmail?.split('@')[0] || 'Guest';
+
+                    const fallbackTicket: WalletItem = wallet || {
+                        id: gift.entitlementId,
+                        userId: donorId,
+                        type: 'TICKET',
+                        title: gift.itemName,
+                        subtitle: '',
+                        status: gift.status === 'PENDING' ? 'PENDING_CLAIM' : 'ACTIVE',
+                        isTransferable: true,
+                        meta: {},
+                    };
+
+                    return {
+                        ticketId: gift.entitlementId,
+                        allocationId: gift.id,
+                        status: gift.status,
+                        recipientName,
+                        recipientEmail: gift.targetEmail || '',
+                        recipientPhone: gift.recipientPhone || '',
+                        originalTicket: fallbackTicket,
+                        sentAt: gift.createdAt,
+                    };
+                });
+
+            setRows([...assignRows, ...historyRows]);
         } catch (e) {
             console.error(e);
         } finally {
@@ -218,7 +246,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                         const isLocked = activeTab === 'HISTORY';
                                         
                                         return (
-                                            <tr key={row.ticketId} className="hover:bg-slate-50 transition-colors">
+                                            <tr key={row.allocationId || row.ticketId} className="hover:bg-slate-50 transition-colors">
                                                 <td className="px-6 py-4 text-center text-slate-400 font-mono text-xs">
                                                     {idx + 1}
                                                 </td>

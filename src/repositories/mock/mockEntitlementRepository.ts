@@ -1,5 +1,5 @@
 
-import { IEntitlementRepository } from '../contracts';
+import { CreateWalletGiftInput, IEntitlementRepository } from '../contracts';
 import { UserEntitlements, WalletItem, GiftAllocation, CorporateTeamMember, WalletMemberHub, WalletTransactionHistory } from '../../types/access';
 import { DevDatabase } from '../../utils/devDatabase';
 import { SEED_ENTITLEMENTS } from '../../services/entitlementService';
@@ -109,6 +109,90 @@ export class MockEntitlementRepository implements IEntitlementRepository {
 
     async upsertGiftAllocation(gift: GiftAllocation): Promise<void> {
         await DevDatabase.add('gift_allocations', gift);
+    }
+
+    async createGift(input: CreateWalletGiftInput): Promise<GiftAllocation> {
+        const ticket = await this.getWalletItemById(input.walletItemId);
+        if (!ticket) throw new Error('Wallet item not found');
+        ticket.status = 'PENDING_CLAIM';
+        ticket.meta = {
+            ...(ticket.meta || {}),
+            recipientName: input.recipientName,
+            recipientEmail: input.recipientEmail,
+            recipientPhone: input.recipientPhone,
+            pendingClaimIssuedAt: new Date().toISOString(),
+        };
+        await this.upsertWalletItem(ticket);
+
+        const gift: GiftAllocation = {
+            id: `GFT-${Date.now()}`,
+            sourceUserId: ticket.userId,
+            sourceUserName: 'Mock Sender',
+            entitlementId: ticket.id,
+            itemName: ticket.title,
+            targetEmail: input.recipientEmail,
+            recipientPhone: input.recipientPhone,
+            claimToken: `gift_${Date.now()}`,
+            tokenExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+            deliveryMethod: input.deliveryMethod,
+            giftMessage: input.giftMessage,
+            status: 'PENDING',
+            createdAt: new Date().toISOString(),
+        };
+        await this.upsertGiftAllocation(gift);
+        return gift;
+    }
+
+    async claimGift(token: string): Promise<WalletItem> {
+        const gifts = await this.getGiftAllocations();
+        const gift = gifts.find(g => g.claimToken === token);
+        if (!gift) throw new Error('Gift not found');
+        const ticket = await this.getWalletItemById(gift.entitlementId);
+        if (!ticket) throw new Error('Wallet item not found');
+        ticket.status = 'ACTIVE';
+        await this.upsertWalletItem(ticket);
+        gift.status = 'CLAIMED';
+        gift.claimedAt = new Date().toISOString();
+        await this.upsertGiftAllocation(gift);
+        return ticket;
+    }
+
+    async revokeGift(id: string, _reason?: string): Promise<GiftAllocation> {
+        const gifts = await this.getGiftAllocations();
+        const gift = gifts.find(g => g.id === id);
+        if (!gift) throw new Error('Gift not found');
+        gift.status = 'REVOKED';
+        gift.revokedAt = new Date().toISOString();
+        await this.upsertGiftAllocation(gift);
+        const ticket = await this.getWalletItemById(gift.entitlementId);
+        if (ticket) {
+            ticket.status = 'ACTIVE';
+            if (ticket.meta && typeof ticket.meta === 'object') {
+                delete ticket.meta.recipientName;
+                delete ticket.meta.recipientEmail;
+                delete ticket.meta.recipientPhone;
+                delete ticket.meta.pendingClaimIssuedAt;
+            }
+            await this.upsertWalletItem(ticket);
+        }
+        return gift;
+    }
+
+    async getGiftInbox(userEmail: string): Promise<GiftAllocation[]> {
+        const email = userEmail.trim().toLowerCase();
+        const gifts = await this.getGiftAllocations();
+        return gifts.filter(g =>
+            g.status === 'PENDING' &&
+            ((g.targetEmail || '').toLowerCase() === email)
+        );
+    }
+
+    async getSentGifts(): Promise<GiftAllocation[]> {
+        return this.getGiftAllocations();
+    }
+
+    async getReceivedGifts(): Promise<GiftAllocation[]> {
+        return this.getGiftAllocations();
     }
 
     async getTeamMembers(orgId: string): Promise<CorporateTeamMember[]> {

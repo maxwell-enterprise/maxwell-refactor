@@ -72,12 +72,19 @@ const EventForm: React.FC<EventFormProps> = ({
         normalizeEventFormData(initialData),
     );
     const [activeTab, setActiveTab] = useState<'GENERAL' | 'LOCATION' | 'ACCESS' | 'TIERS' | 'LOGISTICS' | 'HIERARCHY'>('GENERAL');
+    const shouldShowHierarchyTab = formData.type !== 'SOLO';
     
     const [expandedTierIndex, setExpandedTierIndex] = useState<number | null>(null);
     
     useEffect(() => {
         setFormData(normalizeEventFormData(initialData));
     }, [initialData]);
+
+    useEffect(() => {
+        if (!shouldShowHierarchyTab && activeTab === 'HIERARCHY') {
+            setActiveTab('GENERAL');
+        }
+    }, [activeTab, shouldShowHierarchyTab]);
 
     const updateField = (field: keyof Event, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -186,16 +193,18 @@ const EventForm: React.FC<EventFormProps> = ({
                                 <Clock size={16} className="mr-3"/> Session Logistics
                             </button>
                         )}
-                        <button 
-                            onClick={() => setActiveTab('HIERARCHY')} 
-                            className={`px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center 
-                                ${activeTab === 'HIERARCHY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-100'}
-                                ${formData.type === 'SESSION' && !formData.parentEventId ? 'text-red-500 bg-red-50 animate-pulse' : ''}
-                            `}
-                        >
-                            <Layers size={16} className="mr-3"/> Hierarchy & Picker
-                            {formData.type === 'SESSION' && !formData.parentEventId && <AlertCircle size={14} className="ml-auto text-red-500"/>}
-                        </button>
+                        {shouldShowHierarchyTab && (
+                            <button 
+                                onClick={() => setActiveTab('HIERARCHY')} 
+                                className={`px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center 
+                                    ${activeTab === 'HIERARCHY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-100'}
+                                    ${formData.type === 'SESSION' && !formData.parentEventId ? 'text-red-500 bg-red-50 animate-pulse' : ''}
+                                `}
+                            >
+                                <Layers size={16} className="mr-3"/> Hierarchy & Picker
+                                {formData.type === 'SESSION' && !formData.parentEventId && <AlertCircle size={14} className="ml-auto text-red-500"/>}
+                            </button>
+                        )}
                      </div>
 
                     <div className="flex-1 overflow-y-auto p-8 bg-white">

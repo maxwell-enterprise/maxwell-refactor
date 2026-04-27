@@ -612,11 +612,12 @@ const Marketing: React.FC = () => {
                     <h3 className="font-bold text-xl text-slate-900 mb-2">{showQrModal.name}</h3>
                     <p className="text-sm text-slate-500 mb-6">Scan to visit campaign landing page.</p>
                     
-                    <QRCodeDisplay 
+                     <QRCodeDisplay 
                         data={`${window.location.origin}${showQrModal.generatedLink}`}
                         size={200}
                         showLabel={false}
-                    />
+                        downloadFileName={`campaign-${showQrModal.id || showQrModal.name}`}
+                     />
 
                     <button onClick={() => setShowQrModal(null)} className="mt-8 w-full bg-slate-900 text-white py-3 rounded-xl font-bold">
                         Close

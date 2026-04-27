@@ -116,11 +116,17 @@ export interface GiftAllocation {
     itemName: string;
     
     targetEmail?: string; // Optional: If sent specifically to an email
+    recipientPhone?: string;
     claimToken: string; // The magic code
+    tokenExpiresAt?: string;
+    deliveryMethod?: 'LINK' | 'EMAIL' | 'WHATSAPP' | 'DIRECT';
+    giftMessage?: string;
     
     status: 'PENDING' | 'CLAIMED' | 'REVOKED';
     claimedByUserId?: string; // The Recipient
     claimedAt?: string;
+    revokedAt?: string;
+    revokeReason?: string;
     createdAt: string;
 }
 

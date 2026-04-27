@@ -22,13 +22,10 @@ const DistributionLedger: React.FC<DistributionLedgerProps> = ({ userId }) => {
     const loadData = async () => {
         setLoading(true);
         const [allGifts, allWallets] = await Promise.all([
-            EntitlementService.getAllGifts(),
+            EntitlementService.getSentGifts(),
             EntitlementService.getAllWalletItems()
         ]);
-        
-        // Filter gifts sent by this user
-        const myGifts = allGifts.filter(g => g.sourceUserId === userId);
-        setGifts(myGifts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        setGifts(allGifts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
         // Map tickets for easy status lookup
         const tMap: Record<string, WalletItem> = {};

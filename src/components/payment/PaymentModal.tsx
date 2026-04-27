@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
-import { X, CreditCard, QrCode, Building2, Smartphone, Copy, UploadCloud, CheckCircle, AlertCircle, Clock, ShieldCheck, Loader2, Tag, ChevronRight, Mail, Trash2, Plus, Minus, Zap, PieChart } from 'lucide-react';
+import { X, CreditCard, QrCode, Building2, Smartphone, Copy, UploadCloud, CheckCircle, AlertCircle, Clock, ShieldCheck, Loader2, Tag, ChevronRight, Mail, Trash2, Plus, Minus, Zap, PieChart, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { PaymentMethodType, PaymentTransaction, Product, UserRole, Discount, CartItem } from '../../types/index';
 import { PaymentService } from '../../services/paymentService';
@@ -84,6 +84,24 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  const handleDownloadQris = useCallback(async () => {
+    if (!transaction?.qrisUrl) return;
+
+    try {
+      const response = await fetch(transaction.qrisUrl);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = objectUrl;
+      downloadLink.download = `qris-${transaction.id || 'payment'}.png`;
+      downloadLink.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Failed to download QRIS image', error);
+      window.open(transaction.qrisUrl, '_blank', 'noopener,noreferrer');
+    }
+  }, [transaction]);
 
   // Guest Logic State
   const [customerEmail, setCustomerEmail] = useState(userEmail);
@@ -910,6 +928,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               <div className="bg-white p-4 rounded-xl border border-slate-200 inline-block shadow-sm">
                  <img src={transaction.qrisUrl} alt="QRIS" className="w-48 h-48 mx-auto" />
               </div>
+              <button
+                 type="button"
+                 onClick={handleDownloadQris}
+                 className="mx-auto inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                 <Download size={16} />
+                 Download QR Code
+              </button>
               <p className="text-sm text-slate-500">Scan using GoPay, OVO, Dana, or BCA Mobile</p>
               <div className="flex items-center justify-center gap-2">
                  <span className="text-2xl font-bold text-slate-900">{formatIDR(amountToDisplay)}</span>

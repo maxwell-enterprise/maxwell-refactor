@@ -250,30 +250,7 @@ export const EntitlementService = {
   // Fix: Added revokeTicketGift for DistributionLedger and GiftManagementModal
   revokeTicketGift: async (userId: string, giftId: string): Promise<void> => {
       const repo = RepositoryFactory.getEntitlementRepository();
-      const gifts = await repo.getGiftAllocations();
-      const gift = gifts.find(g => g.id === giftId);
-      
-      if (!gift) throw new Error("Gift record not found");
-      if (gift.status !== 'PENDING') throw new Error("Only pending gifts can be revoked.");
-      
-      // Return ticket to original owner
-      const ticket = await repo.getWalletItemById(gift.entitlementId);
-      if (ticket) {
-          ticket.userId = userId;
-          ticket.status = 'ACTIVE';
-          delete (ticket as any).sponsoredBy;
-          if (ticket.meta && typeof ticket.meta === 'object') {
-              delete ticket.meta.recipientName;
-              delete ticket.meta.recipientEmail;
-              delete ticket.meta.recipientPhone;
-              delete ticket.meta.pendingClaimIssuedAt;
-          }
-          await repo.upsertWalletItem(ticket);
-      }
-      
-      // Update gift status to prevent double-processing
-      gift.status = 'REVOKED';
-      await repo.upsertGiftAllocation(gift);
+      await repo.revokeGift(giftId);
   },
 
   // --- DISTRIBUTION: default = pending claim (ticket stays with donor); guest checkout uses immediateTransfer ---
@@ -287,49 +264,24 @@ export const EntitlementService = {
       const immediate = opts?.immediateTransfer === true;
 
       for (const recipient of recipients) {
+          if (!immediate) {
+              await repo.createGift({
+                  walletItemId: recipient.ticketId,
+                  transferAmount: 1,
+                  recipientName: recipient.name,
+                  recipientEmail: recipient.email,
+                  recipientPhone: recipient.phone,
+                  deliveryMethod: recipient.phone ? 'WHATSAPP' : 'EMAIL',
+                  giftMessage: `Ticket shared by ${donorName}`,
+              });
+              continue;
+          }
+
           const donorTicket = await repo.getWalletItemById(recipient.ticketId);
           if (!donorTicket) continue;
 
           const allocationId = `DISTR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
           const claimToken = `CLAIM-${Math.floor(100000 + Math.random() * 900000)}`;
-
-          if (!immediate) {
-              donorTicket.userId = donorId;
-              donorTicket.status = 'PENDING_CLAIM';
-              donorTicket.meta = {
-                  ...(donorTicket.meta || {}),
-                  recipientName: recipient.name,
-                  recipientEmail: recipient.email,
-                  recipientPhone: recipient.phone,
-                  pendingClaimIssuedAt: new Date().toISOString(),
-              };
-              await repo.upsertWalletItem(donorTicket);
-
-              const allocation: GiftAllocation = {
-                  id: allocationId,
-                  sourceUserId: donorId,
-                  sourceUserName: donorName,
-                  entitlementId: donorTicket.id,
-                  itemName: donorTicket.title,
-                  targetEmail: recipient.email,
-                  claimToken,
-                  status: 'PENDING',
-                  createdAt: new Date().toISOString(),
-              };
-              await repo.upsertGiftAllocation(allocation);
-
-              await repo.logWalletTransaction({
-                  id: `TX-GIFT-PEND-${Date.now()}`,
-                  userId: donorId,
-                  walletItemId: donorTicket.id,
-                  transactionType: 'TRANSFER_OUT',
-                  amountChange: 0,
-                  balanceAfter: 0,
-                  referenceName: `Invitation pending: ${recipient.name}`,
-                  timestamp: new Date().toISOString(),
-              });
-              continue;
-          }
 
           const members = await DataService.getMembers();
           let targetMember = members.find(
@@ -404,6 +356,22 @@ export const EntitlementService = {
 
   getAllGifts: async (): Promise<GiftAllocation[]> => {
       return await RepositoryFactory.getEntitlementRepository().getGiftAllocations();
+  },
+
+  getSentGifts: async (): Promise<GiftAllocation[]> => {
+      return await RepositoryFactory.getEntitlementRepository().getSentGifts();
+  },
+
+  getReceivedGifts: async (): Promise<GiftAllocation[]> => {
+      return await RepositoryFactory.getEntitlementRepository().getReceivedGifts();
+  },
+
+  getGiftInbox: async (userEmail: string): Promise<GiftAllocation[]> => {
+      return await RepositoryFactory.getEntitlementRepository().getGiftInbox(userEmail);
+  },
+
+  claimTicketGift: async (token: string): Promise<WalletItem> => {
+      return await RepositoryFactory.getEntitlementRepository().claimGift(token);
   },
 
   /**
