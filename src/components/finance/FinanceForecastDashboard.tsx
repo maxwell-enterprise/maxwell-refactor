@@ -114,10 +114,10 @@ export const FinanceForecastDashboard: React.FC<Props> = ({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6">
+        <div className="min-w-0 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <p className="text-sm text-slate-500 font-medium">Outstanding AR</p>
-          <h3 className="text-2xl font-bold text-slate-900 mt-1">
+          <h3 className="mt-1 break-words text-xl font-bold text-slate-900 sm:text-2xl">
             {loading ? '…' : data ? formatIDR(data.outstandingAr) : formatIDR(0)}
           </h3>
           <p className="text-xs text-slate-400 mt-3">
@@ -141,9 +141,9 @@ export const FinanceForecastDashboard: React.FC<Props> = ({
           )}
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="min-w-0 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <p className="text-sm text-slate-500 font-medium">Pending AP</p>
-          <h3 className="text-2xl font-bold text-slate-900 mt-1">
+          <h3 className="mt-1 break-words text-xl font-bold text-slate-900 sm:text-2xl">
             {loading ? '…' : data ? formatIDR(data.pendingApAmount) : formatIDR(0)}
           </h3>
           <p className="text-xs text-amber-600 mt-4 font-bold flex items-center">
@@ -152,9 +152,9 @@ export const FinanceForecastDashboard: React.FC<Props> = ({
           </p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="min-w-0 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <p className="text-sm text-slate-500 font-medium">Commission accrued</p>
-          <h3 className="text-2xl font-bold text-slate-900 mt-1">
+          <h3 className="mt-1 break-words text-xl font-bold text-slate-900 sm:text-2xl">
             {loading ? '…' : data ? formatIDR(data.commissionAccrued) : formatIDR(0)}
           </h3>
           <p className="text-xs text-slate-400 mt-4">
@@ -166,9 +166,9 @@ export const FinanceForecastDashboard: React.FC<Props> = ({
           </p>
         </div>
 
-        <div className="bg-slate-900 p-5 rounded-2xl text-white shadow-xl shadow-slate-900/20">
+        <div className="min-w-0 bg-slate-900 p-5 rounded-2xl text-white shadow-xl shadow-slate-900/20 sm:col-span-2 xl:col-span-1">
           <p className="text-sm text-slate-400 font-medium">Net cashflow (6 mo)</p>
-          <h3 className="text-2xl font-bold mt-1">
+          <h3 className="mt-1 break-words text-xl font-bold sm:text-2xl">
             {loading ? '…' : data ? formatIDR(data.netCashflowSixMonths) : '—'}
           </h3>
           <p className="text-xs text-slate-500 mt-2">
@@ -183,10 +183,10 @@ export const FinanceForecastDashboard: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="min-w-0 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm sm:p-6 xl:col-span-2">
           <h3 className="font-bold text-slate-800 mb-6">Cashflow distribution</h3>
-          <div className="h-80">
+          <div className="h-64 sm:h-80">
             {loading ? (
               <div className="h-full flex items-center justify-center text-slate-400 text-sm">
                 Loading chart…
@@ -231,7 +231,7 @@ export const FinanceForecastDashboard: React.FC<Props> = ({
             )}
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="min-w-0 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm sm:p-6">
           <h3 className="font-bold text-slate-800 mb-4">Quick post</h3>
           <div className="space-y-4">
             <button

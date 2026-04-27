@@ -104,7 +104,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
       ].includes(role),
     );
   }, [user]);
-  const canOpenPersonaSwitcher = personaRoles.length > 1;
+  const canOpenPersonaSwitcher =
+    personaRoles.length > 1 || Boolean(user?.customRole);
+  const isCustomPersonaActive =
+    Boolean(user?.customRole) && user?.activeCustomRoleId === user?.customRole?.id;
+  const personaBadgeLabel = isCustomPersonaActive
+    ? `Custom: ${user?.customRole?.name ?? 'Role'}`
+    : userRole.replace('Super ', '');
 
   const handleNotificationItemClick = async (task: UnifiedTask) => {
     markNotificationsAsSeen();
@@ -268,7 +274,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                         <RefreshCw size={12} className="text-indigo-500 group-hover:rotate-180 transition-transform duration-500" />
                         <span className="text-slate-400">View as:</span>
                         <span className="font-bold text-slate-800 max-w-[100px] truncate">{user?.fullName || 'Guest'}</span>
-                        <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 uppercase">{userRole.replace('Super ','')}</span>
+                        <span
+                          className="inline-block max-w-[150px] truncate text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 uppercase"
+                          title={personaBadgeLabel}
+                        >
+                          {personaBadgeLabel}
+                        </span>
                     </button>
                 </div>
                 )}

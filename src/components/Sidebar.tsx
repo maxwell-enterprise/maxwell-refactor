@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { ViewState, UserRole } from '../types/index';
 import { useAuth } from '../context/AuthContext';
+import { ALWAYS_ON_CUSTOM_VIEWS, toViewFeatureId } from '../constants/customRoleFeatures';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -31,7 +32,7 @@ const WORKSPACE_ROLES = [
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, toggleSidebar, userRole, isPersonalZone, onToggleZone }) => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
 
   /** Promoted / internal staff: any role except Member sees Workspace ↔ My Zone. Pure members only see the user sidebar. */
   const showWorkspaceMyZoneToggle = userRole !== UserRole.MEMBER;
@@ -72,7 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
         { id: ViewState.CERTIFICATION_RULES, label: 'Cert. Rules', icon: <Award size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS] },
         { id: ViewState.TAG_MANAGEMENT, label: 'Tag Master', icon: <Tag size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.MARKETING] },
         { id: ViewState.CONTRACTS, label: 'Contracts', icon: <FileText size={18} />, resourceId: 'sys_contracts', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.SALES, UserRole.FINANCE] },
-        { id: ViewState.STORE_ADMIN, label: 'Product', icon: <Store size={18} />, resourceId: 'ops_inventory', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS] },
+        { id: ViewState.STORE_ADMIN, label: 'Product', icon: <Store size={18} />, resourceId: 'ops_inventory', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.MARKETING] },
         { id: ViewState.FINANCE, label: 'Finance', icon: <Banknote size={18} />, resourceId: 'fin_invoices', roleReq: [UserRole.SUPER_ADMIN, UserRole.FINANCE] },
         { id: ViewState.COMMISSION_CONFIG, label: 'Commissions', icon: <Percent size={18} />, resourceId: 'fin_invoices', roleReq: [UserRole.SUPER_ADMIN, UserRole.FINANCE] }, 
       ]
@@ -95,6 +96,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
     // Entry staff promoted as Guest: same workspace nav slice as Sales where Sales is allowed.
     if (userRole === UserRole.GUEST && allowedRoles.includes(UserRole.SALES)) return true;
     return false;
+  };
+
+  const hasCustomFeatureAccess = (item: { id: ViewState; resourceId: string | null }) => {
+    const customRole = user?.customRole;
+    const activeId = user?.activeCustomRoleId;
+    if (!customRole || !activeId || customRole.id !== activeId) {
+      return true;
+    }
+    if (ALWAYS_ON_CUSTOM_VIEWS.has(item.id)) return true;
+    const featureKeys = [
+      ...(item.resourceId ? [item.resourceId] : []),
+      toViewFeatureId(item.id),
+    ];
+    return featureKeys.some((key) => customRole.allowedFeatures.includes(key));
   };
 
   const isMemberMode = isPersonalZone || userRole === UserRole.MEMBER;
@@ -191,7 +206,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
                       <h4 className="px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{group.title}</h4>
                     )}
                     <div className="space-y-0.5">
-                      {group.items.filter(item => hasAccess(item.roleReq)).map(item => (
+                      {group.items
+                        .filter((item) => {
+                          const customRole = user?.customRole;
+                          const activeId = user?.activeCustomRoleId;
+                          const customActive =
+                            !!customRole && !!activeId && customRole.id === activeId;
+                          if (customActive) {
+                            return hasCustomFeatureAccess(item);
+                          }
+                          return hasAccess(item.roleReq);
+                        })
+                        .map(item => (
                         <button
                           key={item.id}
                           onClick={() => onNavigate(item.id)}

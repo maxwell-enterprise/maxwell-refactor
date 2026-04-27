@@ -10,6 +10,8 @@ import { workspaceFetch } from '../../lib/workspaceApi';
 import { ApiRequestError } from '../../repositories/api/apiClient';
 import { useAccountDeletionRealtime } from '../../hooks/useAccountDeletionRealtime';
 import { setWorkspaceToken } from '../../lib/workspaceAuthToken';
+import { SECURE_RESOURCES } from '../../constants/securityDefs';
+import { CUSTOM_VIEW_FEATURES } from '../../constants/customRoleFeatures';
 
 /** Roles assignable from Security quick-actions. */
 const SECURITY_QUICK_ASSIGN_ROLES: UserRole[] = [
@@ -18,6 +20,33 @@ const SECURITY_QUICK_ASSIGN_ROLES: UserRole[] = [
   UserRole.OPERATIONS,
   UserRole.MARKETING,
   UserRole.SALES,
+];
+
+const CUSTOM_ROLE_OPTION = '__CUSTOM_ROLE__';
+
+type RolePickerOption = UserRole | typeof CUSTOM_ROLE_OPTION;
+
+type CustomRoleAssignment = {
+  id: string;
+  name: string;
+  allowedFeatures: string[];
+  createdAt: string;
+  locked: true;
+};
+
+const CUSTOM_ROLE_FEATURE_OPTIONS = [
+  ...SECURE_RESOURCES.map((resource) => ({
+    id: resource.id,
+    label: resource.name,
+    hint: resource.id,
+    group: 'Resource Access',
+  })),
+  ...CUSTOM_VIEW_FEATURES.map((feature) => ({
+    id: feature.id,
+    label: feature.label,
+    hint: String(feature.view),
+    group: 'Workspace Views',
+  })),
 ];
 
 function getAssignedRoles(user: UserProfile): UserRole[] {
@@ -32,14 +61,15 @@ function isMemberOnly(user: UserProfile): boolean {
   return roles.length === 1 && roles[0] === UserRole.MEMBER;
 }
 
-function selectRoleOptionsForUser(user: UserProfile): UserRole[] {
-  return Array.from(
+function selectRoleOptionsForUser(user: UserProfile): RolePickerOption[] {
+  const builtIn = Array.from(
     new Set(
       [...getAssignedRoles(user), ...SECURITY_QUICK_ASSIGN_ROLES].filter(
         (role) => role !== UserRole.MEMBER,
       ),
     ),
   );
+  return [...builtIn, CUSTOM_ROLE_OPTION];
 }
 
 type PendingDeletionRequest = {
@@ -109,11 +139,33 @@ const UserAccessManager: React.FC = () => {
     nextRoles: UserRole[];
   } | null>(null);
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
+  const [customRolesByUserId, setCustomRolesByUserId] = useState<Record<string, CustomRoleAssignment>>({});
+  const [customRoleEditor, setCustomRoleEditor] = useState<{
+    user: UserProfile;
+    roleName: string;
+    allowedFeatures: string[];
+  } | null>(null);
 
   // Load from Service
   useEffect(() => {
       loadUsers();
   }, []);
+
+  useEffect(() => {
+    const map: Record<string, CustomRoleAssignment> = {};
+    for (const u of users) {
+      if (u.customRole) {
+        map[u.id] = {
+          id: u.customRole.id,
+          name: u.customRole.name,
+          allowedFeatures: u.customRole.allowedFeatures,
+          createdAt: u.customRole.createdAt,
+          locked: true,
+        };
+      }
+    }
+    setCustomRolesByUserId(map);
+  }, [users]);
 
   const loadDeletionRequests = useCallback(async () => {
     if (authUser?.role !== UserRole.SUPER_ADMIN) return;
@@ -310,15 +362,60 @@ const UserAccessManager: React.FC = () => {
     }
   };
 
-  const handleToggleRole = async (user: UserProfile, selectedRole: UserRole) => {
+  const handleToggleRole = async (user: UserProfile, selectedRole: RolePickerOption) => {
     const currentRoles = getAssignedRoles(user);
+    const hasCustomRole = Boolean(customRolesByUserId[user.id]);
     const currentNonMemberRoles = currentRoles.filter(
       (role) => role !== UserRole.MEMBER,
     );
+    const selectedCount = currentNonMemberRoles.length + (hasCustomRole ? 1 : 0);
+
+    if (selectedRole === CUSTOM_ROLE_OPTION) {
+      if (hasCustomRole) {
+        try {
+          const res = await workspaceFetch('/admin/users/custom-role', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: user.email }),
+          });
+          if (!res.ok) {
+            let msg = 'Failed to remove custom role.';
+            try {
+              const data = (await res.json()) as { message?: string | string[] };
+              if (typeof data?.message === 'string') msg = data.message;
+              else if (Array.isArray(data?.message)) msg = data.message.join(', ');
+            } catch {
+              /* ignore */
+            }
+            showToast(msg, 'error');
+            return;
+          }
+          await loadUsers();
+          showToast(`Custom role removed from ${user.fullName}.`, 'success');
+        } catch {
+          showToast('Network error while removing custom role.', 'error');
+        }
+        return;
+      }
+      if (selectedCount >= 2) {
+        showToast(
+          'Maksimal 2 role. Lepas salah satu role dulu untuk menambah Custom role.',
+          'error',
+        );
+        return;
+      }
+      setCustomRoleEditor({
+        user,
+        roleName: '',
+        allowedFeatures: [],
+      });
+      return;
+    }
+
     const isTryingNewRole = !currentRoles.includes(selectedRole);
     let nextRoles: UserRole[];
 
-    if (isTryingNewRole && currentNonMemberRoles.length >= 2) {
+    if (isTryingNewRole && selectedCount >= 2) {
       showToast(
         'Maksimal 2 role. Lepas salah satu role dulu untuk mengganti role ini.',
         'error',
@@ -353,6 +450,81 @@ const UserAccessManager: React.FC = () => {
     }
 
     await handleRoleChange(user, nextRoles);
+  };
+
+  const handleToggleCustomFeature = (featureId: string) => {
+    if (!customRoleEditor) return;
+    const exists = customRoleEditor.allowedFeatures.includes(featureId);
+    const nextFeatures = exists
+      ? customRoleEditor.allowedFeatures.filter((f) => f !== featureId)
+      : [...customRoleEditor.allowedFeatures, featureId];
+    setCustomRoleEditor({
+      ...customRoleEditor,
+      allowedFeatures: nextFeatures,
+    });
+  };
+
+  const handleAcceptCustomRole = async () => {
+    if (!customRoleEditor) return;
+    const roleName = customRoleEditor.roleName.trim();
+    if (!roleName) {
+      showToast('Role name is required.', 'error');
+      return;
+    }
+    if (customRoleEditor.allowedFeatures.length === 0) {
+      showToast('Choose at least one feature.', 'error');
+      return;
+    }
+    try {
+      const res = await workspaceFetch('/admin/users/custom-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: customRoleEditor.user.email,
+          name: roleName,
+          allowedFeatures: customRoleEditor.allowedFeatures,
+        }),
+      });
+      if (!res.ok) {
+        let msg = 'Failed to assign custom role.';
+        try {
+          const data = (await res.json()) as { message?: string | string[] };
+          if (typeof data?.message === 'string') msg = data.message;
+          else if (Array.isArray(data?.message)) msg = data.message.join(', ');
+        } catch {
+          /* ignore */
+        }
+        showToast(msg, 'error');
+        return;
+      }
+      await loadUsers();
+      setOpenRolePickerUserId(null);
+      showToast(
+        `Custom role "${roleName}" assigned to ${customRoleEditor.user.fullName}.`,
+        'success',
+      );
+      setCustomRoleEditor(null);
+    } catch {
+      showToast('Network error while assigning custom role.', 'error');
+    }
+  };
+
+  const handleSelectAllCustomFeatures = () => {
+    if (!customRoleEditor) return;
+    setCustomRoleEditor({
+      ...customRoleEditor,
+      allowedFeatures: Array.from(
+        new Set(CUSTOM_ROLE_FEATURE_OPTIONS.map((option) => option.id)),
+      ),
+    });
+  };
+
+  const handleClearCustomFeatures = () => {
+    if (!customRoleEditor) return;
+    setCustomRoleEditor({
+      ...customRoleEditor,
+      allowedFeatures: [],
+    });
   };
 
   const handleConfirmSuperAdminHandover = async () => {
@@ -536,6 +708,7 @@ const UserAccessManager: React.FC = () => {
                             const assignedRoles = getAssignedRoles(user);
                             const isSuperAdmin = assignedRoles.includes(UserRole.SUPER_ADMIN);
                             const roleSelectOptions = selectRoleOptionsForUser(user);
+                            const customRole = customRolesByUserId[user.id];
                             const isSavingRole = savingRoleUserId === user.id;
                             return (
                             <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
@@ -571,6 +744,11 @@ const UserAccessManager: React.FC = () => {
                                                         {role}
                                                     </span>
                                                 ))}
+                                                {customRole && (
+                                                    <span className="inline-flex items-center rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                                                        Custom: {customRole.name}
+                                                    </span>
+                                                )}
                                             </div>
                                             {isSavingRole ? (
                                                 <Loader2 size={14} className="shrink-0 animate-spin text-slate-400" />
@@ -585,14 +763,17 @@ const UserAccessManager: React.FC = () => {
                                                 </p>
                                                 <div className="space-y-1">
                                                     {roleSelectOptions.map((role) => {
-                                                        const checked = assignedRoles.includes(role);
-                                                        const selectedNonMemberCount = assignedRoles.filter(
+                                                        const checked =
+                                                          role === CUSTOM_ROLE_OPTION
+                                                            ? Boolean(customRole)
+                                                            : assignedRoles.includes(role);
+                                                        const selectedCount = assignedRoles.filter(
                                                           (assignedRole) => assignedRole !== UserRole.MEMBER,
-                                                        ).length;
+                                                        ).length + (customRole ? 1 : 0);
                                                         const disabledByLimit =
                                                           !checked &&
-                                                          role !== UserRole.MEMBER &&
-                                                          selectedNonMemberCount >= 2;
+                                                          selectedCount >= 2;
+                                                        const label = role === CUSTOM_ROLE_OPTION ? 'Custom' : role;
                                                         return (
                                                             <button
                                                                 key={role}
@@ -612,7 +793,7 @@ const UserAccessManager: React.FC = () => {
                                                                         : 'text-slate-700 hover:bg-slate-50'
                                                                 }`}
                                                             >
-                                                                <span className="font-semibold">{role}</span>
+                                                                <span className="font-semibold">{label}</span>
                                                                 <span className={`flex h-4 w-4 items-center justify-center rounded border ${
                                                                     checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-transparent'
                                                                 }`}>
@@ -677,11 +858,11 @@ const UserAccessManager: React.FC = () => {
             {deletionRequests.length === 0 ? (
               <p className="text-xs text-slate-600">No pending requests.</p>
             ) : (
-              <ul className="space-y-3 max-h-72 overflow-y-auto">
+              <ul className="h-[10.5rem] space-y-3 overflow-y-auto pr-1 snap-y snap-mandatory">
                 {deletionRequests.map((r) => (
                   <li
                     key={r.id}
-                    className="rounded-lg border border-amber-200 bg-white p-3 text-xs shadow-sm"
+                    className="h-[10.5rem] snap-start rounded-lg border border-amber-200 bg-white p-3 text-xs shadow-sm"
                   >
                     <div className="flex flex-wrap justify-between gap-2 font-semibold text-slate-900">
                       <span>{r.user.fullName}</span>
@@ -830,6 +1011,101 @@ const UserAccessManager: React.FC = () => {
                     onClick={() => void handleConfirmSuperAdminHandover()}
                   >
                     Confirm Transfer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {customRoleEditor && (
+          <div className="fixed inset-0 z-[125] bg-slate-900/35 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+            <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h3 className="text-lg font-bold text-slate-900">Create Custom Role</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Assigning to <span className="font-semibold text-slate-800">{customRoleEditor.user.fullName}</span>. Custom role is locked after accepted.
+                </p>
+              </div>
+              <div className="space-y-4 px-5 py-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Role Name</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    placeholder="e.g. Corporate Closer Lite"
+                    value={customRoleEditor.roleName}
+                    onChange={(e) =>
+                      setCustomRoleEditor({
+                        ...customRoleEditor,
+                        roleName: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Allowed Features</p>
+                  <div className="mb-2 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                      onClick={handleClearCustomFeatures}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700 hover:bg-blue-100"
+                      onClick={handleSelectAllCustomFeatures}
+                    >
+                      Select all
+                    </button>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 p-2 space-y-1">
+                    {CUSTOM_ROLE_FEATURE_OPTIONS.map((option) => {
+                      const checked = customRoleEditor.allowedFeatures.includes(option.id);
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => handleToggleCustomFeature(option.id)}
+                          className={`w-full flex items-center justify-between rounded-lg px-2 py-2 text-left text-xs ${
+                            checked ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <span>
+                            <span className="font-semibold">{option.label}</span>
+                            <span className="ml-2 text-[10px] text-slate-400">{option.hint}</span>
+                            <span className="ml-2 rounded border border-slate-200 px-1 py-0.5 text-[9px] text-slate-500">
+                              {option.group}
+                            </span>
+                          </span>
+                          <span className={`flex h-4 w-4 items-center justify-center rounded border ${
+                            checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-transparent'
+                          }`}>
+                            <Check size={11} />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                    onClick={() => setCustomRoleEditor(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                    onClick={handleAcceptCustomRole}
+                  >
+                    Accept
                   </button>
                 </div>
               </div>

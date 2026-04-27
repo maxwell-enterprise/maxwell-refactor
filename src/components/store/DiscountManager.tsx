@@ -9,6 +9,7 @@ import { useAccess } from '../../context/SecurityContext';
 import { useDialog } from '../../context/DialogContext'; // NEW
 import DiscountModal from './DiscountModal';
 import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
+import { useVoucherRealtime } from '../../hooks/useVoucherRealtime';
 
 const DiscountManager: React.FC = () => {
     const { can } = useAccess('mkt_discounts');
@@ -23,12 +24,10 @@ const DiscountManager: React.FC = () => {
     const [showModal, setShowModal] = useState(false);
     const [editingDiscount, setEditingDiscount] = useState<Discount | undefined>(undefined);
 
-    useEffect(() => {
-        loadData();
-    }, []);
-
-    const loadData = async () => {
-        setLoading(true);
+    const loadData = async (opts?: { silent?: boolean }) => {
+        if (!opts?.silent) {
+            setLoading(true);
+        }
         try {
             const data = await DiscountService.getDiscounts();
             setDiscounts(Array.isArray(data) ? data : []);
@@ -39,9 +38,19 @@ const DiscountManager: React.FC = () => {
                 'error',
             );
         } finally {
-            setLoading(false);
+            if (!opts?.silent) {
+                setLoading(false);
+            }
         }
     };
+
+    useEffect(() => {
+        void loadData();
+    }, []);
+
+    useVoucherRealtime(true, () => {
+        void loadData({ silent: true });
+    });
 
     const handleCreate = () => {
         setEditingDiscount(undefined);
@@ -91,7 +100,11 @@ const DiscountManager: React.FC = () => {
     const getScopeBadge = (scope: string) => {
         switch(scope) {
             case 'GLOBAL': return 'bg-purple-100 text-purple-700';
+            case 'PRODUCT_SPECIFIC':
+            case 'Product_SPECIFIC': return 'bg-emerald-100 text-emerald-700';
+            case 'CATEGORY_SPECIFIC': return 'bg-amber-100 text-amber-700';
             case 'EVENT_SPECIFIC': return 'bg-blue-100 text-blue-700';
+            case 'USER_ROLE_SPECIFIC': return 'bg-fuchsia-100 text-fuchsia-700';
             default: return 'bg-slate-100 text-slate-600';
         }
     };

@@ -83,6 +83,14 @@ export interface UserProfile {
   fullName: string;
   role: UserRole;
   roles?: UserRole[];
+  customRole?: {
+    id: string;
+    name: string;
+    allowedFeatures: string[];
+    createdAt: string;
+    locked: true;
+  } | null;
+  activeCustomRoleId?: string | null;
   avatarUrl?: string;
   /** From Nest session / `User.abacContext.selfProfile.phone` */
   phone?: string;
@@ -296,7 +304,14 @@ export interface CartItem {
 }
 
 export type DiscountType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'BUNDLE_VOLUME';
-export type DiscountScope = 'GLOBAL' | 'CATEGORY_SPECIFIC' | 'Product_SPECIFIC' | 'EVENT_SPECIFIC' | 'USER_ROLE_SPECIFIC' | 'ABAC_COMPLEX';
+export type DiscountScope =
+  | 'GLOBAL'
+  | 'CATEGORY_SPECIFIC'
+  | 'PRODUCT_SPECIFIC'
+  | 'Product_SPECIFIC'
+  | 'EVENT_SPECIFIC'
+  | 'USER_ROLE_SPECIFIC'
+  | 'ABAC_COMPLEX';
 
 export interface Discount {
   id: string;

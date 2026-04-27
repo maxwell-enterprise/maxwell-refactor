@@ -268,6 +268,12 @@ const Marketing: React.FC = () => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
   };
 
+  const getConversionRate = (clicks: number, conversions: number) => {
+      if (clicks <= 0) return 0;
+      const raw = (conversions / clicks) * 100;
+      return Math.min(100, raw);
+  };
+
   const categoryStats = useMemo(() => {
       const stats: Record<string, { revenue: number, clicks: number, conversions: number }> = {};
       campaigns.forEach(c => {
@@ -279,7 +285,7 @@ const Marketing: React.FC = () => {
       return Object.keys(stats).map(key => ({
           name: key.replace('_', ' '),
           revenue: stats[key].revenue,
-          conversionRate: stats[key].clicks > 0 ? (stats[key].conversions / stats[key].clicks * 100) : 0
+          conversionRate: getConversionRate(stats[key].clicks, stats[key].conversions)
       })).sort((a,b) => b.revenue - a.revenue);
   }, [campaigns]);
 
@@ -543,7 +549,7 @@ const Marketing: React.FC = () => {
                                         </div>
                                         <div className="text-center">
                                             <div className="text-[10px] text-slate-400 uppercase font-bold">Rate</div>
-                                            <div className="font-bold text-blue-600">{campaign.clicks > 0 ? (campaign.conversions/campaign.clicks*100).toFixed(1) : 0}%</div>
+                                            <div className="font-bold text-blue-600">{getConversionRate(campaign.clicks, campaign.conversions).toFixed(1)}%</div>
                                         </div>
                                     </div>
                                     {campaign.linkedDiscountCode && (
@@ -653,7 +659,10 @@ const Marketing: React.FC = () => {
                             <span className="text-slate-500 text-sm font-medium">Avg. Conversion</span>
                         </div>
                         <div className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">
-                            {campaigns.reduce((a,b)=>a+b.clicks,0) > 0 ? (campaigns.reduce((a,b)=>a+b.conversions,0) / campaigns.reduce((a,b)=>a+b.clicks,0) * 100).toFixed(2) : 0}%
+                            {getConversionRate(
+                                campaigns.reduce((a,b)=>a+b.clicks,0),
+                                campaigns.reduce((a,b)=>a+b.conversions,0),
+                            ).toFixed(2)}%
                         </div>
                     </div>
                 </div>

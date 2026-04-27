@@ -48,6 +48,14 @@ export const UserService = {
                     fullName: string;
                     role: string;
                     roles?: string[];
+                    customRole?: {
+                        id: string;
+                        name: string;
+                        allowedFeatures: string[];
+                        createdAt: string;
+                        locked: true;
+                    } | null;
+                    activeCustomRoleId?: string | null;
                     avatarUrl?: string | null;
                     provider?: 'email' | 'google';
                 }>>('/admin/internal-users');
@@ -62,6 +70,11 @@ export const UserService = {
                         fullName: r.fullName,
                         role: parseAppRoleString(r.role),
                         roles,
+                        customRole: r.customRole ?? null,
+                        activeCustomRoleId:
+                          typeof r.activeCustomRoleId === 'string'
+                            ? r.activeCustomRoleId
+                            : null,
                         avatarUrl: r.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.fullName)}&background=random`,
                         provider: r.provider ?? 'email',
                     };

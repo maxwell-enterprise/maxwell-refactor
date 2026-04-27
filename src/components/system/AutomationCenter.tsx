@@ -220,15 +220,22 @@ const EventSimulator = () => {
                     payload: finalPayload as Record<string, unknown>,
                 });
                 showToast(
-                    `Event ${definition.id} logged to queue (${res.queueId}). Check logs/queue.`,
+                    `Permintaan otomatisasi berhasil dikirim dan sedang diproses di background. Pantau progresnya di Automation Queue (Ref: ${res.queueId}).`,
                     'success',
                 );
             } else {
                 await EventBus.emit(definition.id as SystemTriggerType, finalPayload);
-                showToast(`Event ${definition.id} fired successfully. Check logs/queue.`, 'success');
+                showToast(
+                    `Permintaan otomatisasi berhasil dikirim. Pantau progresnya di Automation Queue.`,
+                    'success',
+                );
             }
-        } catch {
-            showToast('Failed to fire event.', 'error');
+        } catch (error) {
+            const detail =
+                error instanceof Error && error.message.trim()
+                    ? ` ${error.message.trim()}`
+                    : '';
+            showToast(`Failed to dispatch automation event.${detail}`, 'error');
         }
         setIsFiring(false);
     };

@@ -82,6 +82,15 @@ export interface UserProfile {
   email: string;
   fullName: string;
   role: UserRole;
+  roles?: UserRole[];
+  customRole?: {
+    id: string;
+    name: string;
+    allowedFeatures: string[];
+    createdAt: string;
+    locked: true;
+  } | null;
+  activeCustomRoleId?: string | null;
   avatarUrl?: string;
   phone?: string;
   provider: 'email' | 'google';

@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Discount } from '../../types/index';
 import { AbacCondition } from '../../types/pricing'; // Fixed Import
-import { X, Save, Ticket, Calendar, Users, ShieldCheck, DollarSign } from 'lucide-react';
+import { X, Save, Ticket, Calendar, Users, ShieldCheck } from 'lucide-react';
 
 interface DiscountModalProps {
     isOpen: boolean;
@@ -11,26 +11,44 @@ interface DiscountModalProps {
     initialData?: Discount;
 }
 
+const buildDefaultDiscount = (): Partial<Discount> => ({
+    code: '',
+    title: '',
+    description: '',
+    type: 'PERCENTAGE',
+    value: 0,
+    scope: 'GLOBAL',
+    validFrom: new Date().toISOString().slice(0, 10),
+    validUntil: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().slice(0, 10),
+    maxUsageLimit: 100,
+    isFeatured: false,
+    conditions: {}
+});
+
 const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
-    const [formData, setFormData] = useState<Partial<Discount>>(initialData || {
-        code: '',
-        title: '',
-        description: '',
-        type: 'PERCENTAGE',
-        value: 0,
-        scope: 'GLOBAL',
-        validFrom: new Date().toISOString().slice(0, 10),
-        validUntil: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().slice(0, 10),
-        maxUsageLimit: 100,
-        isFeatured: false,
-        conditions: {} // Initialize ABAC
-    });
+    const [formData, setFormData] = useState<Partial<Discount>>(initialData || buildDefaultDiscount());
+    const [targetIdsText, setTargetIdsText] = useState(
+        Array.isArray(initialData?.targetIds) ? initialData!.targetIds.join(', ') : '',
+    );
 
     const [abac, setAbac] = useState<AbacCondition>(initialData?.conditions || {
         targetRegions: [],
         targetCompanies: [],
         minTenureMonths: 0
     });
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setFormData(initialData || buildDefaultDiscount());
+        setTargetIdsText(
+            Array.isArray(initialData?.targetIds) ? initialData.targetIds.join(', ') : '',
+        );
+        setAbac(initialData?.conditions || {
+            targetRegions: [],
+            targetCompanies: [],
+            minTenureMonths: 0
+        });
+    }, [initialData, isOpen]);
 
     if (!isOpen) return null;
 
@@ -44,6 +62,10 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
             type: formData.type as any,
             value: Number(formData.value),
             scope: formData.scope as any,
+            targetIds: targetIdsText
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean),
             validFrom: formData.validFrom || new Date().toISOString(),
             validUntil: formData.validUntil || new Date().toISOString(),
             maxUsageLimit: Number(formData.maxUsageLimit),
@@ -61,6 +83,38 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
         const updated = current.includes(value) ? current.filter(v => v !== value) : [...current, value];
         setAbac({ ...abac, [field]: updated });
     };
+
+    const targetIdsLabel = (() => {
+        switch (formData.scope) {
+            case 'PRODUCT_SPECIFIC':
+            case 'Product_SPECIFIC':
+                return 'Target Product IDs';
+            case 'CATEGORY_SPECIFIC':
+                return 'Target Categories';
+            case 'EVENT_SPECIFIC':
+                return 'Target Event IDs';
+            case 'USER_ROLE_SPECIFIC':
+                return 'Target Roles';
+            default:
+                return 'Target IDs';
+        }
+    })();
+
+    const targetIdsHint = (() => {
+        switch (formData.scope) {
+            case 'PRODUCT_SPECIFIC':
+            case 'Product_SPECIFIC':
+                return 'Comma-separated product IDs. Only matching products receive the discount in checkout.';
+            case 'CATEGORY_SPECIFIC':
+                return 'Comma-separated product categories, e.g. Packages, Token.';
+            case 'EVENT_SPECIFIC':
+                return 'Comma-separated event-linked product or event IDs.';
+            case 'USER_ROLE_SPECIFIC':
+                return 'Comma-separated roles exactly as used by the app, e.g. Member, Sales.';
+            default:
+                return 'Leave empty for global campaigns.';
+        }
+    })();
 
     return (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -111,6 +165,41 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
                                     type="number" required className="w-full p-3 border border-slate-300 rounded-xl text-sm"
                                     value={formData.value} onChange={e => setFormData({...formData, value: Number(e.target.value)})}
                                 />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Scope</label>
+                                <select
+                                    className="w-full p-3 border border-slate-300 rounded-xl text-sm bg-white"
+                                    value={formData.scope}
+                                    onChange={e => setFormData({ ...formData, scope: e.target.value as any })}
+                                >
+                                    <option value="GLOBAL">Global</option>
+                                    <option value="PRODUCT_SPECIFIC">Product specific</option>
+                                    <option value="CATEGORY_SPECIFIC">Category specific</option>
+                                    <option value="EVENT_SPECIFIC">Event specific</option>
+                                    <option value="USER_ROLE_SPECIFIC">User role specific</option>
+                                    <option value="ABAC_COMPLEX">ABAC complex</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">{targetIdsLabel}</label>
+                                <input
+                                    type="text"
+                                    className="w-full p-3 border border-slate-300 rounded-xl text-sm"
+                                    placeholder={
+                                        formData.scope === 'PRODUCT_SPECIFIC' || formData.scope === 'Product_SPECIFIC'
+                                            ? 'PROD-123, PROD-456'
+                                            : formData.scope === 'USER_ROLE_SPECIFIC'
+                                                ? 'Member, Sales'
+                                                : 'Optional target IDs'
+                                    }
+                                    value={targetIdsText}
+                                    onChange={e => setTargetIdsText(e.target.value)}
+                                />
+                                <p className="mt-1 text-[10px] text-slate-400">{targetIdsHint}</p>
                             </div>
                         </div>
 
