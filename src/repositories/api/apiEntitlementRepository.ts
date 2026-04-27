@@ -1,4 +1,4 @@
-import { IEntitlementRepository } from '../contracts';
+import { CreateWalletGiftInput, IEntitlementRepository } from '../contracts';
 import {
   CorporateTeamMember,
   GiftAllocation,
@@ -101,6 +101,41 @@ export class ApiEntitlementRepository implements IEntitlementRepository {
         body: JSON.stringify(gift),
       },
     );
+  }
+
+  async createGift(input: CreateWalletGiftInput): Promise<GiftAllocation> {
+    return apiRequest<GiftAllocation>('/wallet/gifts', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async claimGift(token: string): Promise<WalletItem> {
+    const raw = await apiRequest<Record<string, unknown>>(
+      `/wallet/gifts/claim?token=${encodeURIComponent(token)}`,
+    );
+    return normalizeWalletItem(raw);
+  }
+
+  async revokeGift(id: string, reason?: string): Promise<GiftAllocation> {
+    return apiRequest<GiftAllocation>(`/wallet/gifts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async getGiftInbox(userEmail: string): Promise<GiftAllocation[]> {
+    return apiRequest<GiftAllocation[]>(
+      `/wallet/gifts/inbox?email=${encodeURIComponent(userEmail)}`,
+    );
+  }
+
+  async getSentGifts(): Promise<GiftAllocation[]> {
+    return apiRequest<GiftAllocation[]>('/wallet/gifts/sent');
+  }
+
+  async getReceivedGifts(): Promise<GiftAllocation[]> {
+    return apiRequest<GiftAllocation[]>('/wallet/gifts/received');
   }
 
   async getTeamMembers(orgId: string): Promise<CorporateTeamMember[]> {

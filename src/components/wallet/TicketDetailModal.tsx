@@ -172,6 +172,7 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
                                         }
                                         size={160}
                                         showLabel={false}
+                                        downloadFileName={`ticket-${item.id}`}
                                         className="opacity-90 transition-opacity group-hover:opacity-100"
                                      />
                                      <div className="mt-4 flex items-center justify-center text-green-600 text-[10px] font-bold uppercase tracking-wider bg-green-50 py-1.5 rounded-lg">

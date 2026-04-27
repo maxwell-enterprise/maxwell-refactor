@@ -491,7 +491,12 @@ const EventsAdmin: React.FC = () => {
                   <h1 className="text-4xl font-bold text-slate-900 mb-2">{projectorEvent.name}</h1>
                   <p className="text-xl text-slate-500 mb-8">Scan to Self Check-In</p>
                   <div className="flex justify-center mb-8">
-                      <QRCodeDisplay data={`EVENT_ATTENDANCE:${projectorEvent.id}`} size={400} showLabel={false} />
+                      <QRCodeDisplay
+                        data={`EVENT_ATTENDANCE:${projectorEvent.id}`}
+                        size={400}
+                        showLabel={false}
+                        downloadFileName={`event-attendance-${projectorEvent.id}`}
+                      />
                   </div>
               </div>
           </div>

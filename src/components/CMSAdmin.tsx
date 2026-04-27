@@ -5,6 +5,7 @@ import { ContentPost, ContentType, ContentStatus } from '../types/index';
 import { STORE_PRODUCTS } from '../constants';
 import { AIService } from '../services/aiService';
 import { useToast } from '../context/ToastContext';
+import { useAccess } from '../context/SecurityContext';
 import { 
     LayoutTemplate, PenTool, BarChart3, Plus, Search, 
     Edit3, Save, Sparkles, Image as ImageIcon, Link
@@ -14,6 +15,8 @@ import RichTextEditor from './communication/RichTextEditor'; // REUSED COMPONENT
 
 const CMSAdmin: React.FC = () => {
     const { showToast } = useToast();
+    const { can } = useAccess('cms_content');
+    const canManageContent = can('WRITE');
     const [posts, setPosts] = useState<ContentPost[]>([]);
     const [activeTab, setActiveTab] = useState<'LIST' | 'EDITOR' | 'CALENDAR' | 'STATS'>('LIST');
 
@@ -32,6 +35,10 @@ const CMSAdmin: React.FC = () => {
     };
 
     const handleNewPost = () => {
+        if (!canManageContent) {
+            showToast('You do not have permission to create content.', 'error');
+            return;
+        }
         setEditingPost({
             title: '',
             body: '',
@@ -44,11 +51,19 @@ const CMSAdmin: React.FC = () => {
     };
 
     const handleEditPost = (post: ContentPost) => {
+        if (!canManageContent) {
+            showToast('You do not have permission to edit content.', 'error');
+            return;
+        }
         setEditingPost({ ...post, publishDate: post.publishDate.slice(0, 16) });
         setActiveTab('EDITOR');
     };
 
     const handleSave = async () => {
+        if (!canManageContent) {
+            showToast('You do not have permission to save content.', 'error');
+            return;
+        }
         if (!editingPost.title) {
             showToast('Title is required', 'error');
             return;
@@ -86,6 +101,10 @@ const CMSAdmin: React.FC = () => {
 
     const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(num);
 
+    if (!can('READ')) {
+        return <div className="p-8 text-center text-slate-400">Access Restricted</div>;
+    }
+
     // --- VIEWS ---
 
     const renderList = () => (
@@ -95,7 +114,7 @@ const CMSAdmin: React.FC = () => {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
                     <input type="text" placeholder="Search content..." className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20" />
                 </div>
-                <button type="button" onClick={handleNewPost} className="shrink-0 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-blue-700 w-full sm:w-auto">
+                <button type="button" onClick={handleNewPost} disabled={!canManageContent} className="shrink-0 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto">
                     <Plus size={16} /> Create Content
                 </button>
             </div>
@@ -140,7 +159,7 @@ const CMSAdmin: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="px-3 sm:px-5 py-3 sm:py-4 text-right align-top">
-                                    <button type="button" onClick={() => handleEditPost(post)} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors inline-flex touch-target sm:min-h-0 sm:min-w-0"><Edit3 size={18}/></button>
+                                    <button type="button" onClick={() => handleEditPost(post)} disabled={!canManageContent} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors inline-flex touch-target sm:min-h-0 sm:min-w-0 disabled:opacity-40 disabled:cursor-not-allowed"><Edit3 size={18}/></button>
                                 </td>
                             </tr>
                         ))}
@@ -310,7 +329,7 @@ const CMSAdmin: React.FC = () => {
 
                 <div className="flex gap-3 pt-2">
                     <button onClick={() => setActiveTab('LIST')} className="flex-1 py-2 border border-slate-300 rounded-lg text-sm text-slate-600 font-bold hover:bg-slate-50">Cancel</button>
-                    <button onClick={handleSave} className="flex-[2] py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center justify-center">
+                    <button onClick={handleSave} disabled={!canManageContent} className="flex-[2] py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
                         <Save size={16} className="mr-2" /> Save Content
                     </button>
                 </div>

@@ -35,6 +35,16 @@ export interface ProductListQuery {
     isActive?: boolean;
 }
 
+export interface CreateWalletGiftInput {
+    walletItemId: string;
+    transferAmount?: number;
+    recipientName?: string;
+    recipientEmail?: string;
+    recipientPhone?: string;
+    deliveryMethod: 'LINK' | 'EMAIL' | 'WHATSAPP' | 'DIRECT';
+    giftMessage?: string;
+}
+
 export interface IMemberRepository {
     getAll(): Promise<Member[]>;
     getById(id: string): Promise<Member | null>;
@@ -156,6 +166,12 @@ export interface IEntitlementRepository {
 
     getGiftAllocations(): Promise<GiftAllocation[]>;
     upsertGiftAllocation(gift: GiftAllocation): Promise<void>;
+    createGift(input: CreateWalletGiftInput): Promise<GiftAllocation>;
+    claimGift(token: string): Promise<WalletItem>;
+    revokeGift(id: string, reason?: string): Promise<GiftAllocation>;
+    getGiftInbox(userEmail: string): Promise<GiftAllocation[]>;
+    getSentGifts(): Promise<GiftAllocation[]>;
+    getReceivedGifts(): Promise<GiftAllocation[]>;
 
     getTeamMembers(orgId: string): Promise<CorporateTeamMember[]>;
     upsertTeamMember(member: CorporateTeamMember & { orgId: string }): Promise<void>;

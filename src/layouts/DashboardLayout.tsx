@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import CommandPalette from '../components/common/CommandPalette'; 
 import { ViewState, UserRole } from '../types/index';
-import { Menu, Search, UserCircle, ChevronDown, CheckCircle, RefreshCw } from 'lucide-react';
+import { Menu, Search, UserCircle, ChevronDown, CheckCircle, RefreshCw, Gift } from 'lucide-react';
 import { BellIcon } from '../components/ui/bell';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -12,10 +12,13 @@ import {
   UnifiedTask,
   MAXWELL_TASKS_UPDATED_EVENT,
 } from '../services/taskService';
+import { EntitlementService } from '../services/entitlementService';
 import PersonaSwitcherModal from '../components/auth/PersonaSwitcherModal'; // NEW IMPORT
 import { useToast } from '../context/ToastContext';
 import { useDialog } from '../context/DialogContext';
 import { markRbacInboxRead } from '../lib/rbacInboxClient';
+import GiftClaimModal from '../components/wallet/GiftClaimModal';
+import type { GiftAllocation } from '../types/access';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -40,6 +43,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   // Notification State
   const [showNotifications, setShowNotifications] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<UnifiedTask[]>([]);
+  const [pendingGifts, setPendingGifts] = useState<GiftAllocation[]>([]);
+  const [activeGift, setActiveGift] = useState<GiftAllocation | null>(null);
+  const [isLoadingGiftInbox, setIsLoadingGiftInbox] = useState(false);
   /** Digest of tasks last marked "seen" in the bell; new/changed tasks bring the badge back. */
   const [notificationsSeenDigest, setNotificationsSeenDigest] = useState<string | null>(null);
   const [isHeaderAvatarBroken, setIsHeaderAvatarBroken] = useState(false);
@@ -48,13 +54,39 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
     () => pendingTasks.map((t) => t.id).sort().join('|'),
     [pendingTasks],
   );
+  const giftsDigest = useMemo(
+    () => pendingGifts.map((gift) => gift.id).sort().join('|'),
+    [pendingGifts],
+  );
+  const notificationsDigest = useMemo(
+    () => `${tasksDigest}::${giftsDigest}`,
+    [tasksDigest, giftsDigest],
+  );
 
   const hasUnreadNotifications =
-    pendingTasks.length > 0 && notificationsSeenDigest !== tasksDigest;
+    (pendingTasks.length > 0 || pendingGifts.length > 0) && notificationsSeenDigest !== notificationsDigest;
 
   const markNotificationsAsSeen = useCallback(() => {
-    setNotificationsSeenDigest(tasksDigest);
-  }, [tasksDigest]);
+    setNotificationsSeenDigest(notificationsDigest);
+  }, [notificationsDigest]);
+
+  const loadGiftInbox = useCallback(async () => {
+    const email = user?.email?.trim();
+    if (!email || userRole === UserRole.GUEST) {
+      setPendingGifts([]);
+      return;
+    }
+
+    setIsLoadingGiftInbox(true);
+    try {
+      const gifts = await EntitlementService.getGiftInbox(email);
+      setPendingGifts(gifts.filter((gift) => gift.status === 'PENDING'));
+    } catch {
+      setPendingGifts([]);
+    } finally {
+      setIsLoadingGiftInbox(false);
+    }
+  }, [user?.email, userRole]);
 
   // Hotkey Listener for Cmd+K / Ctrl+K
   useEffect(() => {
@@ -76,6 +108,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
           });
       }
   }, [userRole]);
+
+  useEffect(() => {
+      void loadGiftInbox();
+  }, [loadGiftInbox]);
 
   useEffect(() => {
       if (userRole === UserRole.GUEST) return;
@@ -131,6 +167,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
     }
     onNavigate(ViewState.MY_TASKS);
     setShowNotifications(false);
+  };
+
+  const handleGiftNotificationClick = (gift: GiftAllocation) => {
+    markNotificationsAsSeen();
+    setShowNotifications(false);
+    setActiveGift(gift);
   };
 
   /** Close mobile drawer after navigation; desktop layout ignores `isSidebarOpen` via `lg:translate-x-0`. */
@@ -316,31 +358,63 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                             <div className="absolute top-full right-0 mt-4 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-fade-in-up origin-top-right">
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 backdrop-blur-sm">
                                     <h4 className="font-bold text-sm text-slate-800">Notifications</h4>
-                                    <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{pendingTasks.length} New</span>
+                                    <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                      {pendingTasks.length + pendingGifts.length} New
+                                    </span>
                                 </div>
                                 <div className="max-h-72 overflow-y-auto custom-scrollbar">
-                                    {pendingTasks.length === 0 ? (
+                                    {isLoadingGiftInbox && pendingTasks.length === 0 && pendingGifts.length === 0 ? (
+                                        <div className="p-8 text-center text-slate-400">
+                                            <RefreshCw size={32} className="mx-auto mb-3 animate-spin text-slate-200"/>
+                                            <p className="text-xs">Loading invitations...</p>
+                                        </div>
+                                    ) : pendingTasks.length === 0 && pendingGifts.length === 0 ? (
                                         <div className="p-8 text-center text-slate-400">
                                             <CheckCircle size={32} className="mx-auto mb-3 text-slate-200"/>
                                             <p className="text-xs">You're all caught up!</p>
                                         </div>
                                     ) : (
-                                        pendingTasks.slice(0, 5).map(task => (
-                                            <button 
-                                                key={task.id}
-                                                onClick={() => void handleNotificationItemClick(task)}
-                                                className="w-full text-left p-4 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors group"
-                                            >
-                                                <div className="flex justify-between items-start mb-1.5">
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${task.priority === 'HIGH' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                                        {task.priority}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{new Date(task.createdAt).toLocaleDateString()}</span>
-                                                </div>
-                                                <p className="text-sm font-semibold text-slate-800 truncate mb-0.5">{task.title}</p>
-                                                <p className="text-xs text-slate-500 truncate">{task.description}</p>
-                                            </button>
-                                        ))
+                                        <>
+                                          {pendingGifts.slice(0, 5).map((gift) => (
+                                              <button
+                                                  key={gift.id}
+                                                  onClick={() => handleGiftNotificationClick(gift)}
+                                                  className="w-full text-left p-4 hover:bg-emerald-50/80 border-b border-slate-50 last:border-0 transition-colors group"
+                                              >
+                                                  <div className="flex justify-between items-start mb-1.5">
+                                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-100">
+                                                          <Gift size={10} />
+                                                          GIFT
+                                                      </span>
+                                                      <span className="text-[10px] text-slate-400 group-hover:text-slate-500">
+                                                        {new Date(gift.createdAt).toLocaleDateString()}
+                                                      </span>
+                                                  </div>
+                                                  <p className="text-sm font-semibold text-slate-800 truncate mb-0.5">
+                                                    Accept {gift.itemName}
+                                                  </p>
+                                                  <p className="text-xs text-slate-500 truncate">
+                                                    From {gift.sourceUserName} · Tap to accept
+                                                  </p>
+                                              </button>
+                                          ))}
+                                          {pendingTasks.slice(0, 5).map(task => (
+                                              <button 
+                                                  key={task.id}
+                                                  onClick={() => void handleNotificationItemClick(task)}
+                                                  className="w-full text-left p-4 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors group"
+                                              >
+                                                  <div className="flex justify-between items-start mb-1.5">
+                                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${task.priority === 'HIGH' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                          {task.priority}
+                                                      </span>
+                                                      <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{new Date(task.createdAt).toLocaleDateString()}</span>
+                                                  </div>
+                                                  <p className="text-sm font-semibold text-slate-800 truncate mb-0.5">{task.title}</p>
+                                                  <p className="text-xs text-slate-500 truncate">{task.description}</p>
+                                              </button>
+                                          ))}
+                                        </>
                                     )}
                                 </div>
                                 <div className="p-2 border-t border-slate-100 bg-slate-50">
@@ -401,6 +475,16 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
         {/* New Persona Switcher Modal */}
         {showPersonaModal && (
             <PersonaSwitcherModal onClose={() => setShowPersonaModal(false)} />
+        )}
+        
+        {activeGift && (
+          <GiftClaimModal
+            gift={activeGift}
+            onClose={() => setActiveGift(null)}
+            onClaimed={() => {
+              void loadGiftInbox();
+            }}
+          />
         )}
       </div>
     </div>

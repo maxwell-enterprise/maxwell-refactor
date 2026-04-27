@@ -212,7 +212,11 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                   Gate scan
                 </p>
                 <div className="rounded-xl bg-white p-2 shadow-inner">
-                  <QRCodeDisplay data={memberHub.gateScanQrPayload} size={112} />
+                  <QRCodeDisplay
+                    data={memberHub.gateScanQrPayload}
+                    size={112}
+                    downloadFileName={`membership-${memberHub.cardNumber || memberHub.memberPublicId || memberHub.appUserId || 'gate-pass'}`}
+                  />
                 </div>
               </div>
             </div>
