@@ -236,7 +236,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                         <th className="px-6 py-4 w-12 text-center">#</th>
                                         <th className="px-6 py-4 w-1/4">Recipient Name</th>
                                         <th className="px-6 py-4 w-1/4">Email</th>
-                                        <th className="px-6 py-4 w-1/5">WhatsApp (Ex: 0812...)</th>
+                                        <th className="px-6 py-4 w-1/5">WhatsApp (Ex: +62812...)</th>
                                         {activeTab === 'HISTORY' && <th className="px-6 py-4 w-32 text-center">Status</th>}
                                         {activeTab === 'HISTORY' && <th className="px-6 py-4 text-right">Actions</th>}
                                     </tr>
@@ -277,7 +277,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                                         <span className="text-slate-500 text-xs font-mono">{row.recipientPhone || '-'}</span>
                                                     ) : (
                                                         <input 
-                                                            type="tel" placeholder="08..." className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            type="tel" placeholder="+62..." className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                                                             value={row.recipientPhone}
                                                             onChange={(e) => updateRow(idx, 'recipientPhone', e.target.value)}
                                                         />

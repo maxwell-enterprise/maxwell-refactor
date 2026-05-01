@@ -17,7 +17,6 @@ import PersonaSwitcherModal from '../components/auth/PersonaSwitcherModal'; // N
 import { useToast } from '../context/ToastContext';
 import { useDialog } from '../context/DialogContext';
 import { markRbacInboxRead } from '../lib/rbacInboxClient';
-import GiftClaimModal from '../components/wallet/GiftClaimModal';
 import type { GiftAllocation } from '../types/access';
 
 interface DashboardLayoutProps {
@@ -44,7 +43,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   const [showNotifications, setShowNotifications] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<UnifiedTask[]>([]);
   const [pendingGifts, setPendingGifts] = useState<GiftAllocation[]>([]);
-  const [activeGift, setActiveGift] = useState<GiftAllocation | null>(null);
   const [isLoadingGiftInbox, setIsLoadingGiftInbox] = useState(false);
   /** Digest of tasks last marked "seen" in the bell; new/changed tasks bring the badge back. */
   const [notificationsSeenDigest, setNotificationsSeenDigest] = useState<string | null>(null);
@@ -178,7 +176,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   const handleGiftNotificationClick = (gift: GiftAllocation) => {
     markNotificationsAsSeen();
     setShowNotifications(false);
-    setActiveGift(gift);
+    onNavigate(ViewState.WALLET);
   };
 
   /** Close mobile drawer after navigation; desktop layout ignores `isSidebarOpen` via `lg:translate-x-0`. */
@@ -402,7 +400,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                                                       </span>
                                                   </div>
                                                   <p className="text-sm font-semibold text-slate-800 truncate mb-0.5">
-                                                    Accept {gift.itemName}
+                                                    {gift.itemName}
                                                   </p>
                                                   <p className="text-xs text-slate-500 truncate">
                                                     From {gift.sourceUserName} · Tap to accept
@@ -486,16 +484,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
         {/* New Persona Switcher Modal */}
         {showPersonaModal && (
             <PersonaSwitcherModal onClose={() => setShowPersonaModal(false)} />
-        )}
-        
-        {activeGift && (
-          <GiftClaimModal
-            gift={activeGift}
-            onClose={() => setActiveGift(null)}
-            onClaimed={() => {
-              void loadGiftInbox();
-            }}
-          />
         )}
       </div>
     </div>

@@ -181,8 +181,12 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
         cache: 'no-store',
       });
       if (!health.ok) {
+        const message =
+          health.status === 404
+            ? 'Auth route /fe/* is not being proxied to Nest. Restart the frontend with the updated rewrite or point the API base URL directly to :3002.'
+            : 'Auth API is not ready. Start the Nest server (e.g. :3002), then try Google again.';
         showToast(
-          'Auth API is not ready. Start the Nest server (e.g. :3002), then try Google again.',
+          message,
           'error',
         );
         return;
