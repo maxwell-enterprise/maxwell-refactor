@@ -5,6 +5,7 @@ import { EntitlementService } from '../../services/entitlementService';
 import { WhatsAppService } from '../../services/whatsappService';
 import { X, Send, Trash2, CheckCircle, Info, MessageSquare, Mail, RotateCcw, User, Loader2, List, UserPlus } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { useDialog } from '../../context/DialogContext';
 
 interface TicketDistributionModalProps {
     donorId: string;
@@ -13,6 +14,8 @@ interface TicketDistributionModalProps {
     onClose: () => void;
     onSuccess: () => void;
 }
+
+const DEFAULT_WHATSAPP_PREFIX = '+62';
 
 // Helper to normalize phone to ID format (62) if starts with 08
 const normalizePhone = (phone: string): string => {
@@ -23,10 +26,20 @@ const normalizePhone = (phone: string): string => {
     return clean; // Assume user typed correct country code otherwise (e.g. 628..., 31...)
 };
 
+const getInitialWhatsappValue = (phone: string): string => {
+    return phone.trim() ? phone : DEFAULT_WHATSAPP_PREFIX;
+};
+
+const hasMeaningfulPhoneNumber = (phone: string): boolean => {
+    const normalized = normalizePhone(phone);
+    return normalized.length > 2;
+};
+
 const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({ 
     donorId, donorName, selectedTickets, onClose, onSuccess 
 }) => {
     const { showToast } = useToast();
+    const { confirm } = useDialog();
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<'ASSIGN' | 'HISTORY'>('ASSIGN');
@@ -67,7 +80,9 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                     status: 'AVAILABLE',
                     recipientName: typeof ticket.meta?.recipientName === 'string' ? ticket.meta.recipientName : '',
                     recipientEmail: typeof ticket.meta?.recipientEmail === 'string' ? ticket.meta.recipientEmail : '',
-                    recipientPhone: typeof ticket.meta?.recipientPhone === 'string' ? ticket.meta.recipientPhone : '',
+                    recipientPhone: getInitialWhatsappValue(
+                        typeof ticket.meta?.recipientPhone === 'string' ? ticket.meta.recipientPhone : ''
+                    ),
                     originalTicket: ticket,
                 }));
 
@@ -132,7 +147,10 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
         try {
             // Filter rows that are NEWLY filled and AVAILABLE
             const toDistribute = rows.filter(r => 
-                r.status === 'AVAILABLE' && r.recipientName && r.recipientEmail && r.recipientPhone
+                r.status === 'AVAILABLE' &&
+                r.recipientName.trim() &&
+                r.recipientEmail.trim() &&
+                hasMeaningfulPhoneNumber(r.recipientPhone)
             );
 
             if (toDistribute.length === 0) {
@@ -161,7 +179,17 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     };
 
     const handleRevoke = async (allocationId: string) => {
-        if (!confirm("Are you sure you want to revoke this invitation? The ticket will return to your pool.")) return;
+        const approved = await confirm({
+            title: 'Revoke ticket invitation?',
+            message: 'This will cancel the delivery and return the ticket to your available pool.',
+            variant: 'warning',
+            confirmLabel: 'Yes, Revoke',
+            cancelLabel: 'No',
+            confirmIcon: <CheckCircle size={16} />,
+            cancelIcon: <X size={16} />,
+            icon: <RotateCcw size={24} />,
+        });
+        if (!approved) return;
         
         try {
             await EntitlementService.revokeTicketGift(donorId, allocationId);
@@ -273,11 +301,11 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                     {isLocked ? (
+                                                         {isLocked ? (
                                                         <span className="text-slate-500 text-xs font-mono">{row.recipientPhone || '-'}</span>
                                                     ) : (
                                                         <input 
-                                                            type="tel" placeholder="+62..." className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            type="tel" placeholder="8123456789" className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                                                             value={row.recipientPhone}
                                                             onChange={(e) => updateRow(idx, 'recipientPhone', e.target.value)}
                                                         />

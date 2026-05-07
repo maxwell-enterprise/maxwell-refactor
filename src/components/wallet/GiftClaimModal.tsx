@@ -5,6 +5,7 @@ import { GiftAllocation } from '../../types/access';
 import { EntitlementService } from '../../services/entitlementService';
 import { CheckCircle, Clock, Gift, Loader2, Mail, Phone, X } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { useDialog } from '../../context/DialogContext';
 
 interface GiftClaimModalProps {
   gift: GiftAllocation;
@@ -21,9 +22,22 @@ const formatExpiresAt = (value?: string) => {
 
 const GiftClaimModal: React.FC<GiftClaimModalProps> = ({ gift, onClose, onClaimed }) => {
   const { showToast } = useToast();
+  const { confirm } = useDialog();
   const [loading, setLoading] = useState(false);
 
   const handleAccept = async () => {
+    const approved = await confirm({
+      title: 'Accept this ticket?',
+      message: `This action will add "${gift.itemName}" to your wallet and complete the transfer to your account.`,
+      variant: 'success',
+      confirmLabel: 'Yes, Accept',
+      cancelLabel: 'No',
+      confirmIcon: <CheckCircle size={16} />,
+      cancelIcon: <X size={16} />,
+      icon: <Gift size={24} />,
+    });
+    if (!approved) return;
+
     setLoading(true);
     try {
       await EntitlementService.claimTicketGift(gift.claimToken);

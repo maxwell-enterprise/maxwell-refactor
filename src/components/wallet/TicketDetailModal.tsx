@@ -21,6 +21,8 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
         setActiveTab, 
         availableTabs, 
         joinOnlineSession, 
+        canJoinOnlineSession,
+        joinWindowStart,
         handleSelectSession,
         handleBackToSeries,
         openSecureLink,
@@ -219,13 +221,23 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
 
                             <button 
                                 onClick={joinOnlineSession}
-                                disabled={isJoining}
-                                className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-xl shadow-indigo-200 hover:bg-indigo-700 flex items-center justify-center gap-2 transition-all active:scale-[0.98] animate-pulse-slow"
+                                disabled={isJoining || !canJoinOnlineSession}
+                                className={`w-full py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+                                    canJoinOnlineSession
+                                        ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-200 hover:bg-indigo-700 animate-pulse-slow'
+                                        : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                }`}
                             >
                                 {isJoining ? 'Connecting...' : (isAttended ? 'Re-Join Session' : 'Join Session Now')}
                                 {!isJoining && <PlayCircle size={18}/>}
                             </button>
-                            
+
+                            {!canJoinOnlineSession && joinWindowStart && (
+                                <p className="text-[11px] text-center text-amber-600 -mt-2">
+                                    Join session available from {joinWindowStart.toLocaleString()}
+                                </p>
+                            )}
+                             
                             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
                                 <p className="text-[10px] text-slate-400">
                                     Link protected for: <b>{item.meta?.recipientName || 'You'}</b>

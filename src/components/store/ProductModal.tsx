@@ -102,7 +102,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     const [selectedSku, setSelectedSku] = useState('');
     const [selectedEventId, setSelectedEventId] = useState('');
     const [selectedEventTier, setSelectedEventTier] = useState('');
-    const [ticketHierarchyFilter, setTicketHierarchyFilter] = useState('ALL');
+    const [ticketTypeFilter, setTicketTypeFilter] = useState<'SOLO' | 'CONTAINER' | 'SESSION'>('SOLO');
+    const [ticketTimeFilter, setTicketTimeFilter] = useState<'PAST' | 'FUTURE'>('FUTURE');
     const [creditTag, setCreditTag] = useState('');
     const [digitalUrl, setDigitalUrl] = useState('');
     const [itemLabel, setItemLabel] = useState('');
@@ -432,22 +433,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     };
 
     const currentSelectedEvent = events.find(e => e.id === selectedEventId);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
     const ticketSelectableEvents = events
         .filter((event) => !event.isRecurring)
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const ticketHierarchyContainers = ticketSelectableEvents
-        .filter((event) => event.type === 'CONTAINER')
-        .sort((a, b) => a.name.localeCompare(b.name));
     const visibleTicketEvents = ticketSelectableEvents.filter((event) => {
-        if (ticketHierarchyFilter === 'ALL') {
-            return true;
-        }
+        const matchesType = event.type === ticketTypeFilter;
+        const eventDate = new Date(event.date);
+        const matchesTime =
+            ticketTimeFilter === 'PAST'
+                ? eventDate.getTime() < todayStart.getTime()
+                : eventDate.getTime() >= todayStart.getTime();
 
-        if (ticketHierarchyFilter === 'INDEPENDENT') {
-            return event.type === 'SOLO';
-        }
-
-        return event.id === ticketHierarchyFilter || event.parentEventId === ticketHierarchyFilter;
+        return matchesType && matchesTime;
     });
     const activeItemsList = formData.hasVariants && activeVariantIndex >= 0 
         ? formData.variants?.[activeVariantIndex]?.items || [] 
@@ -847,17 +846,26 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                             {itemType === 'TICKET' && (
                                                 <div className="space-y-3">
                                                     <div>
-                                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Filter Hierarchy Event</label>
+                                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Filter Type</label>
                                                         <select
                                                             className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
-                                                            value={ticketHierarchyFilter}
-                                                            onChange={e => setTicketHierarchyFilter(e.target.value)}
+                                                            value={ticketTypeFilter}
+                                                            onChange={e => setTicketTypeFilter(e.target.value as 'SOLO' | 'CONTAINER' | 'SESSION')}
                                                         >
-                                                            <option value="ALL">All Event</option>
-                                                            <option value="INDEPENDENT">Independent Event</option>
-                                                            {ticketHierarchyContainers.map((event) => (
-                                                                <option key={event.id} value={event.id}>{event.name}</option>
-                                                            ))}
+                                                            <option value="SOLO">Solo Event</option>
+                                                            <option value="CONTAINER">Series Container</option>
+                                                            <option value="SESSION">Sub Event</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Filter Time</label>
+                                                        <select
+                                                            className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
+                                                            value={ticketTimeFilter}
+                                                            onChange={e => setTicketTimeFilter(e.target.value as 'PAST' | 'FUTURE')}
+                                                        >
+                                                            <option value="PAST">Past Event</option>
+                                                            <option value="FUTURE">Future Event</option>
                                                         </select>
                                                     </div>
                                                     <div>

@@ -11,6 +11,8 @@ export interface DialogOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   icon?: React.ReactNode;
+  confirmIcon?: React.ReactNode;
+  cancelIcon?: React.ReactNode;
 }
 
 interface GlobalDialogProps {
@@ -111,14 +113,15 @@ const GlobalDialog: React.FC<GlobalDialogProps> = ({ isOpen, options, onConfirm,
           <button
             onClick={onCancel}
             disabled={isConfirming}
-            className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl text-sm hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl text-sm hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
+            {options.cancelIcon}
             {options.cancelLabel || 'Cancel'}
           </button>
           <button
             onClick={handleConfirmClick}
             disabled={isConfirming}
-            className={`px-6 py-2.5 text-white font-bold rounded-xl text-sm shadow-lg transition-all transform active:scale-95 disabled:opacity-80 disabled:cursor-not-allowed ${styles.btnBg}`}
+            className={`inline-flex items-center gap-2 px-6 py-2.5 text-white font-bold rounded-xl text-sm shadow-lg transition-all transform active:scale-95 disabled:opacity-80 disabled:cursor-not-allowed ${styles.btnBg}`}
           >
             {isConfirming ? (
               <span className="inline-flex items-center gap-2">
@@ -126,7 +129,10 @@ const GlobalDialog: React.FC<GlobalDialogProps> = ({ isOpen, options, onConfirm,
                 Processing...
               </span>
             ) : (
-              options.confirmLabel || 'Confirm'
+              <>
+                {options.confirmIcon}
+                {options.confirmLabel || 'Confirm'}
+              </>
             )}
           </button>
         </div>
