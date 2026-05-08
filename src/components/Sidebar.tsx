@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { 
   LayoutDashboard, Users, CalendarDays, Store, Banknote, 
   Target, Mail, Trophy, FileText, CheckSquare, Database, 
@@ -10,6 +10,9 @@ import {
 import { ViewState, UserRole } from '../types/index';
 import { useAuth } from '../context/AuthContext';
 import { ALWAYS_ON_CUSTOM_VIEWS, toViewFeatureId } from '../constants/customRoleFeatures';
+import { EntitlementService } from '../services/entitlementService';
+import { WALLET_REFRESH_EVENT } from '../services/paymentService';
+import { Badge } from './ui/badge';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -33,6 +36,7 @@ const WORKSPACE_ROLES = [
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, toggleSidebar, userRole, isPersonalZone, onToggleZone }) => {
   const { logout, user } = useAuth();
+  const [pendingGiftCount, setPendingGiftCount] = useState(0);
 
   /** Promoted / internal staff: any role except Member sees Workspace ↔ My Zone. Pure members only see the user sidebar. */
   const showWorkspaceMyZoneToggle = userRole !== UserRole.MEMBER;
@@ -114,6 +118,32 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
 
   const isMemberMode = isPersonalZone || userRole === UserRole.MEMBER;
 
+  const loadPendingGiftCount = useCallback(async () => {
+    const email = user?.email?.trim();
+    if (!email) {
+      setPendingGiftCount(0);
+      return;
+    }
+    try {
+      const gifts = await EntitlementService.getGiftInbox(email);
+      setPendingGiftCount(gifts.filter((gift) => gift.status === 'PENDING').length);
+    } catch {
+      setPendingGiftCount(0);
+    }
+  }, [user?.email]);
+
+  useEffect(() => {
+    void loadPendingGiftCount();
+  }, [loadPendingGiftCount]);
+
+  useEffect(() => {
+    const refresh = () => {
+      void loadPendingGiftCount();
+    };
+    window.addEventListener(WALLET_REFRESH_EVENT, refresh);
+    return () => window.removeEventListener(WALLET_REFRESH_EVENT, refresh);
+  }, [loadPendingGiftCount]);
+
   return (
     <div className="relative h-full w-0 shrink-0 lg:w-72">
       {/* One flex child for the shell: mobile width 0 so main fills; lg reserves 288px like before. */}
@@ -180,6 +210,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
                     </button>
                     <button onClick={() => onNavigate(ViewState.WALLET)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.WALLET ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                         <Banknote size={18} className="mr-3" /> My Wallet
+                        {pendingGiftCount > 0 && (
+                          <Badge
+                            variant={currentView === ViewState.WALLET ? 'secondary' : 'warning'}
+                            className="ml-auto min-w-5 justify-center px-1.5 text-[10px] font-black"
+                          >
+                            {pendingGiftCount}
+                          </Badge>
+                        )}
                     </button>
                     <button onClick={() => onNavigate(ViewState.STORE_CATALOG)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.STORE_CATALOG ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                         <ShoppingBag size={18} className="mr-3" /> Store

@@ -7,7 +7,7 @@ import {
   readWalletSessionCache,
   writeWalletSessionCache,
 } from '../lib/walletSessionCache';
-import { WalletItem, WalletMemberHub } from '../types/access';
+import { GiftAllocation, WalletItem, WalletMemberHub } from '../types/access';
 import { ViewState } from '../types/index';
 import { 
     QrCode, Ticket, Calendar, Zap, 
@@ -18,6 +18,8 @@ import { useToast } from '../context/ToastContext';
 import WalletHistory from './wallet/WalletHistory';
 import TicketDistributionModal from './wallet/TicketDistributionModal';
 import TicketDetailModal from './wallet/TicketDetailModal'; // Use the full detail modal
+import GiftClaimModal from './wallet/GiftClaimModal';
+import { Badge } from './ui/badge';
 
 interface WalletProps {
   /** Opens Event Catalogue so users can redeem program credits (Nest-backed events). */
@@ -28,12 +30,14 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [items, setItems] = useState<WalletItem[]>([]);
+  const [pendingGifts, setPendingGifts] = useState<GiftAllocation[]>([]);
   const [memberHub, setMemberHub] = useState<WalletMemberHub | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'ASSETS' | 'TICKETS' | 'PHYSICAL' | 'HISTORY'>('TICKETS');
 
   // Replaced simple QR state with full item state
   const [viewingTicket, setViewingTicket] = useState<WalletItem | null>(null);
+  const [activePendingGift, setActivePendingGift] = useState<GiftAllocation | null>(null);
   
   // Distribution State
   const [distributionContext, setDistributionContext] = useState<WalletItem[] | null>(null);
@@ -65,6 +69,16 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
     [user],
   );
 
+  const loadPendingGifts = useCallback(async () => {
+    const email = user?.email?.trim();
+    if (!email) {
+      setPendingGifts([]);
+      return;
+    }
+    const gifts = await EntitlementService.getGiftInbox(email);
+    setPendingGifts(gifts.filter((gift) => gift.status === 'PENDING'));
+  }, [user?.email]);
+
   useEffect(() => {
     if (!user) return;
     const snap = readWalletSessionCache(user.id);
@@ -73,19 +87,22 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
       setMemberHub(snap.memberHub);
       setLoading(false);
       void loadWallet('background');
+      void loadPendingGifts();
     } else {
       void loadWallet('full');
+      void loadPendingGifts();
     }
-  }, [user, loadWallet]);
+  }, [user, loadWallet, loadPendingGifts]);
 
   useEffect(() => {
     if (!user) return;
     const onRefresh = () => {
       void loadWallet('full');
+      void loadPendingGifts();
     };
     window.addEventListener(WALLET_REFRESH_EVENT, onRefresh);
     return () => window.removeEventListener(WALLET_REFRESH_EVENT, onRefresh);
-  }, [user, loadWallet]);
+  }, [user, loadWallet, loadPendingGifts]);
 
   /** Unassigned transferable tickets (Smart Redeem “Draft” + bulk) — same rules as Event Catalogue “Draft tickets”. */
   const isUnassignedTransferableTicket = useCallback((t: WalletItem) => {
@@ -145,6 +162,15 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
 
   const emptyShell =
     'rounded-[2rem] border-2 border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm sm:rounded-[2.5rem] sm:py-20';
+
+  const pendingGiftCount = pendingGifts.length;
+
+  const handlePendingGiftAccepted = () => {
+    setActivePendingGift(null);
+    window.dispatchEvent(new CustomEvent(WALLET_REFRESH_EVENT));
+    void loadWallet('full');
+    void loadPendingGifts();
+  };
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
@@ -227,7 +253,16 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
         <div className="flex w-full justify-center">
           <div className="w-full max-w-xl overflow-x-scroll-touch rounded-2xl bg-slate-100 p-1 shadow-inner sm:max-w-2xl">
             <div className="flex min-w-0 gap-1">
-              <button type="button" onClick={() => setActiveTab('TICKETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'TICKETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>My Tickets</button>
+              <button type="button" onClick={() => setActiveTab('TICKETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'TICKETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>
+                <span className="inline-flex items-center gap-2">
+                  My Tickets
+                  {pendingGiftCount > 0 && (
+                    <Badge variant="warning" className="min-w-5 justify-center px-1.5 text-[10px] font-black">
+                      {pendingGiftCount}
+                    </Badge>
+                  )}
+                </span>
+              </button>
               <button type="button" onClick={() => setActiveTab('ASSETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'ASSETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Credits & Digital</button>
               <button type="button" onClick={() => setActiveTab('PHYSICAL')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'PHYSICAL' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Orders</button>
               <button type="button" onClick={() => setActiveTab('HISTORY')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'HISTORY' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>Activity</button>
@@ -367,11 +402,79 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
 
             {activeTab === 'TICKETS' && (
                 <div className="space-y-6">
+                    {pendingGifts.length > 0 && (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between rounded-[2rem] border border-amber-200 bg-amber-50 px-5 py-4">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Pending acceptance</p>
+                                    <p className="mt-1 text-sm font-semibold text-slate-800">
+                                        You have {pendingGiftCount} ticket{pendingGiftCount > 1 ? 's' : ''} waiting in your wallet.
+                                    </p>
+                                </div>
+                                <Badge variant="warning" className="min-w-7 justify-center px-2 text-xs font-black">
+                                    {pendingGiftCount}
+                                </Badge>
+                            </div>
+
+                            {pendingGifts.map((gift) => {
+                                const ticketDate = formatEventDate(gift.createdAt);
+                                return (
+                                    <div
+                                        key={gift.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => setActivePendingGift(gift)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                setActivePendingGift(gift);
+                                            }
+                                        }}
+                                        className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-amber-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
+                                    >
+                                        <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-amber-50/60 p-5">
+                                            <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-amber-200 pr-5">
+                                                <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-amber-500">{ticketDate.weekday}</span>
+                                                <span className="text-4xl font-black leading-none text-amber-900">{ticketDate.day}</span>
+                                                <span className="mt-1 text-sm font-bold uppercase tracking-wider text-amber-500">{ticketDate.month}</span>
+                                            </div>
+                                            <div className="flex min-w-0 flex-1 flex-col justify-center">
+                                                <div className="mb-2">
+                                                    <Badge variant="warning" className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wide">
+                                                        Pending
+                                                    </Badge>
+                                                </div>
+                                                <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{gift.itemName}</h3>
+                                                <p className="mb-2 truncate text-xs text-slate-600">
+                                                    From {gift.sourceUserName}
+                                                </p>
+                                                <p className="flex items-center text-[10px] font-medium text-slate-500">
+                                                    <Clock size={10} className="mr-1.5" /> Tap to review and accept this ticket
+                                                </p>
+                                            </div>
+                                            <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 items-center justify-center rounded-full bg-amber-500 text-white shadow-lg transition-transform group-hover:scale-110">
+                                                <Ticket size={24} className="-translate-x-1 -translate-y-1" />
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                                            <span>Gifted ticket</span>
+                                            <span>Pending</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
                     {groupedTickets.length === 0 ? (
                         <div className={emptyShell}>
                              <Ticket size={44} strokeWidth={1.25} className="mx-auto mb-4 text-slate-300"/>
                              <p className="font-bold text-slate-800">Your Wallet is Empty</p>
-                             <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">Acquired tickets will appear here for you to use or share.</p>
+                             <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
+                               {pendingGifts.length > 0
+                                 ? 'Open the pending ticket above to accept it into your wallet.'
+                                 : 'Acquired tickets will appear here for you to use or share.'}
+                             </p>
                         </div>
                     ) : groupedTickets.map((group, idx) => {
                         const pool = group.filter(isUnassignedTransferableTicket);
@@ -484,6 +587,14 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
             <TicketDetailModal 
                 item={viewingTicket} 
                 onClose={() => setViewingTicket(null)} 
+            />
+        )}
+
+        {activePendingGift && (
+            <GiftClaimModal
+                gift={activePendingGift}
+                onClose={() => setActivePendingGift(null)}
+                onClaimed={handlePendingGiftAccepted}
             />
         )}
 

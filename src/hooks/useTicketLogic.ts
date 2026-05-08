@@ -8,6 +8,26 @@ import { QrCode, Monitor, Info, Layers } from 'lucide-react';
 
 export type TicketTab = 'ACCESS' | 'VIRTUAL' | 'DETAILS' | 'SESSIONS';
 
+const parseEventStart = (dateValue?: string, timeValue?: string): Date | null => {
+    if (!dateValue) return null;
+
+    const baseDate = new Date(dateValue);
+    if (Number.isNaN(baseDate.getTime())) return null;
+
+    const timeMatch = timeValue?.match(/(\d{1,2}):(\d{2})/);
+    if (!timeMatch) return null;
+
+    const [, hoursRaw, minutesRaw] = timeMatch;
+    const hours = Number(hoursRaw);
+    const minutes = Number(minutesRaw);
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+
+    const start = new Date(baseDate);
+    start.setHours(hours, minutes, 0, 0);
+    return start;
+};
+
 export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     const { showToast } = useToast();
     
@@ -68,6 +88,19 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     // 2. Determine Display Context (Master Event or Selected Session)
     const activeContext = selectedSession || eventData;
     const mode = activeContext?.locationMode || item.meta?.locationMode || 'OFFLINE';
+    const activeContextTime = activeContext?.recurringMeta?.time || activeContext?.time || item.meta?.time;
+    const activeContextStart = useMemo(
+        () => parseEventStart(activeContext?.date || item.expiryDate, activeContextTime),
+        [activeContext?.date, activeContextTime, item.expiryDate],
+    );
+    const joinWindowStart = useMemo(() => {
+        if (!activeContextStart) return null;
+        return new Date(activeContextStart.getTime() - 60 * 60 * 1000);
+    }, [activeContextStart]);
+    const canJoinOnlineSession = useMemo(() => {
+        if (!joinWindowStart) return true;
+        return Date.now() >= joinWindowStart.getTime();
+    }, [joinWindowStart]);
     
     // 3. Define Available Tabs based on Mode & Hierarchy
     const availableTabs = useMemo(() => {
@@ -111,6 +144,11 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     const joinOnlineSession = async () => {
         // Priority: Selected Session -> Event Data -> Ticket Meta
         const link = activeContext?.onlineMeetingLink || item.meta?.onlineMeetingLink;
+
+        if (!canJoinOnlineSession) {
+            showToast("Join session becomes available 1 hour before the event starts.", "info");
+            return;
+        }
 
         if (!link) {
             showToast("Meeting link is not available yet. Please check back later.", "error");
@@ -162,6 +200,9 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
         setActiveTab,
         availableTabs,
         joinOnlineSession,
+        canJoinOnlineSession,
+        joinWindowStart,
+        eventStart: activeContextStart,
         handleSelectSession,
         handleBackToSeries,
         openSecureLink, // Exported for use in UI

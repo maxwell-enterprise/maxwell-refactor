@@ -490,10 +490,10 @@ const ClauseMasterMindmap: React.FC<ClauseMasterMindmapProps> = ({ data, onChang
     };
 
     return (
-        <div className="flex h-full bg-white">
+        <div className="flex h-full flex-col bg-white">
             
             {/* LEFT SIDEBAR: OUTLINE */}
-            <div className="w-80 border-r border-slate-200 flex flex-col bg-white h-full shrink-0">
+            <div className="flex flex-col border-b border-slate-200 bg-white shrink-0 basis-[38%] min-h-[240px]">
                 <div className="p-4 border-b border-slate-100 flex flex-col gap-3 bg-slate-50">
                     <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">Document Outline</h3>
                     <div className="flex gap-1 justify-between">
@@ -523,7 +523,7 @@ const ClauseMasterMindmap: React.FC<ClauseMasterMindmapProps> = ({ data, onChang
             </div>
 
             {/* MAIN AREA */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
                 
                 {/* Top Toolbar */}
                 <div className="h-14 border-b border-slate-200 flex items-center justify-between px-6 bg-white shrink-0 z-20">
