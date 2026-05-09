@@ -1,5 +1,5 @@
 const PRODUCTION_API_BASE_URL =
-  'https://server-maxwell-production.up.railway.app/fe';
+  'https://midnightblue-manatee-826616.hostingersite.com/fe';
 const LOCAL_API_BASE_URL = 'http://localhost:3002/fe';
 
 function isLocalHostname(hostname: string): boolean {
