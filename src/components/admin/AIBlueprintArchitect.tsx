@@ -15,6 +15,7 @@ import AISchemaArchitect from './AISchemaArchitect';
 import ModifiedSchemaViewer from './schema/ModifiedSchemaViewer';
 import SchemaGapAnalyzer from './schema/SchemaGapAnalyzer'; // New Import
 import { isSystemApiMode, systemApi } from '../../lib/systemApi';
+import { metadata } from '@/app/layout';
 
 type Tab = 'AUDIT' | 'BASELINE' | 'MODIFIED' | 'GAP_ANALYSIS' | 'STORIES' | 'ARCHITECT' | 'PROPOSED' | 'BLUEPRINT';
 

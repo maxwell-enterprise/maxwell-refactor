@@ -93,6 +93,22 @@ export type AutomationSimulateResult = {
   backgroundJobId: string;
 };
 
+export type AutomationConnectionSnapshotRow = {
+  triggerId: string;
+  communication: {
+    whatsappTemplateLabels: string[];
+    emailTemplateNames: string[];
+  };
+  operations: {
+    workflowNames: string[];
+  };
+  gamification: {
+    rulePoints: number;
+    badgeBonusPoints: number;
+    badgeNames: string[];
+  };
+};
+
 /** Nest `/fe/system/*` — use when `DOMAINS.SYSTEM === 'API'`. */
 export const systemApi = {
   getSecurityLogs: () =>
@@ -126,6 +142,11 @@ export const systemApi = {
 
   getAutomationTriggers: () =>
     requestJson<AutomationTriggerApiRow[]>('/system/automation-triggers'),
+
+  getAutomationConnections: () =>
+    requestJson<AutomationConnectionSnapshotRow[]>(
+      '/system/automation-connections',
+    ),
 
   postAutomationSimulate: (body: {
     triggerId: string;

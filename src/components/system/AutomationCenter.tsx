@@ -4,6 +4,7 @@ import { MASTER_EVENT_REGISTRY } from '../../constants/masterEventRegistry';
 import { WhatsAppService } from '../../services/whatsappService';
 import { OpsService } from '../../services/opsService';
 import { GamificationService } from '../../services/gamificationService';
+import { CommunicationService } from '../../services/communicationService';
 import { AutomationQueueService } from '../../services/automationQueueService';
 import { loadTriggerDefinitions } from '../../services/triggerDefinitions';
 import { EventBus } from '../../services/eventBus';
@@ -14,12 +15,28 @@ import type { SystemTriggerType } from '../../types/ops';
 import { WhatsAppTemplate } from '../../types/index';
 import { AutomationQueueItem } from '../../types/automation';
 import { OpsTemplate } from '../../types/ops';
-import { PointRule } from '../../types/gamification';
+import { PointRule, Badge } from '../../types/gamification';
 import { 
     Activity, MessageSquare, ClipboardList, Trophy, 
     Play, RotateCw, CheckCircle2
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+
+type TriggerConnectionsSnapshot = {
+    triggerId: string;
+    communication: {
+        whatsappTemplateLabels: string[];
+        emailTemplateNames: string[];
+    };
+    operations: {
+        workflowNames: string[];
+    };
+    gamification: {
+        rulePoints: number;
+        badgeBonusPoints: number;
+        badgeNames: string[];
+    };
+};
 
 // --- SUB-COMPONENT: QUEUE MONITOR (Migrated from AutomationQueue.tsx) ---
 const QueueMonitor = () => {
@@ -302,28 +319,129 @@ const EventSimulator = () => {
 // --- MAIN COMPONENT ---
 const AutomationCenter: React.FC = () => {
     const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+    const [emailTemplates, setEmailTemplates] = useState<Array<Record<string, unknown>>>([]);
     const [opsWorkflows, setOpsWorkflows] = useState<OpsTemplate[]>([]);
     const [gameRules, setGameRules] = useState<PointRule[]>([]);
+    const [badges, setBadges] = useState<Badge[]>([]);
+    const [connectionsSnapshot, setConnectionsSnapshot] = useState<Record<string, TriggerConnectionsSnapshot>>({});
     const [activeTab, setActiveTab] = useState<'REGISTRY' | 'SIMULATOR'>('REGISTRY');
+
+    const normalizeTrigger = (value: unknown): string =>
+        String(value ?? '').trim().toUpperCase();
+
+    const mapGamificationTriggerAliases = (triggerId: string): string[] => {
+        const normalized = normalizeTrigger(triggerId);
+        const aliases = new Set<string>([normalized]);
+        // Business alias: payment success in automation maps to purchase completion points.
+        if (normalized === 'PAYMENT_SUCCESS') {
+            aliases.add('PURCHASE_COMPLETE');
+        }
+        return Array.from(aliases);
+    };
 
     useEffect(() => {
         // Load all consumers of events to map them
         Promise.all([
             WhatsAppService.getTemplates(),
+            CommunicationService.getTemplates(),
             OpsService.getTemplates(),
-            GamificationService.getRules()
-        ]).then(([wa, ops, game]) => {
+            GamificationService.getRules(),
+            GamificationService.getBadges(),
+        ]).then(([wa, email, ops, game, badgeRows]) => {
             setTemplates(wa);
+            setEmailTemplates(email as Array<Record<string, unknown>>);
             setOpsWorkflows(ops);
             setGameRules(game);
+            setBadges(badgeRows);
         });
     }, []);
 
+    useEffect(() => {
+        if (!isSystemApiMode()) return;
+        let cancelled = false;
+        systemApi
+            .getAutomationConnections()
+            .then((rows) => {
+                if (cancelled) return;
+                const mapped: Record<string, TriggerConnectionsSnapshot> = {};
+                for (const row of rows) {
+                    mapped[normalizeTrigger(row.triggerId)] = row as TriggerConnectionsSnapshot;
+                }
+                setConnectionsSnapshot(mapped);
+            })
+            .catch(() => {
+                if (!cancelled) setConnectionsSnapshot({});
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const getConnections = (triggerId: string) => {
-        const wa = templates.find(t => t.linkedTriggerId === triggerId);
-        const ops = opsWorkflows.find(t => t.triggerType === 'SYSTEM_EVENT' && t.triggerEventId === triggerId);
-        const game = gameRules.find(r => r.triggerType === triggerId && r.isActive);
-        return { wa, ops, game };
+        const normalized = normalizeTrigger(triggerId);
+        const gameKeys = mapGamificationTriggerAliases(triggerId);
+        const snapshot = connectionsSnapshot[normalized];
+
+        const wa = templates.find(
+            (t) => normalizeTrigger(t.linkedTriggerId) === normalized,
+        );
+        const email = emailTemplates.find(
+            (t) => normalizeTrigger((t as { linkedTriggerId?: string }).linkedTriggerId) === normalized,
+        );
+        const ops = opsWorkflows.find((t) => {
+            if (!t.isActive) return false;
+            if (t.triggerType === 'SYSTEM_EVENT') {
+                return normalizeTrigger(t.triggerEventId) === normalized;
+            }
+            // PRODUCT_PURCHASE flows are materialized from successful checkout/payment.
+            if (t.triggerType === 'PRODUCT_PURCHASE' && normalized === 'PAYMENT_SUCCESS') {
+                return true;
+            }
+            return false;
+        });
+        const game = gameRules.find(
+            (r) => r.isActive && gameKeys.includes(normalizeTrigger(r.triggerType)),
+        );
+        const gameBadge = badges.find((b) =>
+            gameKeys.includes(normalizeTrigger(b.autoTrigger)),
+        );
+        const gamePointsLocal = (game?.points ?? 0) + (gameBadge?.pointBonus ?? 0);
+        const gamePoints = snapshot
+            ? Number(snapshot.gamification.rulePoints ?? 0) +
+              Number(snapshot.gamification.badgeBonusPoints ?? 0)
+            : gamePointsLocal;
+
+        const hasCommSnapshot =
+            !!snapshot &&
+            (snapshot.communication.whatsappTemplateLabels.length > 0 ||
+                snapshot.communication.emailTemplateNames.length > 0);
+        const commLabelSnapshot = snapshot
+            ? snapshot.communication.whatsappTemplateLabels[0] ||
+              snapshot.communication.emailTemplateNames[0] ||
+              ''
+            : '';
+        const hasOpsSnapshot =
+            !!snapshot && snapshot.operations.workflowNames.length > 0;
+        const opsNameSnapshot = snapshot?.operations.workflowNames[0] ?? '';
+        const hasGameSnapshot =
+            !!snapshot &&
+            (snapshot.gamification.rulePoints > 0 ||
+                snapshot.gamification.badgeBonusPoints > 0 ||
+                snapshot.gamification.badgeNames.length > 0);
+
+        return {
+            wa,
+            email,
+            ops,
+            game,
+            gameBadge,
+            gamePoints,
+            hasCommSnapshot,
+            commLabelSnapshot,
+            hasOpsSnapshot,
+            opsNameSnapshot,
+            hasGameSnapshot,
+        };
     };
 
     return (
@@ -368,7 +486,27 @@ const AutomationCenter: React.FC = () => {
                     {activeTab === 'REGISTRY' && (
                         <div className="space-y-4">
                             {MASTER_EVENT_REGISTRY.map(event => {
-                                const { wa, ops, game } = getConnections(event.id);
+                                const {
+                                    wa,
+                                    email,
+                                    ops,
+                                    game,
+                                    gameBadge,
+                                    gamePoints,
+                                    hasCommSnapshot,
+                                    commLabelSnapshot,
+                                    hasOpsSnapshot,
+                                    opsNameSnapshot,
+                                    hasGameSnapshot,
+                                } = getConnections(event.id);
+                                const hasComm = hasCommSnapshot || !!wa || !!email;
+                                const commLabel =
+                                    commLabelSnapshot ||
+                                    wa?.label ||
+                                    (typeof email?.name === 'string' ? email.name : 'Email Template');
+                                const hasOps = hasOpsSnapshot || !!ops;
+                                const opsName = opsNameSnapshot || ops?.name || '';
+                                const hasGame = hasGameSnapshot || !!game || !!gameBadge;
 
                                 return (
                                     <div key={event.id} className="group rounded-xl border border-slate-300 bg-white p-4 shadow-sm transition-all hover:shadow-md sm:p-5">
@@ -395,13 +533,13 @@ const AutomationCenter: React.FC = () => {
                                         {/* Connection Map */}
                                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                             {/* WA */}
-                                            <div className={`p-3 rounded-lg border text-xs flex flex-col justify-between h-24 ${wa ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+                                            <div className={`p-3 rounded-lg border text-xs flex flex-col justify-between h-24 ${hasComm ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
                                                 <div className="flex items-center text-green-700 font-bold mb-1">
                                                     <MessageSquare size={14} className="mr-1.5"/> Communication
                                                 </div>
-                                                {wa ? (
+                                                {hasComm ? (
                                                     <div>
-                                                        <span className="block font-bold text-slate-800 line-clamp-1">{wa.label}</span>
+                                                        <span className="block font-bold text-slate-800 line-clamp-1">{commLabel}</span>
                                                         <span className="text-[10px] text-green-600">Active Template</span>
                                                     </div>
                                                 ) : (
@@ -410,13 +548,13 @@ const AutomationCenter: React.FC = () => {
                                             </div>
 
                                             {/* OPS */}
-                                            <div className={`p-3 rounded-lg border text-xs flex flex-col justify-between h-24 ${ops ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+                                            <div className={`p-3 rounded-lg border text-xs flex flex-col justify-between h-24 ${hasOps ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
                                                 <div className="flex items-center text-blue-700 font-bold mb-1">
                                                     <ClipboardList size={14} className="mr-1.5"/> Operations
                                                 </div>
-                                                {ops ? (
+                                                {hasOps ? (
                                                     <div>
-                                                        <span className="block font-bold text-slate-800 line-clamp-1">{ops.name}</span>
+                                                        <span className="block font-bold text-slate-800 line-clamp-1">{opsName}</span>
                                                         <span className="text-[10px] text-blue-600">Triggers Workflow</span>
                                                     </div>
                                                 ) : (
@@ -425,13 +563,13 @@ const AutomationCenter: React.FC = () => {
                                             </div>
 
                                             {/* GAME */}
-                                            <div className={`p-3 rounded-lg border text-xs flex flex-col justify-between h-24 ${game ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+                                            <div className={`p-3 rounded-lg border text-xs flex flex-col justify-between h-24 ${hasGame ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
                                                 <div className="flex items-center text-amber-700 font-bold mb-1">
                                                     <Trophy size={14} className="mr-1.5"/> Gamification
                                                 </div>
-                                                {game ? (
+                                                {hasGame ? (
                                                     <div>
-                                                        <span className="block font-bold text-slate-800">+{game.points} Points</span>
+                                                        <span className="block font-bold text-slate-800">+{gamePoints} Points</span>
                                                         <span className="text-[10px] text-amber-600">Awarded automatically</span>
                                                     </div>
                                                 ) : (
