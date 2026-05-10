@@ -444,6 +444,7 @@ export interface EmailTemplate {
     subject: string;
     body: string; // HTML
     variables: string[];
+    linkedTriggerId?: string;
 }
 
 export interface EmailCampaign {

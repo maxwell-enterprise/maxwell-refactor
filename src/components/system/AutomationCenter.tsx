@@ -12,7 +12,7 @@ import { isSystemApiMode, systemApi } from '../../lib/systemApi';
 import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
 import type { TriggerDefinition } from '../../types/automation';
 import type { SystemTriggerType } from '../../types/ops';
-import { WhatsAppTemplate } from '../../types/index';
+import { EmailTemplate, WhatsAppTemplate } from '../../types/index';
 import { AutomationQueueItem } from '../../types/automation';
 import { OpsTemplate } from '../../types/ops';
 import { PointRule, Badge } from '../../types/gamification';
@@ -319,7 +319,7 @@ const EventSimulator = () => {
 // --- MAIN COMPONENT ---
 const AutomationCenter: React.FC = () => {
     const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
-    const [emailTemplates, setEmailTemplates] = useState<Array<Record<string, unknown>>>([]);
+    const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
     const [opsWorkflows, setOpsWorkflows] = useState<OpsTemplate[]>([]);
     const [gameRules, setGameRules] = useState<PointRule[]>([]);
     const [badges, setBadges] = useState<Badge[]>([]);
@@ -349,7 +349,7 @@ const AutomationCenter: React.FC = () => {
             GamificationService.getBadges(),
         ]).then(([wa, email, ops, game, badgeRows]) => {
             setTemplates(wa);
-            setEmailTemplates(email as Array<Record<string, unknown>>);
+            setEmailTemplates(email);
             setOpsWorkflows(ops);
             setGameRules(game);
             setBadges(badgeRows);
@@ -386,7 +386,7 @@ const AutomationCenter: React.FC = () => {
             (t) => normalizeTrigger(t.linkedTriggerId) === normalized,
         );
         const email = emailTemplates.find(
-            (t) => normalizeTrigger((t as { linkedTriggerId?: string }).linkedTriggerId) === normalized,
+            (t) => normalizeTrigger(t.linkedTriggerId) === normalized,
         );
         const ops = opsWorkflows.find((t) => {
             if (!t.isActive) return false;
