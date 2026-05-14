@@ -81,7 +81,7 @@ const Store: React.FC = () => {
       </div>
 
       <div className="relative min-h-0 min-w-0 flex-1">
-          {activeTab === 'catalog' && <Storefront />}
+          {activeTab === 'catalog' && <Storefront allowWorkspaceCheckoutConfig />}
           {activeTab === 'history' && <PurchaseHistory />}
           {activeTab === 'inventory' && <InventoryManager />}
           {activeTab === 'discounts' && <DiscountManager />}

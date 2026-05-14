@@ -33,6 +33,14 @@ const MIDTRANS_UI_DISABLED = (() => {
 const isValidCheckoutEmail = (value: string): boolean =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
+const DEFAULT_PPN_RATE_PERCENT = 0;
+
+const clampPpnRatePercent = (value: number): number =>
+  Math.max(0, Math.min(100, value));
+
+const isWorkspaceStaffRole = (role: UserRole): boolean =>
+  role !== UserRole.MEMBER && role !== UserRole.GUEST;
+
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -47,6 +55,7 @@ interface PaymentModalProps {
   preAppliedDiscountCode?: string; 
   attributionSource?: string; 
   onPaymentSuccess?: () => void;
+  allowWorkspaceCheckoutConfig?: boolean;
 }
 
 type Step = 'SUMMARY';
@@ -64,6 +73,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     preAppliedDiscountCode,
     attributionSource,
     onPaymentSuccess,
+    allowWorkspaceCheckoutConfig = false,
 }) => {
   const { refreshSession } = useAuth();
 
@@ -84,6 +94,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [ppnRatePercent, setPpnRatePercent] = useState<number>(
+    DEFAULT_PPN_RATE_PERCENT,
+  );
+  const [ppnInput, setPpnInput] = useState(String(DEFAULT_PPN_RATE_PERCENT));
+  const [isLoadingCheckoutConfig, setIsLoadingCheckoutConfig] = useState(false);
+  const [isSavingCheckoutConfig, setIsSavingCheckoutConfig] = useState(false);
+  const [ppnConfigError, setPpnConfigError] = useState<string | null>(null);
+  const savedPpnRatePercentRef = useRef<number>(DEFAULT_PPN_RATE_PERCENT);
 
   const handleDownloadQris = useCallback(async () => {
     if (!transaction?.qrisUrl) return;
@@ -124,6 +142,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const checkoutAlreadyFinalizedRef = useRef(false);
   const successAutoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [successSplashAutoClose, setSuccessSplashAutoClose] = useState(false);
+  const canEditPpn =
+    allowWorkspaceCheckoutConfig && isWorkspaceStaffRole(userRole);
 
   // Determine if installments are available for this cart
   // Logic: All items in cart must allow installments, or at least the main high-value item?
@@ -144,12 +164,88 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setSimulatedSuccessOpen(false);
       setSuccessSplashAutoClose(false);
       checkoutAlreadyFinalizedRef.current = false;
+      setPpnConfigError(null);
       if (successAutoCloseTimerRef.current) {
         clearTimeout(successAutoCloseTimerRef.current);
         successAutoCloseTimerRef.current = null;
       }
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+
+    const loadCheckoutConfig = async () => {
+      setIsLoadingCheckoutConfig(true);
+      setPpnConfigError(null);
+      try {
+        const config = await PaymentService.getCheckoutConfig();
+        if (cancelled) return;
+        const next = clampPpnRatePercent(Number(config.ppnRatePercent) || 0);
+        setPpnRatePercent(next);
+        setPpnInput(String(next));
+        savedPpnRatePercentRef.current = next;
+      } catch (error) {
+        if (cancelled) return;
+        setPpnConfigError(
+          error instanceof Error ? error.message : 'Failed to load checkout PPN.',
+        );
+        setPpnRatePercent(DEFAULT_PPN_RATE_PERCENT);
+        setPpnInput(String(DEFAULT_PPN_RATE_PERCENT));
+        savedPpnRatePercentRef.current = DEFAULT_PPN_RATE_PERCENT;
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCheckoutConfig(false);
+        }
+      }
+    };
+
+    void loadCheckoutConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  const persistPpnConfig = useCallback(
+    async (rawValue: string, options?: { suppressMissing?: boolean }) => {
+      if (!canEditPpn) return savedPpnRatePercentRef.current;
+      const trimmed = rawValue.trim();
+      if (!trimmed) {
+        if (options?.suppressMissing) {
+          return savedPpnRatePercentRef.current;
+        }
+        throw new Error('PPN wajib diisi untuk checkout workspace.');
+      }
+      const parsed = Number(trimmed);
+      if (!Number.isFinite(parsed)) {
+        throw new Error('PPN harus berupa angka yang valid.');
+      }
+      const normalizedPpn = clampPpnRatePercent(parsed);
+      if (normalizedPpn === savedPpnRatePercentRef.current) {
+        setPpnRatePercent(normalizedPpn);
+        return normalizedPpn;
+      }
+
+      setIsSavingCheckoutConfig(true);
+      try {
+        const config = await PaymentService.updateCheckoutConfig({
+          ppnRatePercent: normalizedPpn,
+        });
+        const savedPpn = clampPpnRatePercent(
+          Number(config.ppnRatePercent) || 0,
+        );
+        savedPpnRatePercentRef.current = savedPpn;
+        setPpnRatePercent(savedPpn);
+        setPpnInput(String(savedPpn));
+        setPpnConfigError(null);
+        return savedPpn;
+      } finally {
+        setIsSavingCheckoutConfig(false);
+      }
+    },
+    [canEditPpn],
+  );
 
   // Cart Calculation Logic
   const calculateCartTotals = () => {
@@ -168,11 +264,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   // Calculate Tax (PPN) AFTER discount
   const discountVal = appliedDiscount?.amount || 0;
   const taxableAmount = Math.max(0, subTotal - discountVal);
-  const ppnRatePercent = Number(
-    process.env.NEXT_PUBLIC_PAYMENT_PPN_RATE_PERCENT ?? 0,
-  );
   const tax = taxableAmount * (ppnRatePercent / 100);
   const totalAmount = taxableAmount + tax;
+  const parsedPpnInput = Number(ppnInput);
+  const normalizedPpnInput =
+    ppnInput.trim() !== '' && Number.isFinite(parsedPpnInput)
+      ? clampPpnRatePercent(parsedPpnInput)
+      : null;
+  const isPpnDirty =
+    normalizedPpnInput != null &&
+    normalizedPpnInput !== savedPpnRatePercentRef.current;
 
   // Recalculate DP when total changes
   useEffect(() => {
@@ -304,6 +405,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     snapPayInFlightRef.current = true;
 
     try {
+      if (canEditPpn) {
+        await persistPpnConfig(ppnInput);
+      }
+
       const transactionItems = cart.map(item => {
         const p = products.find(prod => prod.id === item.productId);
         return {
@@ -534,6 +639,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   };
 
+  const handleSetPpn = async () => {
+    try {
+      await persistPpnConfig(ppnInput);
+    } catch (error) {
+      setPpnConfigError(
+        error instanceof Error ? error.message : 'Failed to save checkout PPN.',
+      );
+    }
+  };
+
   const handleFinalizeSimulatedPayment = async () => {
     if (checkoutAlreadyFinalizedRef.current) {
       if (successAutoCloseTimerRef.current) {
@@ -640,6 +755,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2 text-sm text-red-700 animate-pulse">
             <AlertCircle size={16} className="shrink-0 mt-0.5" />
             <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {ppnConfigError && (
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-start gap-2 text-sm text-amber-700">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <span>{ppnConfigError}</span>
           </div>
         )}
 
@@ -758,9 +880,55 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   <CheckCircle size={10} className="mr-1"/> Code {appliedDiscount.discount.code} applied!
               </p>
           )}
-      </div>
-      
-      {/* Installment selection removed to keep UI single-step summary */}
+       </div>
+
+      {canEditPpn && (
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">PPN (%)</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              inputMode="decimal"
+              value={ppnInput}
+              onChange={(e) => {
+                setPpnInput(e.target.value);
+                setPpnConfigError(null);
+                const next = Number(e.target.value);
+                if (e.target.value.trim() !== '' && Number.isFinite(next)) {
+                  setPpnRatePercent(clampPpnRatePercent(next));
+                }
+              }}
+              disabled={isLoadingCheckoutConfig || isSavingCheckoutConfig}
+              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+              placeholder="Masukkan persentase PPN"
+            />
+            <button
+              type="button"
+              onClick={handleSetPpn}
+              disabled={
+                isLoadingCheckoutConfig ||
+                isSavingCheckoutConfig ||
+                !isPpnDirty
+              }
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:cursor-not-allowed ${
+                isPpnDirty
+                  ? 'bg-slate-900 text-white hover:bg-slate-800'
+                  : 'bg-slate-200 text-slate-500'
+              }`}
+            >
+              {isSavingCheckoutConfig ? 'Saving...' : 'Set'}
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1">
+            Klik Set untuk menyimpan default checkout workspace.
+          </p>
+        </div>
+      )}
+       
+       {/* Installment selection removed to keep UI single-step summary */}
 
       {/* Totals Calculation */}
       <div className="border-t border-slate-200 pt-3 space-y-2">
@@ -791,7 +959,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
       <button 
         onClick={handleInitiatePayment}
-        disabled={cart.length === 0 || totalAmount < 0 || isMidtransPopupOpen}
+        disabled={
+          cart.length === 0 ||
+          totalAmount < 0 ||
+          isMidtransPopupOpen ||
+          isLoadingCheckoutConfig ||
+          isSavingCheckoutConfig
+        }
         className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg flex justify-center items-center group disabled:opacity-50"
       >
         {totalAmount === 0 ? (
