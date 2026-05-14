@@ -43,8 +43,39 @@ const toIsoOrNow = (value: unknown): string => {
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
+export type CheckoutConfig = {
+  ppnRatePercent: number;
+};
+
 export const PaymentService = {
-  
+  getCheckoutConfig: async (): Promise<CheckoutConfig> => {
+    const res = await apiRequest<CheckoutConfig>('/transactions/checkout-config', {
+      method: 'GET',
+      skipBackendFailureTracking: true,
+    });
+    return {
+      ppnRatePercent: Number.isFinite(Number(res?.ppnRatePercent))
+        ? Math.max(0, Math.min(100, Number(res.ppnRatePercent)))
+        : 0,
+    };
+  },
+
+  updateCheckoutConfig: async (
+    patch: CheckoutConfig,
+  ): Promise<CheckoutConfig> => {
+    const res = await apiRequest<CheckoutConfig>('/transactions/checkout-config', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        ppnRatePercent: patch.ppnRatePercent,
+      }),
+    });
+    return {
+      ppnRatePercent: Number.isFinite(Number(res?.ppnRatePercent))
+        ? Math.max(0, Math.min(100, Number(res.ppnRatePercent)))
+        : 0,
+    };
+  },
+
   initiateTransaction: async (
     payload: InitiatePaymentPayload,
   ): Promise<{ transaction: PaymentTransaction; snapToken: string }> => {

@@ -62,7 +62,13 @@ function parseCampaignCheckoutSearch(search: string): {
     };
 }
 
-const Storefront: React.FC = () => {
+type StorefrontProps = {
+    allowWorkspaceCheckoutConfig?: boolean;
+};
+
+const Storefront: React.FC<StorefrontProps> = ({
+    allowWorkspaceCheckoutConfig = false,
+}) => {
     const { user, userRole } = useAuth();
     const { showToast } = useToast();
     const { confirm } = useDialog();
@@ -892,6 +898,7 @@ const Storefront: React.FC = () => {
                       : autoAppliedDiscount
                 }
                 attributionSource={attributionSource} 
+                allowWorkspaceCheckoutConfig={allowWorkspaceCheckoutConfig}
             />
 
             {isProductModalOpen && (
