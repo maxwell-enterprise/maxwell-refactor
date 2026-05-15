@@ -1,14 +1,21 @@
 
 import React, { useEffect, useState } from 'react';
-import { Discount } from '../../types/index';
+import { DataService } from '../../services/dataService';
+import { Discount, Event, Product, UserRole } from '../../types/index';
 import { AbacCondition } from '../../types/pricing'; // Fixed Import
-import { X, Save, Ticket, Calendar, Users, ShieldCheck } from 'lucide-react';
+import { ChevronDown, X, Save, Ticket, Calendar, Users, ShieldCheck } from 'lucide-react';
 
 interface DiscountModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (discount: Discount) => void;
     initialData?: Discount;
+}
+
+interface TargetOption {
+    value: string;
+    label: string;
+    meta?: string;
 }
 
 const buildDefaultDiscount = (): Partial<Discount> => ({
@@ -25,11 +32,21 @@ const buildDefaultDiscount = (): Partial<Discount> => ({
     conditions: {}
 });
 
+const parseTargetIds = (value: string): string[] =>
+    value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
 const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
     const [formData, setFormData] = useState<Partial<Discount>>(initialData || buildDefaultDiscount());
     const [targetIdsText, setTargetIdsText] = useState(
         Array.isArray(initialData?.targetIds) ? initialData!.targetIds.join(', ') : '',
     );
+    const [products, setProducts] = useState<Product[]>([]);
+    const [events, setEvents] = useState<Event[]>([]);
+    const [targetOptionsLoading, setTargetOptionsLoading] = useState(false);
+    const [targetOptionsError, setTargetOptionsError] = useState<string | null>(null);
 
     const [abac, setAbac] = useState<AbacCondition>(initialData?.conditions || {
         targetRegions: [],
@@ -50,39 +67,51 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
         });
     }, [initialData, isOpen]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+
+        let cancelled = false;
+
+        const loadTargetOptions = async () => {
+            setTargetOptionsLoading(true);
+            setTargetOptionsError(null);
+
+            try {
+                const [productData, eventData] = await Promise.all([
+                    DataService.getProducts(),
+                    DataService.getEvents(),
+                ]);
+
+                if (cancelled) return;
+
+                setProducts(Array.isArray(productData) ? productData : []);
+                setEvents(Array.isArray(eventData) ? eventData : []);
+            } catch (error) {
+                if (cancelled) return;
+                setProducts([]);
+                setEvents([]);
+                setTargetOptionsError(
+                    error instanceof Error
+                        ? error.message
+                        : 'Could not load scope targets.',
+                );
+            } finally {
+                if (!cancelled) {
+                    setTargetOptionsLoading(false);
+                }
+            }
+        };
+
+        void loadTargetOptions();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const discountToSave: Discount = {
-            id: formData.id || `DSC-${Date.now()}`,
-            code: formData.code!.toUpperCase(),
-            title: formData.title || 'Untitled',
-            description: formData.description || '',
-            type: formData.type as any,
-            value: Number(formData.value),
-            scope: formData.scope as any,
-            targetIds: targetIdsText
-                .split(',')
-                .map((item) => item.trim())
-                .filter(Boolean),
-            validFrom: formData.validFrom || new Date().toISOString(),
-            validUntil: formData.validUntil || new Date().toISOString(),
-            maxUsageLimit: Number(formData.maxUsageLimit),
-            currentUsageCount: formData.currentUsageCount || 0,
-            currentBudgetBurned: formData.currentBudgetBurned || 0,
-            isFeatured: !!formData.isFeatured,
-            conditions: abac // Attach ABAC
-        };
-        onSave(discountToSave);
-    };
-
-    // Helper to toggle array items
-    const toggleArray = <T extends string>(field: keyof AbacCondition, value: T) => {
-        const current = (abac[field] as T[]) || [];
-        const updated = current.includes(value) ? current.filter(v => v !== value) : [...current, value];
-        setAbac({ ...abac, [field]: updated });
-    };
+    const selectedTargetIds = parseTargetIds(targetIdsText);
 
     const targetIdsLabel = (() => {
         switch (formData.scope) {
@@ -104,17 +133,125 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
         switch (formData.scope) {
             case 'PRODUCT_SPECIFIC':
             case 'Product_SPECIFIC':
-                return 'Comma-separated product IDs. Only matching products receive the discount in checkout.';
+                return 'Select one or more products that should receive this voucher at checkout.';
             case 'CATEGORY_SPECIFIC':
-                return 'Comma-separated product categories, e.g. Packages, Token.';
+                return 'Select the product categories this voucher should apply to.';
             case 'EVENT_SPECIFIC':
-                return 'Comma-separated event-linked product or event IDs.';
+                return 'Select event-linked targets. Products connected to these event IDs will match.';
             case 'USER_ROLE_SPECIFIC':
-                return 'Comma-separated roles exactly as used by the app, e.g. Member, Sales.';
+                return 'Select the user roles that are eligible to redeem this voucher.';
+            case 'GLOBAL':
+                return 'No target selection is needed for global campaigns.';
+            case 'ABAC_COMPLEX':
+                return 'Use the advanced eligibility section below for ABAC-based rules.';
             default:
-                return 'Leave empty for global campaigns.';
+                return 'Leave empty unless this scope requires specific targets.';
         }
     })();
+
+    const scopeTargetOptions: TargetOption[] = (() => {
+        switch (formData.scope) {
+            case 'PRODUCT_SPECIFIC':
+            case 'Product_SPECIFIC':
+                return [...products]
+                    .sort((a, b) => a.title.localeCompare(b.title))
+                    .map((product) => ({
+                        value: product.id,
+                        label: product.title,
+                        meta: `${product.category} - ${product.id}`,
+                    }));
+            case 'CATEGORY_SPECIFIC':
+                return [...new Set(products.map((product) => product.category))]
+                    .sort((a, b) => a.localeCompare(b))
+                    .map((category) => ({
+                        value: category,
+                        label: category,
+                    }));
+            case 'EVENT_SPECIFIC':
+                return [...events]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((event) => ({
+                        value: event.id,
+                        label: event.name,
+                        meta: `${event.date} - ${event.id}`,
+                    }));
+            case 'USER_ROLE_SPECIFIC':
+                return Object.values(UserRole).map((role) => ({
+                    value: role,
+                    label: role,
+                }));
+            default:
+                return [];
+        }
+    })();
+
+    const requiresTargetSelection = [
+        'PRODUCT_SPECIFIC',
+        'Product_SPECIFIC',
+        'CATEGORY_SPECIFIC',
+        'EVENT_SPECIFIC',
+        'USER_ROLE_SPECIFIC',
+    ].includes(String(formData.scope));
+
+    const scopeTargetValueSet = new Set(scopeTargetOptions.map((option) => option.value));
+    const legacyTargetIds = selectedTargetIds.filter(
+        (targetId) => !scopeTargetValueSet.has(targetId),
+    );
+
+    const setSelectedTargetIds = (nextTargetIds: string[]) => {
+        setTargetIdsText(nextTargetIds.join(', '));
+    };
+
+    const toggleTargetId = (targetId: string) => {
+        if (selectedTargetIds.includes(targetId)) {
+            setSelectedTargetIds(
+                selectedTargetIds.filter((currentTargetId) => currentTargetId !== targetId),
+            );
+            return;
+        }
+
+        setSelectedTargetIds([...selectedTargetIds, targetId]);
+    };
+
+    const removeLegacyTargetId = (targetId: string) => {
+        setSelectedTargetIds(
+            selectedTargetIds.filter((currentTargetId) => currentTargetId !== targetId),
+        );
+    };
+
+    const handleScopeChange = (scope: Discount['scope']) => {
+        setFormData({ ...formData, scope });
+        setTargetIdsText('');
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const discountToSave: Discount = {
+            id: formData.id || `DSC-${Date.now()}`,
+            code: formData.code!.toUpperCase(),
+            title: formData.title || 'Untitled',
+            description: formData.description || '',
+            type: formData.type as any,
+            value: Number(formData.value),
+            scope: formData.scope as any,
+            targetIds: parseTargetIds(targetIdsText),
+            validFrom: formData.validFrom || new Date().toISOString(),
+            validUntil: formData.validUntil || new Date().toISOString(),
+            maxUsageLimit: Number(formData.maxUsageLimit),
+            currentUsageCount: formData.currentUsageCount || 0,
+            currentBudgetBurned: formData.currentBudgetBurned || 0,
+            isFeatured: !!formData.isFeatured,
+            conditions: abac // Attach ABAC
+        };
+        onSave(discountToSave);
+    };
+
+    // Helper to toggle array items
+    const toggleArray = <T extends string>(field: keyof AbacCondition, value: T) => {
+        const current = (abac[field] as T[]) || [];
+        const updated = current.includes(value) ? current.filter(v => v !== value) : [...current, value];
+        setAbac({ ...abac, [field]: updated });
+    };
 
     return (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -174,7 +311,7 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
                                 <select
                                     className="w-full p-3 border border-slate-300 rounded-xl text-sm bg-white"
                                     value={formData.scope}
-                                    onChange={e => setFormData({ ...formData, scope: e.target.value as any })}
+                                    onChange={e => handleScopeChange(e.target.value as Discount['scope'])}
                                 >
                                     <option value="GLOBAL">Global</option>
                                     <option value="PRODUCT_SPECIFIC">Product specific</option>
@@ -186,20 +323,79 @@ const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, onSave, 
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">{targetIdsLabel}</label>
-                                <input
-                                    type="text"
-                                    className="w-full p-3 border border-slate-300 rounded-xl text-sm"
-                                    placeholder={
-                                        formData.scope === 'PRODUCT_SPECIFIC' || formData.scope === 'Product_SPECIFIC'
-                                            ? 'PROD-123, PROD-456'
-                                            : formData.scope === 'USER_ROLE_SPECIFIC'
-                                                ? 'Member, Sales'
-                                                : 'Optional target IDs'
-                                    }
-                                    value={targetIdsText}
-                                    onChange={e => setTargetIdsText(e.target.value)}
-                                />
+                                {requiresTargetSelection && !targetOptionsError && scopeTargetOptions.length > 0 ? (
+                                    <details className="rounded-xl border border-slate-300 bg-white">
+                                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm text-slate-700">
+                                            <span className="truncate">
+                                                {selectedTargetIds.length > 0
+                                                    ? `${selectedTargetIds.length} target selected`
+                                                    : `Select ${targetIdsLabel.toLowerCase()}`}
+                                            </span>
+                                            <ChevronDown size={16} className="shrink-0 text-slate-400" />
+                                        </summary>
+                                        <div className="max-h-56 space-y-2 overflow-y-auto border-t border-slate-200 p-3">
+                                            {scopeTargetOptions.map((option) => (
+                                                <label
+                                                    key={option.value}
+                                                    className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-slate-50"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-purple-600"
+                                                        checked={selectedTargetIds.includes(option.value)}
+                                                        onChange={() => toggleTargetId(option.value)}
+                                                    />
+                                                    <span className="min-w-0">
+                                                        <span className="block text-sm font-medium text-slate-700">
+                                                            {option.label}
+                                                        </span>
+                                                        {option.meta && (
+                                                            <span className="block text-[11px] text-slate-400">
+                                                                {option.meta}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </details>
+                                ) : requiresTargetSelection ? (
+                                    <input
+                                        type="text"
+                                        className="w-full p-3 border border-slate-300 rounded-xl text-sm"
+                                        placeholder="Enter comma-separated target IDs"
+                                        value={targetIdsText}
+                                        onChange={e => setTargetIdsText(e.target.value)}
+                                    />
+                                ) : (
+                                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                                        No direct target selection for this scope.
+                                    </div>
+                                )}
+                                {targetOptionsLoading && requiresTargetSelection && (
+                                    <p className="mt-1 text-[10px] text-slate-400">Loading available targets...</p>
+                                )}
+                                {legacyTargetIds.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {legacyTargetIds.map((targetId) => (
+                                            <button
+                                                key={targetId}
+                                                type="button"
+                                                onClick={() => removeLegacyTargetId(targetId)}
+                                                className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700"
+                                            >
+                                                {targetId}
+                                                <X size={12} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                                 <p className="mt-1 text-[10px] text-slate-400">{targetIdsHint}</p>
+                                {targetOptionsError && requiresTargetSelection && (
+                                    <p className="mt-1 text-[10px] text-amber-600">
+                                        Option list unavailable. Manual entry is still enabled.
+                                    </p>
+                                )}
                             </div>
                         </div>
 
