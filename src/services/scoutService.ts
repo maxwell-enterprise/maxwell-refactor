@@ -4,8 +4,14 @@ import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { apiRequest } from '../repositories/api/apiClient';
 
-const SCOUT_CONFIG = {
-    MAX_AI_REPLIES: 5
+type ScoutChatApiResponse = {
+  reply: string;
+  status: 'ACTIVE' | 'COMPLETED';
+};
+
+type ScoutLeadRegistrationResponse = {
+  created: boolean;
+  member: { id: string };
 };
 
 // Seed for Schema Viewer
@@ -50,54 +56,34 @@ export const ScoutService = {
   },
 
   sendMessage: async (session: ScoutSession, userText: string): Promise<{ text: string; session: ScoutSession }> => {
-    // 1. Check Reply Limits
-    const aiReplyCount = session.messages.filter(m => m.sender === 'ai').length;
-    
-    if (aiReplyCount >= SCOUT_CONFIG.MAX_AI_REPLIES) {
-        const closingMsg = `Thank you! Based on our chat, I see significant potential in your leadership journey. Sign in to continue and access a tailored roadmap for your next leadership step.`;
-        
-        const updatedSession: ScoutSession = {
-            ...session,
-            status: 'COMPLETED',
-            messages: [
-                ...session.messages,
-                { sender: 'user', text: userText, timestamp: Date.now() },
-                { sender: 'ai', text: closingMsg, timestamp: Date.now() + 100 }
-            ]
-        };
-        await ScoutService.updateSession(updatedSession);
-        return { text: closingMsg, session: updatedSession };
-    }
+    const now = Date.now();
+    const result = await apiRequest<ScoutChatApiResponse>(
+        '/scout/chat',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                sessionId: session.id,
+                leadName: session.leadName,
+                leadEmail: session.leadEmail,
+                latestUserMessage: userText,
+                messages: session.messages,
+            }),
+            skipBackendFailureTracking: true,
+        },
+    );
 
-    // 2. Normal AI Processing (Mocked)
-    await new Promise(resolve => setTimeout(resolve, 1500)); 
-
-    let aiResponse = "";
-    const lowerText = userText.toLowerCase();
-    
-    if (lowerText.includes("team") || lowerText.includes("staff") || lowerText.includes("people")) {
-        if (lowerText.includes("40") || lowerText.includes("manager") || lowerText.includes("managers")) {
-             aiResponse = "Managing a layered team is a Level 4 challenge. When you have leaders reporting to you, your focus must shift from 'doing' to 'empowering'. What's the biggest friction point in your team's execution right now?";
-        } else {
-             aiResponse = "Leading a team is the first step into Level 2 & 3. It sounds like you are building influence. Do you feel your team follows you because they have to (Title) or because they want to (Relationship)?";
-        }
-    } else if (lowerText.includes("stuck") || lowerText.includes("time") || lowerText.includes("busy")) {
-        aiResponse = "That 'busy trap' is classic Level 3 (Production). You are getting results, but you might be the bottleneck. Have you identified a potential successor you can mentor?";
-    } else {
-        aiResponse = "That's a valuable perspective. Leadership is indeed a journey of growth. How does this challenge impact your organization's bottom line or culture?";
-    }
-
-    const updatedSession = {
+    const updatedSession: ScoutSession = {
       ...session,
       messages: [
         ...session.messages,
-        { sender: 'user' as const, text: userText, timestamp: Date.now() },
-        { sender: 'ai' as const, text: aiResponse, timestamp: Date.now() + 100 }
-      ]
+        { sender: 'user' as const, text: userText, timestamp: now },
+        { sender: 'ai' as const, text: result.reply, timestamp: now + 100 }
+      ],
+      status: result.status,
     };
 
     await ScoutService.updateSession(updatedSession);
-    return { text: aiResponse, session: updatedSession };
+    return { text: result.reply, session: updatedSession };
   },
 
   updateSession: async (session: ScoutSession) => {
@@ -141,7 +127,7 @@ export const ScoutService = {
   },
 
   registerLeadAtCompletion: async (session: ScoutSession) => {
-      return apiRequest<{ created: boolean; member: { id: string } }>(
+      return apiRequest<ScoutLeadRegistrationResponse>(
           '/members/public/scout-leads',
           {
               method: 'POST',

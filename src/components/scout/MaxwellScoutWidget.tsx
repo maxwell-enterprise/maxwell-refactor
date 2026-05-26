@@ -7,6 +7,18 @@ interface MaxwellScoutWidgetProps {
   onRequireLogin: () => void;
 }
 
+type LeadProfileState = {
+  fullName: string;
+  email: string;
+  syncStatus: 'idle' | 'syncing' | 'done' | 'error';
+};
+
+const INITIAL_LEAD_PROFILE: LeadProfileState = {
+  fullName: '',
+  email: '',
+  syncStatus: 'idle',
+};
+
 const MaxwellScoutWidget: React.FC<MaxwellScoutWidgetProps> = ({
   onRequireLogin,
 }) => {
@@ -14,11 +26,8 @@ const MaxwellScoutWidget: React.FC<MaxwellScoutWidgetProps> = ({
   const [step, setStep] = useState<'TEASER' | 'FORM' | 'VERIFY' | 'CHAT'>('TEASER');
   
   // Form State
-  const [leadProfile, setLeadProfile] = useState({
-      fullName: '',
-      email: '',
-      syncStatus: 'idle' as 'idle' | 'syncing' | 'done' | 'error',
-  });
+  const [leadProfile, setLeadProfile] =
+    useState<LeadProfileState>(INITIAL_LEAD_PROFILE);
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -68,9 +77,12 @@ const MaxwellScoutWidget: React.FC<MaxwellScoutWidgetProps> = ({
       onRequireLogin();
   }, [session?.status, onRequireLogin]);
 
-  const handleStart = async () => {
+  const updateLeadProfile = (patch: Partial<LeadProfileState>) => {
+      setLeadProfile((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleStart = () => {
       if (!leadProfile.fullName || !leadProfile.email) return;
-      // In real app, trigger backend to send OTP here
       setStep('VERIFY');
   };
 
@@ -103,18 +115,31 @@ const MaxwellScoutWidget: React.FC<MaxwellScoutWidgetProps> = ({
 
       setIsTyping(true);
 
-      // 1. Process Chat Response
-      const { session: updatedSession } = await ScoutService.sendMessage(session, userText);
-      setSession(updatedSession);
-      setIsTyping(false);
+      try {
+          const { session: updatedSession } = await ScoutService.sendMessage(session, userText);
+          setSession(updatedSession);
 
-      // 2. Background Qualification (Fire and forget)
-      // Only run if not completed to save resources
-      if (updatedSession.status !== 'COMPLETED') {
-          ScoutService.qualifyLead(userText, session.score).then(newScore => {
-              console.log("Updated Lead Score (Hidden):", newScore);
-              setSession(prev => prev ? ({ ...prev, score: newScore }) : null);
-          });
+          if (updatedSession.status !== 'COMPLETED') {
+              ScoutService.qualifyLead(userText, session.score).then(newScore => {
+                  console.log("Updated Lead Score (Hidden):", newScore);
+                  setSession(prev => prev ? ({ ...prev, score: newScore }) : null);
+              });
+          }
+      } catch (error) {
+          console.error('[SCOUT] Chat request failed:', error);
+          setSession(prev => prev ? ({
+              ...prev,
+              messages: [
+                  ...prev.messages,
+                  {
+                      sender: 'ai',
+                      text: "I'm having trouble responding right now. Please try again in a moment.",
+                      timestamp: Date.now() + 100,
+                  },
+              ],
+          }) : null);
+      } finally {
+          setIsTyping(false);
       }
   };
 
@@ -151,7 +176,7 @@ const MaxwellScoutWidget: React.FC<MaxwellScoutWidgetProps> = ({
                     className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:border-blue-500 outline-none"
                     placeholder="John Doe"
                     value={leadProfile.fullName}
-                    onChange={e => setLeadProfile(prev => ({ ...prev, fullName: e.target.value }))}
+                    onChange={e => updateLeadProfile({ fullName: e.target.value })}
                   />
               </div>
               <div>
@@ -161,7 +186,7 @@ const MaxwellScoutWidget: React.FC<MaxwellScoutWidgetProps> = ({
                     className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:border-blue-500 outline-none"
                     placeholder="john@company.com"
                     value={leadProfile.email}
-                    onChange={e => setLeadProfile(prev => ({ ...prev, email: e.target.value }))}
+                    onChange={e => updateLeadProfile({ email: e.target.value })}
                   />
               </div>
               <button 
