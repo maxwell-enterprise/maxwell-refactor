@@ -1,15 +1,11 @@
-
-import { GoogleGenAI } from "@google/genai";
-import { ScoutSession, LeadScore, Member } from '../types/index'; // Added Member
+import { ScoutSession, LeadScore } from '../types/index';
 import { APP_CONFIG } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
-import { DataService } from './dataService'; // Import DataService to bridge Scout and CRM
+import { apiRequest } from '../repositories/api/apiClient';
 
 const SCOUT_CONFIG = {
-    MAX_AI_REPLIES: 5,
-    ADMIN_WA_NUMBER: '628123456789',
-    HIGH_TICKET_THRESHOLD: 75000000
+    MAX_AI_REPLIES: 5
 };
 
 // Seed for Schema Viewer
@@ -28,7 +24,6 @@ const SEED_SESSIONS: ScoutSession[] = [
 export const ScoutService = {
   
   startSession: async (name: string, email: string): Promise<ScoutSession> => {
-    // 1. Create the Chat Session
     const session: ScoutSession = {
       id: `SCT-${Date.now()}`,
       leadName: name,
@@ -51,45 +46,6 @@ export const ScoutService = {
         await supabase.from('lead_scout_conversations').insert(session);
     }
 
-    // 2. BRIDGE TO CRM: Ensure this user exists in Members table as a Lead
-    // This allows the Sales Team to see them in "Leads Dashboard" immediately
-    try {
-        const allMembers = await DataService.getMembers();
-        const existingMember = allMembers.find(m => m.email.toLowerCase() === email.toLowerCase());
-
-        if (!existingMember) {
-            console.log(`[SCOUT] Creating new Lead in CRM for ${email}`);
-            const newLead: Member = {
-                id: `LEAD-${Date.now()}`, // Generate a Lead ID
-                name: name,
-                email: email,
-                phone: '', // Phone might be collected later or manually
-                category: 'Guest',
-                program: 'Scout Inquiry', // Indicator for Sales team
-                joinMonth: new Date().toISOString().slice(0, 7),
-                lifecycleStage: 'IDENTIFIED', // IMPORTANT: This puts them in the Leads View
-                nTagStatus: 'Not yet',
-                scholarship: false,
-                mentorshipDuration: 0,
-                platform: 'Digital',
-                regInUS: false,
-                tags: ['Scout_User', 'AI_Lead'], // Tag for filtering
-                engagement: {
-                    lastActiveDate: new Date().toISOString(),
-                    eventsAttendedCount: 0,
-                    contentCompletionRate: 0,
-                    communityReputationScore: 0,
-                    leadScore: 10 // Start with base score
-                }
-            };
-            await DataService.addMember(newLead);
-        } else {
-            console.log(`[SCOUT] User ${email} already exists in CRM. Skipping creation.`);
-        }
-    } catch (e) {
-        console.error("[SCOUT] Failed to sync lead to CRM:", e);
-    }
-
     return session;
   },
 
@@ -98,7 +54,7 @@ export const ScoutService = {
     const aiReplyCount = session.messages.filter(m => m.sender === 'ai').length;
     
     if (aiReplyCount >= SCOUT_CONFIG.MAX_AI_REPLIES) {
-        const closingMsg = `Thank you! Based on our chat, I see significant potential in your leadership journey. To provide a tailored roadmap for your specific scale, let's continue this directly with our Senior Consultant on WhatsApp.`;
+        const closingMsg = `Thank you! Based on our chat, I see significant potential in your leadership journey. Sign in to continue and access a tailored roadmap for your next leadership step.`;
         
         const updatedSession: ScoutSession = {
             ...session,
@@ -184,9 +140,18 @@ export const ScoutService = {
     return newScore;
   },
 
-  getWhatsappLink: (session: ScoutSession) => {
-      const summary = `Hi Admin, I just finished a session with Maxwell Scout. Name: ${session.leadName}. Score: L${session.score.willingness}/C${session.score.capacity}. Recommendation: ${session.score.recommendedProduct}.`;
-      return `https://wa.me/${SCOUT_CONFIG.ADMIN_WA_NUMBER}?text=${encodeURIComponent(summary)}`;
+  registerLeadAtCompletion: async (session: ScoutSession) => {
+      return apiRequest<{ created: boolean; member: { id: string } }>(
+          '/members/public/scout-leads',
+          {
+              method: 'POST',
+              body: JSON.stringify({
+                  fullName: session.leadName,
+                  email: session.leadEmail,
+              }),
+              skipBackendFailureTracking: true,
+          },
+      );
   },
 
   getAllSessions: async (): Promise<ScoutSession[]> => {
