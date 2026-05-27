@@ -9,6 +9,7 @@ import { EventBus } from './eventBus';
 import { INVENTORY_DATA } from '../constants';
 import { RepositoryFactory } from './repositories/index';
 import { apiRequest } from '../repositories/api/apiClient';
+import { APP_CONFIG } from '../lib/config';
 import { invalidateWalletSessionCache } from '../lib/walletSessionCache';
 import { invalidateMemberZoneSessionCache } from '../lib/memberZoneSessionCache';
 
@@ -79,7 +80,12 @@ export const PaymentService = {
   initiateTransaction: async (
     payload: InitiatePaymentPayload,
   ): Promise<{ transaction: PaymentTransaction; snapToken: string }> => {
-    // 1. BUSINESS LOGIC: Stock Reservation & SHARED INVENTORY CHECK
+    // Client-side stock checks are skipped when Nest is the payment backend — snap/checkout
+    // validates on the server and avoids two full catalog fetches before every pay click.
+    const skipClientStockCheck =
+      !APP_CONFIG.USE_MOCK && APP_CONFIG.DOMAINS.PAYMENTS === 'API';
+
+    if (!skipClientStockCheck) {
     const [allEvents, allProducts] = await Promise.all([
       DataService.getEvents(),
       DataService.getProducts(),
@@ -121,6 +127,7 @@ export const PaymentService = {
                 }
             }
         }
+    }
     }
 
     // 2. CREATE PAYMENT IN BACKEND (BE is source of truth for amount)
@@ -226,6 +233,45 @@ export const PaymentService = {
     return res;
   },
 
+  /**
+   * After server-side settle (simulate-settle / free checkout / webhook), the payment is already PAID.
+   * Do not poll public-status — that added up to ~5s of artificial delay. Only emit local UI side effects.
+   */
+  notifyLocalPaymentSuccess: async (
+    transactionId: string,
+    totalAmount: number,
+    itemsSnapshot?: PaymentTransaction['itemsSnapshot'],
+    customerEmail?: string,
+    walletUserId?: string,
+  ): Promise<void> => {
+    if (itemsSnapshot && itemsSnapshot.length > 0 && customerEmail?.includes('@')) {
+      let memberId = walletUserId?.trim() ?? '';
+      let memberName = '';
+      let memberPhone = '';
+      if (!memberId) {
+        const members = await DataService.getMembers();
+        const member = members.find(
+          (m) => m.email.toLowerCase() === customerEmail.trim().toLowerCase(),
+        );
+        memberId = member?.id ?? '';
+        memberName = member?.name ?? '';
+        memberPhone = member?.phone ?? '';
+      }
+      await EventBus.emit('PAYMENT_SUCCESS', {
+        transactionId,
+        orderId: transactionId,
+        amount: totalAmount,
+        memberId,
+        name: memberName,
+        member_name: memberName,
+        email: customerEmail,
+        phone: memberPhone,
+        product_name: itemsSnapshot.map((i) => i.name).join(', '),
+      });
+    }
+    dispatchWalletRefresh();
+  },
+
   confirmManualTransfer: async (
     transactionId: string,
     _amountReceived: number,
@@ -240,7 +286,7 @@ export const PaymentService = {
       throw new Error('Missing customer email for payment status verification');
     }
     let backendTx: { paymentStatus?: string; totalAmount?: number } | null = null;
-    const maxAttempts = 16;
+    const maxAttempts = 6;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const statusRes = await apiRequest<{
         paymentStatus: string;
@@ -254,8 +300,7 @@ export const PaymentService = {
       });
       backendTx = { paymentStatus: statusRes.paymentStatus, totalAmount: statusRes.totalAmount };
       if (statusRes.paymentStatus === 'PAID') break;
-      // Short backoff: webhook / settle is usually immediate; long sleeps felt sluggish in checkout.
-      await new Promise((r) => setTimeout(r, 350));
+      await new Promise((r) => setTimeout(r, attempt === 0 ? 80 : 200));
     }
 
     if (!backendTx || backendTx.paymentStatus !== 'PAID') {

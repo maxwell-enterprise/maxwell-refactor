@@ -1,5 +1,5 @@
 
-import { Discount, Product, UserRole } from '../types/index';
+import { CartItem, Discount, Product, UserRole } from '../types/index';
 
 function normalizeDiscountScope(scope: string | undefined): string {
   return String(scope ?? '')
@@ -7,7 +7,6 @@ function normalizeDiscountScope(scope: string | undefined): string {
     .toUpperCase()
     .replace(/-/g, '_');
 }
-import { UserEntitlements } from '../types/access';
 import { DISCOUNT_DATA } from '../constants';
 import { APP_CONFIG, assertExternalApiMode, BackendMode } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
@@ -15,6 +14,7 @@ import { supabase } from '../lib/supabaseClient';
 import { apiRequest } from '../repositories/api/apiClient';
 import { PricingEngine } from './pricingEngine'; // Use Engine for ABAC
 import { EntitlementService } from './entitlementService'; // To fetch user context
+import { UserVoucherService } from './userVoucherService';
 
 export interface DiscountRedemptionLog {
     id: string;
@@ -23,6 +23,83 @@ export interface DiscountRedemptionLog {
     discountAmount: number;
     userId?: string;
     timestamp: string;
+}
+
+/** Discriminated result from `validateForCart`: precise reason on failure, applicable line-set on success. */
+export type CartVoucherValidation =
+  | { ok: true; reason?: undefined; applicableLines: number }
+  | { ok: false; reason: string; code: VoucherFailureCode };
+
+export type VoucherFailureCode =
+  | 'EMPTY_CART'
+  | 'NOT_STARTED'
+  | 'EXPIRED'
+  | 'USAGE_EXHAUSTED'
+  | 'BUDGET_EXHAUSTED'
+  | 'ROLE_MISMATCH'
+  | 'ABAC_INELIGIBLE'
+  | 'PRODUCT_SCOPE_MISMATCH'
+  | 'CATEGORY_SCOPE_MISMATCH'
+  | 'EVENT_SCOPE_MISMATCH'
+  | 'MIN_QTY_NOT_MET'
+  | 'ALREADY_REDEEMED';
+
+function formatDate(input: string): string {
+  try {
+    return new Date(input).toLocaleDateString();
+  } catch {
+    return input;
+  }
+}
+
+function collectCartCategories(cart: CartItem[], products: Product[]): Set<string> {
+  const out = new Set<string>();
+  for (const item of cart) {
+    const p = products.find((pp) => pp.id === item.productId);
+    if (p?.category) out.add(p.category);
+  }
+  return out;
+}
+
+function collectCartProductIds(cart: CartItem[]): Set<string> {
+  return new Set(cart.map((item) => item.productId));
+}
+
+function productHasEvent(product: Product, eventId: string): boolean {
+  const matchInItems = (items: Product['items'] | undefined): boolean => {
+    if (!Array.isArray(items)) return false;
+    return items.some((entry) => {
+      const meta = (entry?.meta ?? null) as { eventId?: string } | null;
+      return meta?.eventId === eventId;
+    });
+  };
+  if (matchInItems(product.items)) return true;
+  if (product.hasVariants && Array.isArray(product.variants)) {
+    for (const v of product.variants) {
+      if (matchInItems(v.items)) return true;
+    }
+  }
+  return false;
+}
+
+function collectCartEventIds(cart: CartItem[], products: Product[]): Set<string> {
+  const ids = new Set<string>();
+  for (const item of cart) {
+    const product = products.find((p) => p.id === item.productId);
+    if (!product) continue;
+    const walk = (items: Product['items'] | undefined) => {
+      if (!Array.isArray(items)) return;
+      for (const entry of items) {
+        const meta = (entry?.meta ?? null) as { eventId?: string } | null;
+        if (meta?.eventId) ids.add(meta.eventId);
+      }
+    };
+    walk(product.items);
+    if (product.hasVariants && Array.isArray(product.variants)) {
+      for (const v of product.variants) walk(v.items);
+    }
+  }
+  return ids;
 }
 
 const SEED_LOGS: DiscountRedemptionLog[] = [
@@ -122,29 +199,196 @@ export const DiscountService = {
   // Refactored to be Async for Context Fetching
   isValid: async (discount: Discount, userRole: UserRole, userId?: string): Promise<{ valid: boolean; reason?: string }> => {
     const now = new Date();
-    if (new Date(discount.validFrom) > now) return { valid: false, reason: 'Promotion has not started yet.' };
-    if (new Date(discount.validUntil) < now) return { valid: false, reason: 'Promotion has expired.' };
-    if (discount.maxUsageLimit && discount.currentUsageCount >= discount.maxUsageLimit) return { valid: false, reason: 'Voucher usage limit reached.' };
-    if (discount.maxBudgetLimit && discount.currentBudgetBurned >= discount.maxBudgetLimit) return { valid: false, reason: 'Promo budget exhausted.' };
-    
-    // Legacy Scope check
-    if (discount.scope === 'USER_ROLE_SPECIFIC' && discount.targetIds && !discount.targetIds.includes(userRole)) {
-         return { valid: false, reason: `Exclusive for ${discount.targetIds.join(', ')}s only.` };
+    if (new Date(discount.validFrom) > now) {
+      return { valid: false, reason: `Promo belum berlaku sampai ${formatDate(discount.validFrom)}.` };
+    }
+    if (new Date(discount.validUntil) < now) {
+      return { valid: false, reason: `Voucher sudah berakhir pada ${formatDate(discount.validUntil)}.` };
+    }
+    if (discount.maxUsageLimit && discount.currentUsageCount >= discount.maxUsageLimit) {
+      return { valid: false, reason: 'Kuota voucher sudah habis.' };
+    }
+    if (discount.maxBudgetLimit && discount.currentBudgetBurned >= discount.maxBudgetLimit) {
+      return { valid: false, reason: 'Budget promo voucher ini sudah habis.' };
     }
 
-    // NEW: ABAC Check using Pricing Engine logic
+    if (discount.scope === 'USER_ROLE_SPECIFIC' && discount.targetIds && !discount.targetIds.includes(userRole)) {
+      return { valid: false, reason: `Voucher ini khusus role: ${discount.targetIds.join(', ')}.` };
+    }
+
     if (discount.conditions && userId) {
-        const userEntitlements = await EntitlementService.getUserEntitlements(userId);
-        if (userEntitlements) {
-            // Casting to any to bridge type mismatch between general AbacCondition (string[]) and strict Pricing AbacCondition (Enum[])
-            const isEligible = PricingEngine.evaluateABAC(discount.conditions as any, userEntitlements);
-            if (!isEligible) {
-                return { valid: false, reason: 'You do not meet the criteria for this voucher.' };
-            }
+      const userEntitlements = await EntitlementService.getUserEntitlements(userId);
+      if (userEntitlements) {
+        // AbacCondition shape differs between domains (string[] vs enum[]); cast is intentional.
+        const isEligible = PricingEngine.evaluateABAC(discount.conditions as any, userEntitlements);
+        if (!isEligible) {
+          return { valid: false, reason: 'Kamu belum memenuhi syarat untuk voucher ini.' };
         }
+      }
+    }
+
+    if (userId && shouldUseApi()) {
+      try {
+        const eligibility = await UserVoucherService.checkVoucherEligibility(
+          discount.code,
+        );
+        if (!eligibility.eligible) {
+          return {
+            valid: false,
+            reason:
+              eligibility.reason ??
+              'Kamu sudah pernah menggunakan voucher ini (maksimal 1x per akun).',
+          };
+        }
+      } catch (err) {
+        console.warn(
+          '[DiscountService] Voucher eligibility check failed:',
+          err instanceof Error ? err.message : err,
+        );
+      }
     }
 
     return { valid: true };
+  },
+
+  /**
+   * Full per-cart validation: returns explicit reason per scope so the UI can tell users why a voucher
+   * was rejected (product/category/event mismatch, not just a generic "not applicable").
+   * Always run AFTER `isValid` (time/usage/role/ABAC) for full semantics.
+   */
+  validateForCart: async (
+    discount: Discount,
+    cart: CartItem[],
+    products: Product[],
+    userRole: UserRole,
+    userId?: string,
+  ): Promise<CartVoucherValidation> => {
+    if (cart.length === 0) {
+      return { ok: false, code: 'EMPTY_CART', reason: 'Keranjang masih kosong. Tambahkan produk dulu sebelum memakai voucher.' };
+    }
+
+    const baseValidity = await DiscountService.isValid(discount, userRole, userId);
+    if (!baseValidity.valid) {
+      const reason = baseValidity.reason ?? 'Voucher tidak berlaku.';
+      const code: VoucherFailureCode =
+        reason.toLowerCase().includes('sudah pernah')
+          ? 'ALREADY_REDEEMED'
+          : reason.includes('habis')
+            ? reason.includes('Budget')
+              ? 'BUDGET_EXHAUSTED'
+              : 'USAGE_EXHAUSTED'
+            : reason.toLowerCase().includes('belum berlaku')
+              ? 'NOT_STARTED'
+              : reason.toLowerCase().includes('berakhir')
+                ? 'EXPIRED'
+                : reason.toLowerCase().includes('role')
+                  ? 'ROLE_MISMATCH'
+                  : 'ABAC_INELIGIBLE';
+      return { ok: false, code, reason };
+    }
+
+    const scope = normalizeDiscountScope(discount.scope);
+    const targets = Array.isArray(discount.targetIds) ? discount.targetIds : [];
+
+    if (scope === 'PRODUCT_SPECIFIC') {
+      const cartProductIds = collectCartProductIds(cart);
+      const hasTarget = targets.some((id) => cartProductIds.has(id));
+      if (!hasTarget) {
+        const titles = targets
+          .map((id) => products.find((p) => p.id === id)?.title)
+          .filter((t): t is string => !!t);
+        const targetLabel = titles.length > 0 ? titles.join(', ') : targets.join(', ');
+        return {
+          ok: false,
+          code: 'PRODUCT_SCOPE_MISMATCH',
+          reason: targetLabel
+            ? `Voucher ${discount.code} hanya berlaku untuk produk: ${targetLabel}. Tambahkan produk tersebut ke keranjangmu.`
+            : `Voucher ${discount.code} tidak berlaku untuk produk di keranjangmu.`,
+        };
+      }
+    }
+
+    if (scope === 'CATEGORY_SPECIFIC') {
+      const cartCategories = collectCartCategories(cart, products);
+      const hasTarget = targets.some((cat) => cartCategories.has(cat));
+      if (!hasTarget) {
+        return {
+          ok: false,
+          code: 'CATEGORY_SCOPE_MISMATCH',
+          reason: `Voucher ${discount.code} hanya berlaku untuk kategori: ${targets.join(', ')}.`,
+        };
+      }
+    }
+
+    if (scope === 'EVENT_SPECIFIC') {
+      const cartProductIds = collectCartProductIds(cart);
+      const cartEventIds = collectCartEventIds(cart, products);
+      const matchByProductId = targets.some((id) => cartProductIds.has(id));
+      const matchByEventId = targets.some((id) => cartEventIds.has(id));
+      if (!matchByProductId && !matchByEventId) {
+        return {
+          ok: false,
+          code: 'EVENT_SCOPE_MISMATCH',
+          reason: `Voucher ${discount.code} hanya berlaku untuk event tertentu.`,
+        };
+      }
+    }
+
+    if (discount.type === 'BUNDLE_VOLUME' && discount.minQty) {
+      const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+      if (totalQty < discount.minQty) {
+        return {
+          ok: false,
+          code: 'MIN_QTY_NOT_MET',
+          reason: `Minimum pembelian ${discount.minQty} item untuk pakai voucher ${discount.code}.`,
+        };
+      }
+    }
+
+    let applicableLines = 0;
+    for (const item of cart) {
+      const product = products.find((p) => p.id === item.productId);
+      if (!product) continue;
+
+      const unit = (() => {
+        if (product.hasVariants && item.variantId) {
+          const v = product.variants?.find((vv) => vv.id === item.variantId);
+          if (v) return v.priceIdr;
+        }
+        return product.priceIdr;
+      })();
+
+      const eventMatch =
+        scope === 'EVENT_SPECIFIC' &&
+        (targets.includes(product.id) ||
+          targets.some((eventId) => productHasEvent(product, eventId)));
+
+      // calculateDiscount only checks the literal targetIds; EVENT_SPECIFIC needs us to expand via product items.
+      if (eventMatch) {
+        applicableLines += 1;
+        continue;
+      }
+
+      const lineDiscount = DiscountService.calculateDiscount(
+        discount,
+        unit,
+        item.quantity,
+        product.category,
+        product.id,
+        userRole,
+      );
+      if (lineDiscount > 0) applicableLines += 1;
+    }
+
+    if (applicableLines === 0) {
+      return {
+        ok: false,
+        code: 'PRODUCT_SCOPE_MISMATCH',
+        reason: `Voucher ${discount.code} tidak bisa diterapkan ke produk yang ada di keranjangmu.`,
+      };
+    }
+
+    return { ok: true, applicableLines };
   },
 
   calculateDiscount: (
@@ -192,39 +436,22 @@ export const DiscountService = {
     return Math.min(discountAmount, productPrice);
   },
 
-  recordRedemption: async (code: string, orderAmount: number, discountAmount: number, userId?: string) => {
-      const log: DiscountRedemptionLog = {
-          id: `RED-${Date.now()}`,
-          discountCode: code,
-          orderAmount,
-          discountAmount,
-          userId,
-          timestamp: new Date().toISOString()
-      };
-
-      assertExternalApiMode('Discount vouchers', getDiscountMode());
-
-      if (APP_CONFIG.USE_MOCK) {
-          await DevDatabase.add('discount_redemption_logs', log);
-          
-          // Update actual record in DB
-          const all = await DiscountService.getDiscounts();
-          const discount = all.find(d => d.code === code);
-          if(discount) {
-              discount.currentUsageCount++;
-              discount.currentBudgetBurned += discountAmount;
-              await DevDatabase.add('discounts', discount);
-          }
-          return;
-      }
-
-      if (supabase) {
-          await supabase.from('discount_redemption_logs').insert(log);
-          await supabase.rpc('increment_discount_usage', { 
-              code_input: code, 
-              amount: discountAmount 
-          });
-      }
+  /**
+   * Server-side recording is the source of truth (Nest `recordVoucherRedemptionForPayment` + DB
+   * trigger). The client must not double-count: this is intentionally a no-op kept for callers
+   * that still reference the symbol so we fail loudly if something invokes it again.
+   */
+  recordRedemption: async (
+    _code: string,
+    _orderAmount: number,
+    _discountAmount: number,
+    _userId?: string,
+  ): Promise<void> => {
+    if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+      console.warn(
+        '[DiscountService.recordRedemption] No-op on the client; redemption is recorded server-side after PAID.',
+      );
+    }
   },
 
   getLogs: async (): Promise<DiscountRedemptionLog[]> => {

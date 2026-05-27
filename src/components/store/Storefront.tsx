@@ -194,8 +194,11 @@ const Storefront: React.FC<StorefrontProps> = ({
           } else {
             setStickyVoucher(null);
           }
-        } catch {
-          // ignore
+        } catch (error) {
+          console.warn(
+            '[Storefront] Failed to load sticky voucher:',
+            error instanceof Error ? error.message : error,
+          );
         }
       })();
     }, [user?.id]);
@@ -342,11 +345,40 @@ const Storefront: React.FC<StorefrontProps> = ({
         try {
           await UserVoucherService.claimMyVoucher(autoAppliedDiscount, autoCheckoutProductId ?? undefined);
           setStickyVoucher({ code: autoAppliedDiscount, productId: autoCheckoutProductId ?? undefined });
-        } catch {
-          // ignore
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Voucher campaign tidak dapat disimpan.';
+          showToast(message, 'error');
         }
       })();
-    }, [user?.id, autoAppliedDiscount, autoCheckoutProductId]);
+    }, [user?.id, autoAppliedDiscount, autoCheckoutProductId, showToast]);
+
+    /** Buyer-side realtime: pick up updates if backend revokes / refreshes sticky voucher. */
+    useEffect(() => {
+      if (!user?.id) return;
+      let cancelled = false;
+      const refresh = async () => {
+        try {
+          const v = await UserVoucherService.getMyVoucher();
+          if (cancelled) return;
+          setStickyVoucher(v?.code ? { code: v.code, productId: v.productId } : null);
+        } catch (error) {
+          if (!cancelled) {
+            console.warn(
+              '[Storefront] Failed to refresh sticky voucher:',
+              error instanceof Error ? error.message : error,
+            );
+          }
+        }
+      };
+
+      const onFocus = () => { void refresh(); };
+      window.addEventListener('focus', onFocus);
+      return () => {
+        cancelled = true;
+        window.removeEventListener('focus', onFocus);
+      };
+    }, [user?.id]);
 
     useEffect(() => {
         setActiveVariantSelections((prev) => {
@@ -878,6 +910,19 @@ const Storefront: React.FC<StorefrontProps> = ({
                 onPaymentSuccess={() => {
                     setCart([]);
                     showToast('Payment successful. Your order has been recorded.', 'success');
+                    if (user?.id) {
+                      void UserVoucherService.getMyVoucher()
+                        .then((v) => {
+                          setStickyVoucher(
+                            v?.code
+                              ? { code: v.code, productId: v.productId }
+                              : null,
+                          );
+                        })
+                        .catch(() => setStickyVoucher(null));
+                    } else {
+                      setStickyVoucher(null);
+                    }
                 }}
                 cart={cart}
                 products={products}

@@ -6,9 +6,19 @@ import {
 } from '../constants/voucherRealtime';
 
 /**
- * Voucher admin live refresh:
- * - Primary: Supabase Realtime Broadcast (WebSocket) from Nest after successful redemption.
- * - Fallback: short polling so local/API-only environments still update quickly enough.
+ * Voucher live refresh, three layers (in order of preference):
+ *
+ *   1. **Supabase `postgres_changes`** on `discounts` + `discount_redemption_logs`.
+ *      Triggered by ANY path that mutates those rows — Nest service, DB trigger from migration 033,
+ *      manual SQL, admin tools. This is the source of truth for "voucher was used somewhere".
+ *
+ *   2. **Broadcast channel `voucher_hub`** (legacy). Kept so existing Nest emits still flush refreshes
+ *      while we transition. Will be safe to retire once trigger + postgres_changes are deployed
+ *      everywhere.
+ *
+ *   3. **Polling fallback** (2-4s) for local/dev envs without Supabase keys.
+ *
+ * Latency budget under happy path: ~100-300ms (Postgres → Realtime → WebSocket).
  */
 export function useVoucherRealtime(
   enabled: boolean,
@@ -17,10 +27,11 @@ export function useVoucherRealtime(
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
 
+  // Polling fallback (always on; cheap; serves envs without Supabase Realtime).
   useEffect(() => {
     if (!enabled) return;
 
-    const pollMs = isSupabaseConfigured() ? 4000 : 2000;
+    const pollMs = isSupabaseConfigured() ? 8000 : 2000;
     let cancelled = false;
     const tick = () => {
       if (cancelled || document.visibilityState !== 'visible') return;
@@ -42,6 +53,35 @@ export function useVoucherRealtime(
     };
   }, [enabled]);
 
+  // Primary: postgres_changes on discounts + redemption logs.
+  useEffect(() => {
+    if (!enabled || !isSupabaseConfigured() || !supabase) return;
+
+    const client = supabase;
+    const channel = client
+      .channel('voucher_postgres_changes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'discounts' },
+        () => onRefreshRef.current(),
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'discount_redemption_logs' },
+        () => onRefreshRef.current(),
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          onRefreshRef.current();
+        }
+      });
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [enabled]);
+
+  // Legacy broadcast channel (still emitted by Nest VoucherBroadcastService).
   useEffect(() => {
     if (!enabled || !isSupabaseConfigured() || !supabase) return;
 
@@ -51,11 +91,7 @@ export function useVoucherRealtime(
       .on('broadcast', { event: VOUCHER_BROADCAST_EVENT }, () => {
         onRefreshRef.current();
       })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          onRefreshRef.current();
-        }
-      });
+      .subscribe();
 
     return () => {
       void client.removeChannel(channel);
