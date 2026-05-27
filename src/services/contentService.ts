@@ -2,6 +2,7 @@
 import { ContentPost } from '../types/index';
 import { CampaignService } from './campaignService';
 import { RepositoryFactory } from './repositories/index';
+import { apiRequest } from '../repositories/api/apiClient';
 
 export const ContentService = {
     
@@ -44,6 +45,20 @@ export const ContentService = {
 
     updateContent: async (id: string, updates: Partial<ContentPost>): Promise<ContentPost | null> => {
         return await RepositoryFactory.getContentRepository().update(id, updates);
+    },
+
+    generateAiContent: async (input: {
+        prompt: string;
+        contentType: 'ARTICLE' | 'ADVERTISEMENT' | 'NEWS';
+        existingTitle?: string;
+        existingBody?: string;
+        ctaLabel?: string;
+        linkedProduct?: Record<string, unknown> | null;
+    }): Promise<{ title: string; body: string }> => {
+        return await apiRequest<{ title: string; body: string }>('/content/posts/ai-generate', {
+            method: 'POST',
+            body: JSON.stringify(input),
+        });
     },
 
     deleteContent: async (id: string): Promise<void> => {

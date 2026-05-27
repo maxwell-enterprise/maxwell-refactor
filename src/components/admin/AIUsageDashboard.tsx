@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AIUsageService } from '../../services/aiUsageService';
 import { AIUsageLog } from '../../types/index';
-import { BarChart as BarChartIcon, Bot, Users, Filter, Code, DollarSign, RefreshCw, List } from 'lucide-react';
+import { BarChart as BarChartIcon, Filter, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+
+const LANDING_SCOUT_FEATURE = 'LANDING_SCOUT_CHAT';
 
 const AIUsageDashboard: React.FC = () => {
     const [logs, setLogs] = useState<AIUsageLog[]>([]);
@@ -49,8 +51,27 @@ const AIUsageDashboard: React.FC = () => {
 
     const totalCost = filteredLogs.reduce((sum, log) => sum + log.costIDR, 0);
     const totalTokens = filteredLogs.reduce((sum, log) => sum + log.totalTokens, 0);
+    const landingScoutCalls = filteredLogs.filter(log => log.featureName === LANDING_SCOUT_FEATURE).length;
 
     const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(num);
+    const formatFeatureName = (featureName: string) => {
+        if (featureName === LANDING_SCOUT_FEATURE) return 'Landing Scout Chat';
+        return featureName.replace(/_/g, ' ');
+    };
+    const formatUserLabel = (userId: string) => {
+        if (!userId.startsWith('guest:')) return userId;
+        const raw = userId.slice('guest:'.length);
+        const [local, domain] = raw.split('@');
+        if (!domain || !local) return 'Guest user';
+        const maskedLocal = local.length <= 2 ? `${local[0] ?? '*'}*` : `${local.slice(0, 2)}***`;
+        return `Guest (${maskedLocal}@${domain})`;
+    };
+    const getPromptPreview = (log: AIUsageLog) => {
+        if (log.featureName === LANDING_SCOUT_FEATURE) {
+            return 'Landing chatbot prompt with knowledge context';
+        }
+        return log.prompt;
+    };
 
     return (
         <div className="flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
@@ -121,6 +142,22 @@ const AIUsageDashboard: React.FC = () => {
                             <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900 sm:text-3xl">{filteredLogs.length}</p>
                         </div>
                     </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Landing scout calls</h3>
+                            <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{landingScoutCalls}</p>
+                            <p className="mt-1 text-sm text-slate-500">Calls logged from the public landing chatbot.</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Active filter</h3>
+                            <p className="mt-2 text-sm font-semibold text-slate-900">
+                                {filterFeature === 'ALL' ? 'All features' : formatFeatureName(filterFeature)}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                                {filterUser === 'ALL' ? 'All users' : formatUserLabel(filterUser)}
+                            </p>
+                        </div>
+                    </div>
                     <div className="shrink-0 overflow-hidden rounded-xl border border-slate-300 bg-white p-4 shadow-sm sm:p-6">
                         <h3 className="mb-4 font-bold text-slate-800">Daily cost (IDR)</h3>
                         {/*
@@ -151,14 +188,23 @@ const AIUsageDashboard: React.FC = () => {
             )}
             
             {activeTab === 'LOGS' && (
-                 <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-300 bg-white shadow-sm">
-                    <table className="w-full min-w-[640px] text-left text-xs">
+                 filteredLogs.length === 0 ? (
+                    <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center shadow-sm">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">No AI usage logs found</p>
+                            <p className="mt-1 text-sm text-slate-500">Try changing filters or generate new AI activity first.</p>
+                        </div>
+                    </div>
+                 ) : (
+                  <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-300 bg-white shadow-sm">
+                     <table className="w-full min-w-[920px] text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 sticky top-0">
                             <tr>
                                 <th className="p-3">Timestamp</th>
                                 <th className="p-3">User / Feature</th>
                                 <th className="p-3">Model</th>
                                 <th className="p-3">Prompt</th>
+                                <th className="p-3">Response</th>
                                 <th className="p-3">Tokens</th>
                                 <th className="p-3">Cost</th>
                             </tr>
@@ -168,12 +214,23 @@ const AIUsageDashboard: React.FC = () => {
                                 <tr key={log.id} className="hover:bg-slate-50">
                                     <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</td>
                                     <td className="p-3">
-                                        <div className="font-bold text-slate-900">{log.featureName}</div>
-                                        <div className="text-[10px] text-slate-500">{log.userId}</div>
+                                        <div className="font-bold text-slate-900">{formatFeatureName(log.featureName)}</div>
+                                        <div className="text-[10px] text-slate-500">{formatUserLabel(log.userId)}</div>
                                     </td>
-                                    <td className="p-3 font-mono text-purple-600 bg-purple-50">{log.model}</td>
                                     <td className="p-3">
-                                        <p className="max-w-xs truncate text-slate-600" title={log.prompt}>{log.prompt}</p>
+                                        <span className="inline-flex rounded-md bg-purple-50 px-2 py-1 font-mono text-purple-700">
+                                            {log.model}
+                                        </span>
+                                    </td>
+                                    <td className="p-3">
+                                        <p className="max-w-xs whitespace-pre-wrap break-words text-slate-600" title={log.prompt}>
+                                            {getPromptPreview(log)}
+                                        </p>
+                                    </td>
+                                    <td className="p-3">
+                                        <p className="max-w-xs whitespace-pre-wrap break-words text-slate-600" title={log.response}>
+                                            {log.response}
+                                        </p>
                                     </td>
                                     <td className="p-3 text-center">
                                         <div className="font-bold">{log.totalTokens}</div>
@@ -186,8 +243,9 @@ const AIUsageDashboard: React.FC = () => {
                                 </tr>
                             ))}
                         </tbody>
-                    </table>
-                 </div>
+                     </table>
+                  </div>
+                 )
             )}
             </div>
         </div>
