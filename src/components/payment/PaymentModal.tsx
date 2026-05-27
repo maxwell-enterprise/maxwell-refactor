@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { PaymentMethodType, PaymentTransaction, Product, UserRole, Discount, CartItem } from '../../types/index';
 import { PaymentService } from '../../services/paymentService';
 import { DiscountService } from '../../services/discountService';
+import { UserVoucherService } from '../../services/userVoucherService';
+import { useVoucherRealtime } from '../../hooks/useVoucherRealtime';
 import { formatStorePriceIdr } from '../../utils/formatStorePrice';
 
 /** Unit price for a cart line (variant overrides base product price). */
@@ -131,6 +133,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [appliedDiscountOrigin, setAppliedDiscountOrigin] = useState<'auto' | 'manual' | null>(null);
   const [voucherError, setVoucherError] = useState('');
   const [isCheckingVoucher, setIsCheckingVoucher] = useState(false);
+  /** Set when buyer clicks Remove on an auto-applied voucher: blocks the `preAppliedDiscountCode`
+   *  useEffect from re-applying it during the same modal session so the input becomes editable. */
+  const [dismissedPreApplied, setDismissedPreApplied] = useState<string | null>(null);
   
   // NEW: Installment State
   const [payMode, setPayMode] = useState<'FULL' | 'INSTALLMENT'>('FULL');
@@ -165,6 +170,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setSuccessSplashAutoClose(false);
       checkoutAlreadyFinalizedRef.current = false;
       setPpnConfigError(null);
+      setDismissedPreApplied(null);
       if (successAutoCloseTimerRef.current) {
         clearTimeout(successAutoCloseTimerRef.current);
         successAutoCloseTimerRef.current = null;
@@ -287,7 +293,18 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const applyVoucherCode = useCallback(
     async (codeRaw: string, origin: 'auto' | 'manual' = 'manual') => {
       const codeToUse = codeRaw.trim();
-      if (!codeToUse || cart.length === 0) return;
+      if (!codeToUse) {
+        setVoucherError('Masukkan kode voucher dulu.');
+        setAppliedDiscount(null);
+        setAppliedDiscountOrigin(null);
+        return;
+      }
+      if (cart.length === 0) {
+        setVoucherError('Keranjang masih kosong. Tambahkan produk dulu sebelum memakai voucher.');
+        setAppliedDiscount(null);
+        setAppliedDiscountOrigin(null);
+        return;
+      }
 
       setIsCheckingVoucher(true);
       setVoucherError('');
@@ -295,59 +312,77 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       try {
         const discount = await DiscountService.findByCode(codeToUse);
         if (!discount) {
-          setVoucherError('Invalid voucher code.');
+          setVoucherError(`Kode "${codeToUse}" tidak ditemukan.`);
           setAppliedDiscount(null);
           setAppliedDiscountOrigin(null);
           return;
         }
 
-        const validation = await DiscountService.isValid(
+        const validation = await DiscountService.validateForCart(
           discount,
+          cart,
+          products,
           userRole,
           walletUserId,
         );
-        if (!validation.valid) {
-          setVoucherError(validation.reason || 'Voucher not applicable.');
+        if (!validation.ok) {
+          setVoucherError(validation.reason);
           setAppliedDiscount(null);
           setAppliedDiscountOrigin(null);
           return;
         }
 
         let totalDiscount = 0;
-
         cart.forEach((item) => {
           const product = products.find((p) => p.id === item.productId);
-          if (product) {
-            const unit = getCartLineUnitPrice(product, item.variantId);
-            const itemDiscount = DiscountService.calculateDiscount(
-              discount,
-              unit,
-              item.quantity,
-              product.category,
-              product.id,
-              userRole,
-            );
-            if (discount.type === 'PERCENTAGE') {
-              totalDiscount += itemDiscount * item.quantity;
-            } else {
-              totalDiscount += itemDiscount;
-            }
+          if (!product) return;
+          const unit = getCartLineUnitPrice(product, item.variantId);
+          const itemDiscount = DiscountService.calculateDiscount(
+            discount,
+            unit,
+            item.quantity,
+            product.category,
+            product.id,
+            userRole,
+          );
+          if (discount.type === 'PERCENTAGE') {
+            totalDiscount += itemDiscount * item.quantity;
+          } else {
+            totalDiscount += itemDiscount;
           }
         });
 
         if (totalDiscount === 0) {
+          // validateForCart already covers scope, but BUNDLE_VOLUME / edge math may still zero out.
           setVoucherError(
-            'Voucher code is valid but not applicable to items in your cart.',
+            `Voucher ${discount.code} tidak menghasilkan potongan untuk keranjang ini. Cek minimal pembelian.`,
           );
           setAppliedDiscount(null);
           setAppliedDiscountOrigin(null);
-        } else {
-          setAppliedDiscount({ discount, amount: totalDiscount });
-          setAppliedDiscountOrigin(origin);
+          return;
+        }
+
+        setAppliedDiscount({ discount, amount: totalDiscount });
+        setAppliedDiscountOrigin(origin);
+
+        // Persist as sticky so refresh / re-open preserves the choice for logged-in buyers.
+        // Skip auto-applied codes (they were already persisted by Storefront on URL claim).
+        if (origin === 'manual' && walletUserId) {
+          try {
+            await UserVoucherService.claimMyVoucher(discount.code);
+          } catch (err) {
+            // Surface but don't block the apply: client total already calculated, server will recompute at checkout.
+            console.warn(
+              '[PaymentModal] Failed to persist sticky voucher:',
+              err instanceof Error ? err.message : err,
+            );
+          }
         }
       } catch (error) {
-        console.error('Voucher check failed', error);
-        setVoucherError('Error checking voucher.');
+        const message =
+          error instanceof Error ? error.message : 'Terjadi kesalahan saat cek voucher.';
+        setVoucherError(message);
+        setAppliedDiscount(null);
         setAppliedDiscountOrigin(null);
       } finally {
         setIsCheckingVoucher(false);
@@ -364,16 +399,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     return applyVoucherCode(code, 'manual');
   }, [applyVoucherCode, preAppliedDiscountCode, voucherCode]);
 
-  /** Campaign / deep-link codes: wait for cart lines before applying. */
+  /** Campaign / deep-link codes: wait for cart lines before applying. Skip if buyer dismissed it. */
   useEffect(() => {
     if (!preAppliedDiscountCode || appliedDiscount) return;
     if (cart.length === 0) return;
+    if (dismissedPreApplied && dismissedPreApplied === preAppliedDiscountCode) return;
     setVoucherCode((v) => v || preAppliedDiscountCode);
     const t = window.setTimeout(() => {
       void applyVoucherCode(preAppliedDiscountCode, 'auto');
     }, 0);
     return () => clearTimeout(t);
-  }, [preAppliedDiscountCode, appliedDiscount, cart.length, applyVoucherCode]);
+  }, [preAppliedDiscountCode, appliedDiscount, cart.length, applyVoucherCode, dismissedPreApplied]);
 
   useEffect(() => {
     if (preAppliedDiscountCode || appliedDiscountOrigin !== 'auto') return;
@@ -389,6 +425,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     if (!code || cart.length === 0) return;
     void applyVoucherCode(code, appliedDiscountOrigin ?? 'manual');
   }, [cart, appliedDiscount?.discount.code, appliedDiscountOrigin, applyVoucherCode]);
+
+  /** Realtime: if someone else exhausts the quota / admin disables the voucher while this user is at
+   *  checkout, re-run validation so the displayed totals stay honest. Powered by postgres_changes. */
+  useVoucherRealtime(isOpen && !!appliedDiscount, () => {
+    const code = appliedDiscount?.discount.code?.trim();
+    if (!code) return;
+    void applyVoucherCode(code, appliedDiscountOrigin ?? 'manual');
+  });
 
   const handleInitiatePayment = async () => {
     if (snapPayInFlightRef.current) return; // prevent double snap.pay while popup is still open
@@ -462,18 +506,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         try {
           const paidNow = String(trx.status ?? '').toUpperCase() === 'PAID';
           if (!paidNow && totalAmount > 0) {
-            await PaymentService.simulateSettle(trx.id, customerEmail);
+            await PaymentService.simulateSettle(trx.id, normalizedEmail);
           }
-          if (trx.itemsSnapshot?.length) {
-            await PaymentService.confirmManualTransfer(
-              trx.id,
-              trx.totalAmount,
-              trx.itemsSnapshot,
-              trx.customerEmail,
-              walletUserId,
-            );
-          }
-          await runAfterPaymentSuccess();
+
+          // Server already marked PAID + grants entitlements during simulate-settle / free checkout.
+          // Show success immediately — do not poll public-status (was adding seconds of delay).
           checkoutAlreadyFinalizedRef.current = true;
           setSuccessSplashAutoClose(true);
           setSimulatedSuccessOpen(true);
@@ -489,6 +526,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             setSimulatedSuccessOpen(false);
             onClose();
           }, 1800);
+
+          void (async () => {
+            try {
+              if (trx.itemsSnapshot?.length) {
+                await PaymentService.notifyLocalPaymentSuccess(
+                  trx.id,
+                  trx.totalAmount,
+                  trx.itemsSnapshot,
+                  trx.customerEmail,
+                  walletUserId,
+                );
+              }
+              await runAfterPaymentSuccess();
+            } catch (bgErr) {
+              console.warn(
+                '[PaymentModal] Post-payment refresh failed:',
+                bgErr instanceof Error ? bgErr.message : bgErr,
+              );
+            }
+          })();
         } catch (e: unknown) {
           const msg =
             e instanceof Error
@@ -509,14 +566,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       if (!snapOk) {
         try {
           if (!trx.itemsSnapshot) throw new Error('Missing cart snapshot');
-          await PaymentService.confirmManualTransfer(
+          await PaymentService.notifyLocalPaymentSuccess(
             trx.id,
             trx.totalAmount,
             trx.itemsSnapshot,
             trx.customerEmail,
             walletUserId,
           );
-          await runAfterPaymentSuccess();
+          void runAfterPaymentSuccess();
           onClose();
         } catch (e: any) {
           setErrorMessage(e?.message || 'Failed to complete free order');
@@ -861,24 +918,41 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   />
               </div>
               {appliedDiscount ? (
-                  <button onClick={() => { setAppliedDiscount(null); setAppliedDiscountOrigin(null); setVoucherCode(''); setVoucherError(''); }} className="px-4 py-2 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200">
+                  <button
+                    onClick={() => {
+                      const wasAuto = appliedDiscountOrigin === 'auto';
+                      setAppliedDiscount(null);
+                      setAppliedDiscountOrigin(null);
+                      setVoucherCode('');
+                      setVoucherError('');
+                      // If this came from a campaign/sticky prop, remember the dismissal so the
+                      // auto-apply effect doesn't immediately re-fire and re-lock the input.
+                      if (wasAuto && preAppliedDiscountCode) {
+                        setDismissedPreApplied(preAppliedDiscountCode);
+                      }
+                    }}
+                    className="px-4 py-2 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200"
+                  >
                       Remove
                   </button>
               ) : (
-                  <button 
-                    onClick={handleApplyVoucher} 
-                    disabled={!voucherCode || isCheckingVoucher || cart.length === 0}
+                  <button
+                    onClick={handleApplyVoucher}
+                    disabled={isCheckingVoucher || !voucherCode}
                     className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700 disabled:opacity-50"
                   >
                       {isCheckingVoucher ? '...' : 'Apply'}
                   </button>
               )}
           </div>
-          {voucherError && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle size={10} className="mr-1"/> {voucherError}</p>}
-          {appliedDiscount && (
+          {voucherError && <p className="text-xs text-red-500 mt-1 flex items-start gap-1"><AlertCircle size={12} className="mt-0.5 shrink-0"/> <span>{voucherError}</span></p>}
+          {appliedDiscount && !voucherError && (
               <p className="text-xs text-green-600 mt-1 flex items-center font-medium">
-                  <CheckCircle size={10} className="mr-1"/> Code {appliedDiscount.discount.code} applied!
+                  <CheckCircle size={10} className="mr-1"/> Kode {appliedDiscount.discount.code} diterapkan — hemat {formatIDR(appliedDiscount.amount)}.
               </p>
+          )}
+          {!appliedDiscount && !voucherError && cart.length === 0 && (
+              <p className="text-[11px] text-slate-400 mt-1">Tambahkan produk dulu sebelum memakai voucher.</p>
           )}
        </div>
 
