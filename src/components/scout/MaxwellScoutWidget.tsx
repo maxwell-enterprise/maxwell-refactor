@@ -1,15 +1,33 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, User, Sparkles, ChevronRight, Mail, Lock, ExternalLink } from 'lucide-react';
+import { X, Send, Sparkles, ChevronRight, Mail, Lock, LogIn } from 'lucide-react';
 import { ScoutService } from '../../services/scoutService';
 import { ScoutSession } from '../../types/index';
 
-const MaxwellScoutWidget: React.FC = () => {
+interface MaxwellScoutWidgetProps {
+  onRequireLogin: () => void;
+}
+
+type LeadProfileState = {
+  fullName: string;
+  email: string;
+  syncStatus: 'idle' | 'syncing' | 'done' | 'error';
+};
+
+const INITIAL_LEAD_PROFILE: LeadProfileState = {
+  fullName: '',
+  email: '',
+  syncStatus: 'idle',
+};
+
+const MaxwellScoutWidget: React.FC<MaxwellScoutWidgetProps> = ({
+  onRequireLogin,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<'TEASER' | 'FORM' | 'VERIFY' | 'CHAT'>('TEASER');
   
   // Form State
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [leadProfile, setLeadProfile] =
+    useState<LeadProfileState>(INITIAL_LEAD_PROFILE);
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -21,12 +39,50 @@ const MaxwellScoutWidget: React.FC = () => {
 
   // Scroll to bottom of chat
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [session?.messages, isTyping, session?.status]);
 
-  const handleStart = async () => {
-      if (!name || !email) return;
-      // In real app, trigger backend to send OTP here
+  useEffect(() => {
+      if (!session || session.status !== 'COMPLETED' || leadProfile.syncStatus === 'syncing' || leadProfile.syncStatus === 'done') {
+          return;
+      }
+
+      let cancelled = false;
+
+      const syncLead = async () => {
+          try {
+              setLeadProfile(prev => ({ ...prev, syncStatus: 'syncing' }));
+              await ScoutService.registerLeadAtCompletion(session);
+              if (!cancelled) {
+                  setLeadProfile(prev => ({ ...prev, syncStatus: 'done' }));
+              }
+          } catch (error) {
+              console.error('[SCOUT] Failed to register completed lead:', error);
+              if (!cancelled) {
+                  setLeadProfile(prev => ({ ...prev, syncStatus: 'error' }));
+              }
+          }
+      };
+
+      void syncLead();
+
+      return () => {
+          cancelled = true;
+      };
+  }, [session, leadProfile.syncStatus]);
+
+  useEffect(() => {
+      if (session?.status !== 'COMPLETED') return;
+      setIsOpen(false);
+      onRequireLogin();
+  }, [session?.status, onRequireLogin]);
+
+  const updateLeadProfile = (patch: Partial<LeadProfileState>) => {
+      setLeadProfile((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleStart = () => {
+      if (!leadProfile.fullName || !leadProfile.email) return;
       setStep('VERIFY');
   };
 
@@ -35,7 +91,10 @@ const MaxwellScoutWidget: React.FC = () => {
       // Simulate API call
       setTimeout(async () => {
           setIsVerifying(false);
-          const newSession = await ScoutService.startSession(name, email);
+          const newSession = await ScoutService.startSession(
+              leadProfile.fullName,
+              leadProfile.email,
+          );
           setSession(newSession);
           setStep('CHAT');
       }, 1500);
@@ -56,18 +115,31 @@ const MaxwellScoutWidget: React.FC = () => {
 
       setIsTyping(true);
 
-      // 1. Process Chat Response
-      const { session: updatedSession } = await ScoutService.sendMessage(session, userText);
-      setSession(updatedSession);
-      setIsTyping(false);
+      try {
+          const { session: updatedSession } = await ScoutService.sendMessage(session, userText);
+          setSession(updatedSession);
 
-      // 2. Background Qualification (Fire and forget)
-      // Only run if not completed to save resources
-      if (updatedSession.status !== 'COMPLETED') {
-          ScoutService.qualifyLead(userText, session.score).then(newScore => {
-              console.log("Updated Lead Score (Hidden):", newScore);
-              setSession(prev => prev ? ({ ...prev, score: newScore }) : null);
-          });
+          if (updatedSession.status !== 'COMPLETED') {
+              ScoutService.qualifyLead(userText, session.score).then(newScore => {
+                  console.log("Updated Lead Score (Hidden):", newScore);
+                  setSession(prev => prev ? ({ ...prev, score: newScore }) : null);
+              });
+          }
+      } catch (error) {
+          console.error('[SCOUT] Chat request failed:', error);
+          setSession(prev => prev ? ({
+              ...prev,
+              messages: [
+                  ...prev.messages,
+                  {
+                      sender: 'ai',
+                      text: "I'm having trouble responding right now. Please try again in a moment.",
+                      timestamp: Date.now() + 100,
+                  },
+              ],
+          }) : null);
+      } finally {
+          setIsTyping(false);
       }
   };
 
@@ -103,8 +175,8 @@ const MaxwellScoutWidget: React.FC = () => {
                     type="text" 
                     className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:border-blue-500 outline-none"
                     placeholder="John Doe"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
+                    value={leadProfile.fullName}
+                    onChange={e => updateLeadProfile({ fullName: e.target.value })}
                   />
               </div>
               <div>
@@ -113,13 +185,13 @@ const MaxwellScoutWidget: React.FC = () => {
                     type="email" 
                     className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:border-blue-500 outline-none"
                     placeholder="john@company.com"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    value={leadProfile.email}
+                    onChange={e => updateLeadProfile({ email: e.target.value })}
                   />
               </div>
               <button 
                 onClick={handleStart}
-                disabled={!name || !email}
+                disabled={!leadProfile.fullName || !leadProfile.email}
                 className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
                   Continue
@@ -131,12 +203,12 @@ const MaxwellScoutWidget: React.FC = () => {
   const renderVerify = () => (
       <div className="p-6 text-center">
           <div className="mb-4">
-              <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Mail size={24} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900">Verify Email</h3>
-              <p className="text-xs text-slate-500">We sent a code to <b>{email}</b></p>
-          </div>
+               <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                   <Mail size={24} />
+               </div>
+               <h3 className="text-lg font-bold text-slate-900">Verify Email</h3>
+               <p className="text-xs text-slate-500">We sent a code to <b>{leadProfile.email}</b></p>
+           </div>
           <div className="mb-6">
               <input 
                 type="text" 
@@ -206,15 +278,13 @@ const MaxwellScoutWidget: React.FC = () => {
               {/* Special CTA when Session Completed */}
               {session?.status === 'COMPLETED' && (
                   <div className="flex justify-center mt-4 mb-2 animate-fade-in-up">
-                      <a 
-                        href={ScoutService.getWhatsappLink(session)} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-full font-bold shadow-lg flex items-center transform hover:scale-105 transition-all text-sm"
+                      <button
+                        onClick={onRequireLogin}
+                        className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-full font-bold shadow-lg flex items-center transform hover:scale-105 transition-all text-sm"
                       >
-                          <MessageCircle size={18} className="mr-2" />
-                          Chat Expert on WhatsApp
-                      </a>
+                          <LogIn size={18} className="mr-2" />
+                          Continue to Login
+                      </button>
                   </div>
               )}
 
@@ -227,7 +297,7 @@ const MaxwellScoutWidget: React.FC = () => {
                   <input 
                     type="text" 
                     className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-full text-sm focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                    placeholder={session?.status === 'COMPLETED' ? "Session ended. Please use WhatsApp." : "Type your reply..."}
+                    placeholder={session?.status === 'COMPLETED' ? "Session ended. Please sign in to continue." : "Type your reply..."}
                     value={inputMsg}
                     onChange={e => setInputMsg(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSend()}

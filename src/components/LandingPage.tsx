@@ -32,6 +32,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
     const params = new URLSearchParams(window.location.search);
     const memberName = params.get('member_name') || params.get('name');
     const authError = params.get('auth_error');
+    const shouldOpenLogin = params.get('login') === '1' || window.location.pathname === '/login';
 
     if (memberName) {
       setDynamicGreeting({
@@ -74,6 +75,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
         `${next.pathname}${next.search}${next.hash}`,
       );
     }
+
+    if (shouldOpenLogin) {
+      setShowLoginModal(true);
+    }
   }, [showToast]);
 
   const featuredOffers = useMemo(() => {
@@ -87,6 +92,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
       maximumFractionDigits: 0,
     }).format(num);
   };
+
+  const openLoginModal = React.useCallback(() => {
+    setShowLoginModal(true);
+  }, []);
 
   return (
     <div className='min-h-screen bg-slate-50 font-sans text-slate-900'>
@@ -508,7 +517,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
       </footer>
 
       {/* Maxwell Scout Widget */}
-      <MaxwellScoutWidget />
+      <MaxwellScoutWidget onRequireLogin={openLoginModal} />
 
       {/* Modern Login Modal */}
       {showLoginModal && (
