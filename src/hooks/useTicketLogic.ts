@@ -211,6 +211,15 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
                 name: liveItem.meta?.recipientName || 'User',
                 email: liveItem.meta?.recipientEmail || '',
                 phone: '',
+                category: 'Member',
+                scholarship: false,
+                joinMonth: '',
+                program: '',
+                mentorshipDuration: 0,
+                nTagStatus: '',
+                platform: 'Digital',
+                regInUS: false,
+                lifecycleStage: 'IDENTIFIED',
             };
 
             // Use active context (session) ID for accurate logging
