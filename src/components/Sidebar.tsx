@@ -13,6 +13,7 @@ import { ALWAYS_ON_CUSTOM_VIEWS, toViewFeatureId } from '../constants/customRole
 import { EntitlementService } from '../services/entitlementService';
 import { WALLET_REFRESH_EVENT } from '../services/paymentService';
 import { Badge } from './ui/badge';
+import type { WalletItem } from '../types/access';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -34,9 +35,20 @@ const WORKSPACE_ROLES = [
   UserRole.GATE_KEEPER
 ];
 
+function hasEligibleSelfAttendanceTicket(items: WalletItem[]): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return items.some((item) => {
+    if (item.type !== 'TICKET' || item.status !== 'ACTIVE') return false;
+    if (!item.expiryDate) return true;
+    return new Date(item.expiryDate).getTime() >= today.getTime();
+  });
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, toggleSidebar, userRole, isPersonalZone, onToggleZone }) => {
   const { logout, user } = useAuth();
   const [pendingGiftCount, setPendingGiftCount] = useState(0);
+  const [canSelfAttend, setCanSelfAttend] = useState(false);
 
   /** Promoted / internal staff: any role except Member sees Workspace ↔ My Zone. Pure members only see the user sidebar. */
   const showWorkspaceMyZoneToggle = userRole !== UserRole.MEMBER;
@@ -144,6 +156,31 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
     return () => window.removeEventListener(WALLET_REFRESH_EVENT, refresh);
   }, [loadPendingGiftCount]);
 
+  useEffect(() => {
+    if (!isMemberMode || !user?.id) {
+      setCanSelfAttend(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const wallet = await EntitlementService.getMyWallet(user.id);
+        if (!cancelled) {
+          setCanSelfAttend(hasEligibleSelfAttendanceTicket(wallet));
+        }
+      } catch {
+        if (!cancelled) {
+          setCanSelfAttend(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isMemberMode, user?.id]);
+
   return (
     <div className="relative h-full w-0 shrink-0 lg:w-72">
       {/* One flex child for the shell: mobile width 0 so main fills; lg reserves 288px like before. */}
@@ -222,6 +259,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
                     <button onClick={() => onNavigate(ViewState.STORE_CATALOG)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.STORE_CATALOG ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                         <ShoppingBag size={18} className="mr-3" /> Store
                     </button>
+                    {canSelfAttend && (
+                        <button onClick={() => onNavigate(ViewState.MEMBER_ATTENDANCE)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.MEMBER_ATTENDANCE ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                            <ScanLine size={18} className="mr-3" /> Self Attendance
+                        </button>
+                    )}
                     <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4">Learning</div>
                     <button onClick={() => onNavigate(ViewState.ENABLEMENT)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.ENABLEMENT ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                         <GraduationCap size={18} className="mr-3" /> Success Toolkit

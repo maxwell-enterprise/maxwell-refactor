@@ -489,7 +489,8 @@ const EventsAdmin: React.FC = () => {
               </button>
               <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-4xl w-full">
                   <h1 className="text-4xl font-bold text-slate-900 mb-2">{projectorEvent.name}</h1>
-                  <p className="text-xl text-slate-500 mb-8">Scan to Self Check-In</p>
+                  <p className="text-xl text-slate-500 mb-2">Scan to Self Check-In</p>
+                  <p className="text-sm text-slate-400 mb-8">For member self check-in only. Gate staff must scan the attendee ticket QR from Wallet.</p>
                   <div className="flex justify-center mb-8">
                       <QRCodeDisplay
                         data={`EVENT_ATTENDANCE:${projectorEvent.id}`}

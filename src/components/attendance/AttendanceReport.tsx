@@ -5,6 +5,19 @@ import { AttendanceRecord } from '../../types/index';
 import { Search, Download, Calendar, Filter, User } from 'lucide-react';
 import WhatsAppQuickAction from '../common/WhatsAppQuickAction';
 
+const getAttendanceMethodLabel = (method: AttendanceRecord['method']) => {
+  switch (method) {
+    case 'SELF_SCAN':
+      return 'Self Check-In';
+    case 'LINK_CLICKED':
+      return 'Online Join';
+    case 'ADMIN_OVERRIDE':
+      return 'Admin Override';
+    default:
+      return 'Gate Scan';
+  }
+};
+
 const AttendanceReport: React.FC = () => {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,8 +111,16 @@ const AttendanceReport: React.FC = () => {
                                   <td className="p-4 text-slate-700">{r.eventName}</td>
                                   <td className="p-4 font-mono text-xs text-slate-500">{new Date(r.scannedAt).toLocaleString()}</td>
                                   <td className="p-4">
-                                      <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase ${r.method === 'GATE_SCAN' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                          {r.method.replace('_', ' ')}
+                                      <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase ${
+                                        r.method === 'GATE_SCAN'
+                                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                          : r.method === 'LINK_CLICKED'
+                                            ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                                            : r.method === 'ADMIN_OVERRIDE'
+                                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                                      }`}>
+                                          {getAttendanceMethodLabel(r.method)}
                                       </span>
                                   </td>
                                   <td className="p-4 font-mono text-xs font-bold">

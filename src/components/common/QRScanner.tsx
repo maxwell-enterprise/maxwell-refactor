@@ -33,6 +33,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const lastPayloadRef = useRef<string>('');
   const lastPayloadAtRef = useRef<number>(0);
+  const processingPayloadRef = useRef(false);
 
   const emitGatePayload = useCallback(
     (raw: string) => {
@@ -57,8 +58,64 @@ const QRScanner: React.FC<QRScannerProps> = ({
     [onScan],
   );
 
+  const processDecodedPayload = useCallback(
+    async (raw: string) => {
+      const trimmed = raw.trim();
+      if (!trimmed || processingPayloadRef.current) return;
+
+      const now = Date.now();
+      if (
+        trimmed === lastPayloadRef.current &&
+        now - lastPayloadAtRef.current < DEDupe_MS
+      ) {
+        return;
+      }
+
+      lastPayloadRef.current = trimmed;
+      lastPayloadAtRef.current = now;
+      processingPayloadRef.current = true;
+
+      try {
+        if (purpose === 'gate') {
+          emitGatePayload(trimmed);
+          return;
+        }
+
+        if (
+          trimmed.startsWith('EVENT_ATTENDANCE:') ||
+          trimmed.startsWith('EVENT:')
+        ) {
+          onScan({
+            success: true,
+            message: trimmed,
+            timestamp: new Date().toISOString(),
+            qrPayload: trimmed,
+          });
+          return;
+        }
+
+        const result = await QRService.processScan(trimmed);
+        onScan(result);
+      } finally {
+        window.setTimeout(() => {
+          processingPayloadRef.current = false;
+        }, 500);
+      }
+    },
+    [emitGatePayload, onScan, purpose],
+  );
+
   const startCamera = async () => {
     try {
+      if (
+        typeof navigator === 'undefined' ||
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== 'function'
+      ) {
+        setHasPermission(false);
+        return;
+      }
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
       });
@@ -92,9 +149,9 @@ const QRScanner: React.FC<QRScannerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stream intentionally excluded to avoid restart loop
   }, [isOpen]);
 
-  // Decode QR from camera (Gate mode)
+  // Decode QR from camera
   useEffect(() => {
-    if (!isOpen || purpose !== 'gate' || !stream || hasPermission !== true) {
+    if (!isOpen || !stream || hasPermission !== true) {
       return;
     }
     const video = videoRef.current;
@@ -118,12 +175,16 @@ const QRScanner: React.FC<QRScannerProps> = ({
       const imageData = ctx.getImageData(0, 0, w, h);
       const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
       if (code?.data) {
-        emitGatePayload(code.data);
+        if (purpose === 'gate') {
+          emitGatePayload(code.data);
+        } else {
+          void processDecodedPayload(code.data);
+        }
       }
     }, SCAN_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [isOpen, purpose, stream, hasPermission, emitGatePayload]);
+  }, [isOpen, stream, hasPermission, processDecodedPayload, purpose]);
 
   const handleManualScan = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -138,11 +199,9 @@ const QRScanner: React.FC<QRScannerProps> = ({
         setManualCode('');
         setTimeout(onClose, 400);
       } else {
-        const result = await QRService.processScan(raw);
-        onScan(result);
-        if (result.success) {
-          setTimeout(onClose, 1000);
-        }
+        await processDecodedPayload(raw);
+        setManualCode('');
+        setTimeout(onClose, 400);
       }
     } finally {
       setIsProcessing(false);
@@ -157,12 +216,12 @@ const QRScanner: React.FC<QRScannerProps> = ({
         <div className="text-white">
           <h2 className="flex items-center text-xl font-bold">
             <Camera className="mr-2" />
-            Gate Scanner
+            {purpose === 'gate' ? 'Gate Scanner' : 'Self Attendance Scanner'}
           </h2>
           <p className="text-xs text-slate-300">
             {purpose === 'gate'
               ? 'Point the camera at the ticket or membership QR code'
-              : 'Align QR code within the frame'}
+              : 'Point the camera at the attendance QR shown by the event team'}
           </p>
         </div>
         <button
@@ -178,9 +237,9 @@ const QRScanner: React.FC<QRScannerProps> = ({
         {hasPermission === false ? (
           <div className="p-6 text-center text-slate-400">
             <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
-            <h3 className="text-lg font-bold text-white">Camera Access Denied</h3>
+            <h3 className="text-lg font-bold text-white">Camera Unavailable</h3>
             <p className="mb-6 mt-2 text-sm">
-              Please allow camera access in your browser settings to use the scanner.
+              This browser or page context cannot access the camera. Use HTTPS or localhost, allow camera permission, or paste the QR code manually below.
             </p>
             <button
               type="button"

@@ -12,6 +12,7 @@ interface TicketDetailModalProps {
 
 const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) => {
     const { 
+        item: liveItem,
         eventData, 
         subEvents,
         selectedSession,
@@ -91,7 +92,7 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
                     </div>
 
                     <p className="text-sm text-slate-500 font-medium leading-relaxed mt-1">
-                        {selectedSession ? `Session Part of: ${eventData?.name}` : item.subtitle}
+                        {selectedSession ? `Session Part of: ${eventData?.name}` : liveItem.subtitle}
                     </p>
                 </div>
 
@@ -169,12 +170,12 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
                                      */}
                                      <QRCodeDisplay
                                         data={
-                                          item.qrData?.trim() ||
-                                          `TICKET:${selectedSession?.id || eventData?.id || (typeof item.meta?.eventId === 'string' ? item.meta.eventId : '') || 'UNKNOWN'}:${item.userId}:${item.id}`
+                                          liveItem.qrData?.trim() ||
+                                          `TICKET:${selectedSession?.id || eventData?.id || (typeof liveItem.meta?.eventId === 'string' ? liveItem.meta.eventId : '') || 'UNKNOWN'}:${liveItem.userId}:${liveItem.id}`
                                         }
                                         size={160}
                                         showLabel={false}
-                                        downloadFileName={`ticket-${item.id}`}
+                                        downloadFileName={`ticket-${liveItem.id}`}
                                         className="opacity-90 transition-opacity group-hover:opacity-100"
                                      />
                                      <div className="mt-4 flex items-center justify-center text-green-600 text-[10px] font-bold uppercase tracking-wider bg-green-50 py-1.5 rounded-lg">
@@ -240,7 +241,7 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
                              
                             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
                                 <p className="text-[10px] text-slate-400">
-                                    Link protected for: <b>{item.meta?.recipientName || 'You'}</b>
+                                    Link protected for: <b>{liveItem.meta?.recipientName || 'You'}</b>
                                 </p>
                             </div>
                         </div>

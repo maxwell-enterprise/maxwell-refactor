@@ -26,10 +26,11 @@ export const AttendanceService = {
     validateGateEntry: async (
         qrString: string, 
         eventId: string, 
-        gateId?: string
+        gateId?: string,
+        options?: { deviceId?: string },
     ): Promise<ScanValidationResult> => {
         if (useApiAttendance()) {
-            return ApiAttendanceService.validateGateEntry(qrString, eventId, gateId);
+            return ApiAttendanceService.validateGateEntry(qrString, eventId, gateId, options);
         }
         
         // 1. Parse QR
@@ -191,9 +192,10 @@ export const AttendanceService = {
         member: Member,
         event: Event,
         method: 'SELF_SCAN' | 'ADMIN_OVERRIDE' | 'LINK_CLICKED',
+        options?: { venueQr?: string },
     ): Promise<AttendanceRecord> => {
         if (useApiAttendance()) {
-            return ApiAttendanceService.recordAttendance(member, event, method);
+            return ApiAttendanceService.recordAttendance(member, event, method, options);
         }
 
         if (method === 'SELF_SCAN' || method === 'LINK_CLICKED') {

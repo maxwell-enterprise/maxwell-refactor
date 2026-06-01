@@ -3,10 +3,22 @@ import { Member, Event } from '../types/index';
 import { ScanValidationResult } from '../types/attendance';
 import { apiRequest } from '../repositories/api/apiClient';
 import { TicketTier } from '../types/attendance';
+import { publishAttendanceUpdated } from './attendanceRealtime';
 
 interface PaginatedAttendance {
   data: AttendanceRecord[];
   total: number;
+}
+
+interface ScannerDeviceApiResult {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  eventId?: string;
+  gateId?: string;
+  isActive: boolean;
+  lastSyncAt?: string | null;
+  registeredAt: string;
 }
 
 interface CheckinApiResult {
@@ -29,6 +41,12 @@ interface CheckinApiResult {
     remainingBalance: number;
   };
   suggestedGate?: string;
+}
+
+interface OfflineSyncApiResult {
+  processed: number;
+  failed: number;
+  results: CheckinApiResult[];
 }
 
 const VALID_TIERS: TicketTier[] = ['GENERAL', 'VIP', 'VVIP', 'CREW', 'SPEAKER'];
@@ -67,12 +85,66 @@ export const ApiAttendanceService = {
     qrString: string,
     eventId: string,
     gateId?: string,
+    options?: { deviceId?: string },
   ): Promise<ScanValidationResult> => {
     const result = await apiRequest<CheckinApiResult>('/checkin/scan', {
       method: 'POST',
-      body: JSON.stringify({ qrString, eventId, gateId }),
+      body: JSON.stringify({
+        qrString,
+        eventId,
+        gateId,
+        deviceId: options?.deviceId,
+      }),
     });
+    if (result.success) {
+      publishAttendanceUpdated({
+        eventId,
+        method: 'GATE_SCAN',
+        status: 'SUCCESS',
+        memberId: result.user?.id,
+        gateId,
+        scannedAt: result.scannedAt,
+      });
+    }
     return mapScanResult(result);
+  },
+
+  registerScannerDevice: async (input: {
+    deviceId: string;
+    deviceName: string;
+    eventId: string;
+    gateId: string;
+  }): Promise<ScannerDeviceApiResult> => {
+    return apiRequest<ScannerDeviceApiResult>('/checkin/devices', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  syncOfflineCheckins: async (input: {
+    deviceId: string;
+    items: Array<{
+      offlineId: string;
+      qrString: string;
+      eventId: string;
+      gateId?: string;
+      scannedAt: string;
+    }>;
+  }): Promise<OfflineSyncApiResult> => {
+    return apiRequest<OfflineSyncApiResult>('/checkin/sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        deviceId: input.deviceId,
+        items: input.items.map((item) => ({
+          offlineId: item.offlineId,
+          actionType: 'CHECKIN',
+          qrString: item.qrString,
+          eventId: item.eventId,
+          gateId: item.gateId,
+          timestamp: item.scannedAt,
+        })),
+      }),
+    });
   },
 
   getAttendance: async (eventId?: string): Promise<AttendanceRecord[]> => {
@@ -85,16 +157,43 @@ export const ApiAttendanceService = {
     member: Member,
     event: Event,
     method: 'SELF_SCAN' | 'ADMIN_OVERRIDE' | 'LINK_CLICKED',
+    options?: { venueQr?: string },
   ): Promise<AttendanceRecord> => {
-    const apiMethod = method === 'LINK_CLICKED' ? 'SELF_SCAN' : method;
-    const result = await apiRequest<CheckinApiResult>('/checkin/manual', {
+    const targetPath = method === 'ADMIN_OVERRIDE' ? '/checkin/manual' : '/checkin/self';
+    const payload =
+      method === 'ADMIN_OVERRIDE'
+        ? {
+            memberId: member.id,
+            eventId: event.id,
+            method,
+          }
+        : {
+            eventId: event.id,
+            method,
+            venueQr: options?.venueQr,
+          };
+
+    const result = await apiRequest<CheckinApiResult>(targetPath, {
       method: 'POST',
-      body: JSON.stringify({
-        memberId: member.id,
-        eventId: event.id,
-        method: apiMethod,
-      }),
+      body: JSON.stringify(payload),
     });
+
+    if (!result.success) {
+      const message =
+        result.status === 'WRONG_GATE' || result.status === 'WRONG_EVENT' || result.status === 'BLOCKED'
+          ? `ACCESS_DENIED: ${result.message}`
+          : result.message;
+      throw new Error(message);
+    }
+
+    publishAttendanceUpdated({
+      eventId: event.id,
+      method,
+      status: 'SUCCESS',
+      memberId: member.id,
+      scannedAt: result.scannedAt,
+    });
+
     return {
       id: result.checkinId || `ATT-${Date.now()}`,
       eventId: event.id,

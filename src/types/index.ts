@@ -674,6 +674,7 @@ export interface AttendanceRecord {
     status?: 'SUCCESS' | 'DUPLICATE' | 'INVALID' | 'SYNC_PENDING';
     ticketUniqueId?: string; 
     scannerDevice?: string;
+    scannedByUserId?: string | null;
 }
 
 export interface AIUsageLog {
