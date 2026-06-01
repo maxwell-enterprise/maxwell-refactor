@@ -53,4 +53,5 @@ export interface AttendanceRecord {
     status?: 'SUCCESS' | 'DUPLICATE' | 'INVALID' | 'SYNC_PENDING'; // Optional for local ledger logic
     ticketUniqueId?: string; // Optional linkage
     scannerDevice?: string;
+    scannedByUserId?: string | null;
 }

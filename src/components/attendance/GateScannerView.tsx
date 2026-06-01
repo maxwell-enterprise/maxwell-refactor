@@ -1,14 +1,17 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AttendanceService } from '../../services/attendanceService';
 import { DataService } from '../../services/dataService';
+import { ApiAttendanceService } from '../../services/apiAttendanceService';
+import { AttendanceOfflineService } from '../../services/attendanceOfflineService';
 import { ScanResult } from '../../types/qr';
 import { Event, UserRole } from '../../types/index';
 import { ScanValidationResult, EventGateConfig } from '../../types/attendance';
-import { Camera, X, CheckCircle, AlertTriangle, ShieldCheck, ChevronDown, LogIn, Lock } from 'lucide-react';
+import { Camera, X, CheckCircle, AlertTriangle, ShieldCheck, ChevronDown, LogIn, Lock, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import QRScanner from '../common/QRScanner';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../context/DialogContext';
+import { publishAttendanceUpdated } from '../../services/attendanceRealtime';
 
 const GateScannerView: React.FC = () => {
   const { user } = useAuth();
@@ -20,6 +23,13 @@ const GateScannerView: React.FC = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [validationResult, setValidationResult] = useState<ScanValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [deviceId, setDeviceId] = useState('');
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  );
   // DATA STATE
   const [activeEvents, setActiveEvents] = useState<Event[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -33,6 +43,17 @@ const GateScannerView: React.FC = () => {
         loadActiveEvents();
       }
   }, [user]);
+
+  useEffect(() => {
+      const handleOnline = () => setIsOnline(true);
+      const handleOffline = () => setIsOnline(false);
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      return () => {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+      };
+  }, []);
 
   // Update Available Gates when Event Changes
   useEffect(() => {
@@ -99,6 +120,101 @@ const GateScannerView: React.FC = () => {
       setLoadingEvents(false);
   };
 
+  const refreshPendingSyncCount = useCallback(async () => {
+      const pending = await AttendanceOfflineService.listPending();
+      setPendingSyncCount(pending.length);
+  }, []);
+
+  const syncPendingQueue = useCallback(async () => {
+      if (!config || !deviceId || !isOnline) return;
+
+      const pending = await AttendanceOfflineService.listPending();
+      if (pending.length === 0) return;
+
+      try {
+          const response = await ApiAttendanceService.syncOfflineCheckins({
+              deviceId,
+              items: pending.map((item) => ({
+                  offlineId: item.offlineId,
+                  qrString: item.qrString,
+                  eventId: item.eventId,
+                  gateId: item.gateId,
+                  scannedAt: item.scannedAt,
+              })),
+          });
+
+          await Promise.all(
+              pending.map(async (item, index) => {
+                  const result = response.results[index];
+                  if (result?.success) {
+                      await AttendanceOfflineService.markSynced(item.id);
+                      publishAttendanceUpdated({
+                          eventId: item.eventId,
+                          method: 'GATE_SCAN',
+                          status: 'SUCCESS',
+                          gateId: item.gateId,
+                          scannedAt: item.scannedAt,
+                        });
+                  } else {
+                      await AttendanceOfflineService.markFailed(
+                          item.id,
+                          result?.message || 'Sync failed',
+                      );
+                  }
+              }),
+          );
+
+          setLastSyncAt(new Date().toISOString());
+          await refreshPendingSyncCount();
+      } catch (syncError) {
+          const message =
+              syncError instanceof Error ? syncError.message : 'Offline sync failed';
+          await Promise.all(
+              pending.map((item) =>
+                  AttendanceOfflineService.markFailed(item.id, message),
+              ),
+          );
+          await refreshPendingSyncCount();
+      }
+  }, [config, deviceId, isOnline, refreshPendingSyncCount]);
+
+  useEffect(() => {
+      void refreshPendingSyncCount();
+  }, [refreshPendingSyncCount]);
+
+  useEffect(() => {
+      if (!config || !user) return;
+
+      const nextDeviceId = AttendanceOfflineService.getOrCreateDeviceId();
+      setDeviceId(nextDeviceId);
+
+      if (!isOnline) return;
+
+      void ApiAttendanceService.registerScannerDevice({
+          deviceId: nextDeviceId,
+          deviceName: `${user.fullName} - Gate Scanner`,
+          eventId: config.eventId,
+          gateId: config.gateId,
+      })
+          .then((device) => {
+              if (device.lastSyncAt) {
+                  setLastSyncAt(device.lastSyncAt);
+              }
+          })
+          .catch(() => {
+              // best effort; sync route will still retry when the network is stable
+          });
+  }, [config, user, isOnline]);
+
+  useEffect(() => {
+      if (!config) return;
+      void syncPendingQueue();
+      const intervalId = window.setInterval(() => {
+          void syncPendingQueue();
+      }, 30000);
+      return () => window.clearInterval(intervalId);
+  }, [config, syncPendingQueue]);
+
   const handleLockConfiguration = () => {
       if (!selectedEventId || !selectedGateId) return;
       setConfig({ eventId: selectedEventId, gateId: selectedGateId });
@@ -116,9 +232,32 @@ const GateScannerView: React.FC = () => {
       setConfig(null);
       setShowScanner(false);
       setValidationResult(null);
+      setDeviceId('');
   };
 
+  const queueOfflineScan = useCallback(async (raw: string) => {
+      if (!config) return;
+      const activeDeviceId =
+          deviceId || AttendanceOfflineService.getOrCreateDeviceId();
+      setDeviceId(activeDeviceId);
+      await AttendanceOfflineService.enqueueScan({
+          qrString: raw,
+          eventId: config.eventId,
+          gateId: config.gateId,
+          deviceId: activeDeviceId,
+      });
+      await refreshPendingSyncCount();
+      setValidationResult({
+          status: 'ALLOWED',
+          message:
+              'Offline mode: scan saved locally and queued for sync. Access granted pending backend verification.',
+      });
+      setShowScanner(false);
+  }, [config, deviceId, refreshPendingSyncCount]);
+
   const handleScan = async (result: ScanResult) => {
+    if (isValidating) return;
+
     setError(null);
     setValidationResult(null);
     if (!result.success) {
@@ -137,21 +276,52 @@ const GateScannerView: React.FC = () => {
       return;
     }
 
+    if (
+      raw.startsWith('EVENT_ATTENDANCE:') ||
+      raw.startsWith('EVENT:')
+    ) {
+      setValidationResult({
+        status: 'DENIED',
+        message:
+          'Wrong QR scanned. This is the member self check-in QR from the projector, not a gate entry ticket QR.',
+      });
+      setShowScanner(false);
+      return;
+    }
+
     if (!config) return;
 
+    if (!isOnline) {
+      await queueOfflineScan(raw);
+      return;
+    }
+
     try {
+        setIsValidating(true);
+        setShowScanner(false);
         const validation = await AttendanceService.validateGateEntry(
             raw,
             config.eventId,
             config.gateId,
+            { deviceId: deviceId || undefined },
         );
         
         setValidationResult(validation);
-        setShowScanner(false); // Pause scanner to show result
 
     } catch (e: any) {
-        setError(e.message || "System Error during validation.");
-        setShowScanner(false);
+        const message = e?.message || "System Error during validation.";
+        if (
+            typeof message === 'string' &&
+            (message.includes('Network error:') ||
+             message.includes('Service unavailable') ||
+             message.includes('Failed to fetch'))
+        ) {
+            await queueOfflineScan(raw);
+        } else {
+            setError(message);
+        }
+    } finally {
+        setIsValidating(false);
     }
   };
 
@@ -254,10 +424,32 @@ const GateScannerView: React.FC = () => {
                       <span className="bg-blue-600 text-[10px] px-2 py-0.5 rounded font-bold">ACTIVE</span>
                       <span className="text-xs text-slate-300">{activeGateName}</span>
                   </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-300">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-bold ${isOnline ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-200'}`}>
+                          {isOnline ? <Wifi size={12}/> : <WifiOff size={12}/>}
+                          {isOnline ? 'ONLINE' : 'OFFLINE'}
+                      </span>
+                      <span className="rounded-full bg-white/10 px-2 py-1 font-bold">
+                          Pending Sync: {pendingSyncCount}
+                      </span>
+                      <span className="rounded-full bg-white/10 px-2 py-1 font-bold">
+                          Last Sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : 'Never'}
+                      </span>
+                  </div>
               </div>
-              <button type="button" onClick={() => void handleExitConfiguration()} className="p-2 bg-white/10 rounded-full text-slate-400 hover:text-white">
-                  <Lock size={16}/>
-              </button>
+              <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void syncPendingQueue()}
+                    className="p-2 bg-white/10 rounded-full text-slate-400 hover:text-white"
+                    title="Sync pending queue"
+                  >
+                    <RefreshCw size={16}/>
+                  </button>
+                  <button type="button" onClick={() => void handleExitConfiguration()} className="p-2 bg-white/10 rounded-full text-slate-400 hover:text-white">
+                      <Lock size={16}/>
+                  </button>
+              </div>
           </div>
       </div>
 
@@ -320,6 +512,14 @@ const GateScannerView: React.FC = () => {
                     </button>
                 </div>
             </div>
+        ) : isValidating ? (
+            <div className="bg-slate-900/90 border border-slate-700 text-white p-8 rounded-3xl text-center animate-fade-in shadow-2xl">
+                 <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-blue-600/20 text-blue-300">
+                    <Camera size={30} className="animate-pulse" />
+                 </div>
+                 <h3 className="text-2xl font-bold mb-2">Validating Ticket</h3>
+                 <p className="text-slate-300">Please wait while Maxwell verifies event access and gate tier.</p>
+            </div>
         ) : error ? (
             // GENERIC ERROR CARD
             <div className="bg-red-50 text-red-900 p-8 rounded-3xl text-center animate-fade-in">
@@ -338,8 +538,12 @@ const GateScannerView: React.FC = () => {
                     <Camera size={48} />
                 </div>
                 <div className="text-center">
-                    <span className="text-xl font-bold block">Tap to Scan</span>
-                    <span className="text-sm text-slate-400">Ready for next attendee</span>
+                    <span className="text-xl font-bold block">
+                        {isValidating ? 'Validating...' : 'Tap to Scan'}
+                    </span>
+                    <span className="text-sm text-slate-400">
+                        {isValidating ? 'Please wait for the current result' : 'Ready for next attendee'}
+                    </span>
                 </div>
             </button>
         )}
@@ -347,7 +551,7 @@ const GateScannerView: React.FC = () => {
 
       <QRScanner
         purpose="gate"
-        isOpen={showScanner}
+        isOpen={showScanner && !isValidating}
         onClose={() => setShowScanner(false)}
         onScan={handleScan}
       />

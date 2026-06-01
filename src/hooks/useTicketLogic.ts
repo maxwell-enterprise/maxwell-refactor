@@ -1,8 +1,11 @@
 
 import { useState, useEffect, useMemo } from 'react';
-import { WalletItem, Event } from '../types/index';
+import { WalletItem, Event, Member } from '../types/index';
 import { DataService } from '../services/dataService';
 import { AttendanceService } from '../services/attendanceService';
+import { EntitlementService } from '../services/entitlementService';
+import { WALLET_REFRESH_EVENT } from '../services/paymentService';
+import { subscribeAttendanceUpdated } from '../services/attendanceRealtime';
 import { useToast } from '../context/ToastContext';
 import { QrCode, Monitor, Info, Layers } from 'lucide-react';
 
@@ -34,6 +37,7 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     // Core Data
     const [eventData, setEventData] = useState<Event | null>(null);
     const [subEvents, setSubEvents] = useState<Event[]>([]); // For Container Tickets
+    const [liveItem, setLiveItem] = useState<WalletItem>(item);
     
     // UI State
     const [isLoading, setIsLoading] = useState(true);
@@ -44,16 +48,21 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     // Drill Down State (For viewing a specific session within a container)
     const [selectedSession, setSelectedSession] = useState<Event | null>(null);
 
+    useEffect(() => {
+        setLiveItem(item);
+        setIsAttended(item.status === 'USED' || item.status === 'CLAIMED');
+    }, [item]);
+
     // 1. Fetch Real-time Event Data & Sub Events
     useEffect(() => {
         const fetchContext = async () => {
-            if (!item.meta?.eventId) {
+            if (!liveItem.meta?.eventId) {
                 setIsLoading(false);
                 return;
             }
             try {
                 const allEvents = await DataService.getEvents();
-                const found = allEvents.find(e => e.id === item.meta!.eventId);
+                const found = allEvents.find(e => e.id === liveItem.meta!.eventId);
                 
                 if (found) {
                     setEventData(found);
@@ -83,15 +92,52 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
         };
 
         fetchContext();
-    }, [item.meta?.eventId]);
+    }, [liveItem.meta?.eventId]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const refreshTicket = async () => {
+            try {
+                const latest = await EntitlementService.getWalletItemById(item.id);
+                if (!cancelled && latest) {
+                    const becameUsed =
+                        latest.status === 'USED' &&
+                        liveItem.status !== 'USED';
+                    setLiveItem(latest);
+                    setIsAttended(latest.status === 'USED' || latest.status === 'CLAIMED');
+                    if (becameUsed) {
+                        window.dispatchEvent(new CustomEvent(WALLET_REFRESH_EVENT));
+                    }
+                }
+            } catch {
+                // best effort
+            }
+        };
+
+        void refreshTicket();
+        const unsubscribeAttendance = subscribeAttendanceUpdated((payload) => {
+            if (payload.eventId !== liveItem.meta?.eventId) return;
+            void refreshTicket();
+        });
+        const intervalId = window.setInterval(() => {
+            void refreshTicket();
+        }, 8000);
+
+        return () => {
+            cancelled = true;
+            unsubscribeAttendance();
+            window.clearInterval(intervalId);
+        };
+    }, [item.id, liveItem.meta?.eventId, liveItem.status]);
 
     // 2. Determine Display Context (Master Event or Selected Session)
     const activeContext = selectedSession || eventData;
-    const mode = activeContext?.locationMode || item.meta?.locationMode || 'OFFLINE';
-    const activeContextTime = activeContext?.recurringMeta?.time || activeContext?.time || item.meta?.time;
+    const mode = activeContext?.locationMode || liveItem.meta?.locationMode || 'OFFLINE';
+    const activeContextTime = activeContext?.recurringMeta?.time || activeContext?.time || liveItem.meta?.time;
     const activeContextStart = useMemo(
-        () => parseEventStart(activeContext?.date || item.expiryDate, activeContextTime),
-        [activeContext?.date, activeContextTime, item.expiryDate],
+        () => parseEventStart(activeContext?.date || liveItem.expiryDate, activeContextTime),
+        [activeContext?.date, activeContextTime, liveItem.expiryDate],
     );
     const joinWindowStart = useMemo(() => {
         if (!activeContextStart) return null;
@@ -143,7 +189,7 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     // 5. Handle Join Online
     const joinOnlineSession = async () => {
         // Priority: Selected Session -> Event Data -> Ticket Meta
-        const link = activeContext?.onlineMeetingLink || item.meta?.onlineMeetingLink;
+        const link = activeContext?.onlineMeetingLink || liveItem.meta?.onlineMeetingLink;
 
         if (!canJoinOnlineSession) {
             showToast("Join session becomes available 1 hour before the event starts.", "info");
@@ -159,17 +205,26 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
         
         try {
             // Record attendance for the specific session ID if available
-            const memberId = item.userId;
-            const dummyMember: any = { id: memberId, name: item.meta?.recipientName || 'User', email: item.meta?.recipientEmail || '' };
-            
-            // Use active context (session) ID for accurate logging
-            const targetEventId = activeContext?.id || item.meta?.eventId || '';
-            const dummyEvent: any = { id: targetEventId, name: activeContext?.name || item.title };
+            const memberId = liveItem.userId;
+            const attendanceMember: Member = {
+                id: memberId,
+                name: liveItem.meta?.recipientName || 'User',
+                email: liveItem.meta?.recipientEmail || '',
+                phone: '',
+            };
 
-            await AttendanceService.recordAttendance(dummyMember, dummyEvent, 'LINK_CLICKED');
+            // Use active context (session) ID for accurate logging
+            const targetEventId = activeContext?.id || liveItem.meta?.eventId || '';
+            const attendanceEvent = {
+                id: targetEventId,
+                name: activeContext?.name || liveItem.title,
+            } as Event;
+
+            await AttendanceService.recordAttendance(attendanceMember, attendanceEvent, 'LINK_CLICKED');
             setIsAttended(true);
         } catch (e) {
             console.warn("Auto-attendance failed, proceeding to link anyway", e);
+            showToast("Attendance could not be recorded automatically. You can still join the session.", "info");
         }
 
         setTimeout(() => {
@@ -208,10 +263,11 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
         openSecureLink, // Exported for use in UI
         isJoining,
         isAttended,
-        displayDate: activeContext?.date || item.expiryDate,
-        displayTime: activeContext?.recurringMeta?.time || item.meta?.time,
-        displayLocation: activeContext?.location || item.meta?.location,
-        displayTitle: activeContext?.name || item.title,
-        locationMapLink: activeContext?.locationMapLink || item.meta?.locationMapLink
+        item: liveItem,
+        displayDate: activeContext?.date || liveItem.expiryDate,
+        displayTime: activeContext?.recurringMeta?.time || liveItem.meta?.time,
+        displayLocation: activeContext?.location || liveItem.meta?.location,
+        displayTitle: activeContext?.name || liveItem.title,
+        locationMapLink: activeContext?.locationMapLink || liveItem.meta?.locationMapLink
     };
 };

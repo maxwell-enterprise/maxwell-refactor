@@ -42,15 +42,20 @@ const MemberAttendanceScanner: React.FC = () => {
         const memberObj = { id: user.id, name: user.fullName, email: user.email, phone: '000' } as Member;
         
         try {
-            const record = await AttendanceService.recordAttendance(memberObj, event, 'SELF_SCAN');
+            const record = await AttendanceService.recordAttendance(
+                memberObj,
+                event,
+                'SELF_SCAN',
+                { venueQr: raw },
+            );
             setConfirmation(record);
             setShowScanner(false);
         } catch (error: any) {
-            // Check for specific ACCESS_DENIED error from service
-            if (error.message.includes('ACCESS_DENIED')) {
-                setScanError("ACCESS_DENIED");
+            const message = String(error?.message || 'Attendance failed. Please try again.');
+            if (message.includes('ACCESS_DENIED:')) {
+                setScanError(message.replace('ACCESS_DENIED:', '').trim());
             } else {
-                setScanError(error.message || "Attendance failed. Please try again.");
+                setScanError(message);
             }
             setShowScanner(false);
         }
@@ -73,9 +78,7 @@ const MemberAttendanceScanner: React.FC = () => {
               </div>
               <h1 className="text-3xl font-black uppercase tracking-widest mb-2">Access Denied</h1>
               <p className="text-lg text-red-100 max-w-xs mb-8">
-                  {scanError === 'ACCESS_DENIED' 
-                    ? "You do not have a valid ticket for this event. Please visit the registration desk." 
-                    : scanError}
+                  {scanError}
               </p>
               
               <button 

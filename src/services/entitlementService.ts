@@ -5,6 +5,8 @@ import { CommunicationService } from './communicationService';
 import { DataService } from './dataService'; 
 import { getTagDefinition } from '../constants/tagRegistry'; 
 import { RepositoryFactory } from './repositories/index'; 
+import { APP_CONFIG } from '../lib/config';
+import { apiRequest } from '../repositories/api/apiClient';
 
 export const SEED_ENTITLEMENTS: UserEntitlements[] = [
     {
@@ -130,6 +132,26 @@ export const EntitlementService = {
 
   // Fix: Added redeemAndAssign for EventMarketplace
   redeemAndAssign: async (userId: string, passId: string, eventId: string, assignee: { type: string, name: string, email: string, phone: string }): Promise<void> => {
+      const useApi =
+          !APP_CONFIG.USE_MOCK_GLOBAL &&
+          APP_CONFIG.DOMAINS.ATTENDANCE === 'API';
+      if (useApi) {
+          await apiRequest('/wallet/redeem-event-credit', {
+              method: 'POST',
+              body: JSON.stringify({
+                  walletItemId: passId,
+                  eventId,
+                  assignee: {
+                      type: assignee.type,
+                      name: assignee.name,
+                      email: assignee.email,
+                      phone: assignee.phone,
+                  },
+              }),
+          });
+          return;
+      }
+
       // 1. Consume Credit
       const success = await EntitlementService.consumePassUsage(passId, 1, eventId);
       if (!success) throw new Error("Insufficient credits");

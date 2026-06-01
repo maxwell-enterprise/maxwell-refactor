@@ -2,7 +2,7 @@
 import { Member, Transaction, Event } from '../../types/index';
 
 const DB_NAME = 'MAXWELL_DEV_SANDBOX_V1';
-const DB_VERSION = 25; // Drop youth_metrics (Nest / Postgres; /fe/youth-impact/metrics)
+const DB_VERSION = 26; // Add offline_checkin_queue for gate scanner sync
 
 export const DevDatabase = {
 
@@ -29,6 +29,10 @@ export const DevDatabase = {
 
                 if (oldVersion < 25 && db.objectStoreNames.contains('youth_metrics')) {
                     db.deleteObjectStore('youth_metrics');
+                }
+
+                if (oldVersion < 26 && !db.objectStoreNames.contains('offline_checkin_queue')) {
+                    db.createObjectStore('offline_checkin_queue', { keyPath: 'id' });
                 }
 
                 // --- CORE STORES ---
@@ -95,6 +99,7 @@ export const DevDatabase = {
                 if (!db.objectStoreNames.contains('sys_internal_users')) db.createObjectStore('sys_internal_users', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('active_shopping_carts')) db.createObjectStore('active_shopping_carts', { keyPath: 'sessionId' });
                 if (!db.objectStoreNames.contains('event_attendance_ledger')) db.createObjectStore('event_attendance_ledger', { keyPath: 'id' });
+                if (!db.objectStoreNames.contains('offline_checkin_queue')) db.createObjectStore('offline_checkin_queue', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('system_security_logs')) db.createObjectStore('system_security_logs', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('system_background_jobs')) db.createObjectStore('system_background_jobs', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('system_settings')) db.createObjectStore('system_settings', { keyPath: 'id' });

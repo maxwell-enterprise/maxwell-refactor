@@ -4,7 +4,7 @@ import { EntitlementService } from '../services/entitlementService';
 import { WalletItem } from '../types/access';
 import { ContractService } from '../services/contractService';
 import { ContractInstance } from '../types/contract';
-import { Calendar, MapPin, Award, Clock, CheckCircle2, Lock } from 'lucide-react';
+import { Calendar, MapPin, Award, Clock, CheckCircle2, Lock, QrCode } from 'lucide-react';
 import type { Member } from '../types/index';
 import { ViewState } from '../types/index';
 import { UserEntitlements, LifecycleStage } from '../types/access';
@@ -209,6 +209,15 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
   const progressPercent =
     STAGES.length <= 1 ? 0 : (currentStageIdx / (STAGES.length - 1)) * 100;
 
+  const canSelfAttend = useMemo(() => {
+    if (!nextEvent) return false;
+    if (nextEvent.type !== 'TICKET' || nextEvent.status !== 'ACTIVE') return false;
+    if (!nextEvent.expiryDate) return true;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return new Date(nextEvent.expiryDate).getTime() >= today.getTime();
+  }, [nextEvent]);
+
   if (loading) {
     return (
       <div className="flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
@@ -314,6 +323,19 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                                     </div>
                                 </div>
                             </div>
+
+                            {canSelfAttend && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onNavigate(ViewState.MEMBER_ATTENDANCE);
+                                    }}
+                                    className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-900 transition-colors hover:bg-indigo-50"
+                                >
+                                    <QrCode size={16} />
+                                    Scan Attendance
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="relative z-10 py-10 text-center">

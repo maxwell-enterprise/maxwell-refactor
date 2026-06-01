@@ -6,6 +6,7 @@ import { MasterTier } from '../../types/reference';
 import { UserService } from '../../services/userService';
 import { DataService } from '../../services/dataService';
 import { ReferenceService } from '../../services/referenceService';
+import { DataUtils } from '../../utils/dataUtils';
 import { X, Plus, Trash2, Users, Save, ShieldCheck, MapPin, Tag } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
@@ -47,9 +48,11 @@ const GateConfigModal: React.FC<GateConfigModalProps> = ({ event, onClose, onSav
         loadDependencies();
     }, [event]);
 
+    const createGateId = () => `GATE-${DataUtils.generateID()}`;
+
     const addGate = () => {
         const newGate: EventGateConfig = {
-            id: `GATE-${Date.now()}`,
+            id: createGateId(),
             name: 'New Gate',
             allowedTiers: availableTiers.length > 0 ? [availableTiers[0].id] : ['GENERAL'],
             assignedUserIds: [],
@@ -81,8 +84,23 @@ const GateConfigModal: React.FC<GateConfigModalProps> = ({ event, onClose, onSav
     const handleSave = async () => {
         setIsSaving(true);
         try {
+            const seenGateIds = new Set<string>();
+            const normalizedGates = gates.map((gate) => {
+                const trimmedName = gate.name.trim() || 'New Gate';
+                let normalizedId = gate.id?.trim() || createGateId();
+                if (seenGateIds.has(normalizedId)) {
+                    normalizedId = createGateId();
+                }
+                seenGateIds.add(normalizedId);
+                return {
+                    ...gate,
+                    id: normalizedId,
+                    name: trimmedName,
+                };
+            });
+
             // Update Event with new Gate Config
-            const updatedEvent = { ...event, gates };
+            const updatedEvent = { ...event, gates: normalizedGates };
             await DataService.upsertEvent(updatedEvent);
             showToast('Gate configuration saved successfully', 'success');
             onSave();
@@ -123,7 +141,7 @@ const GateConfigModal: React.FC<GateConfigModalProps> = ({ event, onClose, onSav
 
                     <div className="space-y-6">
                         {gates.map((gate, idx) => (
-                            <div key={gate.id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                            <div key={`${gate.id}-${idx}`} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                                 {/* Gate Header Row */}
                                 <div className="p-4 border-b border-slate-100 flex gap-4 items-center bg-slate-50/50">
                                     <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">

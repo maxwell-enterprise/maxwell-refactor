@@ -117,7 +117,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   // --- GROUPING LOGIC FOR TICKETS ---
   const groupedTickets = useMemo(() => {
       const tickets = items.filter(
-          (i) => i.type === 'TICKET' && i.status !== 'EXPIRED' && i.status !== 'USED',
+          (i) => i.type === 'TICKET' && i.status !== 'EXPIRED',
       );
       const groups: Record<string, WalletItem[]> = {};
 
@@ -491,9 +491,10 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                 )}
 
                                 {personal.map((ticket) => {
-                                    const ticketDate = formatEventDate(ticket.expiryDate);
-                                    return (
-                                    <div
+                                     const ticketDate = formatEventDate(ticket.expiryDate);
+                                     const isCheckedIn = ticket.status === 'USED' || ticket.status === 'CLAIMED';
+                                     return (
+                                     <div
                                         key={ticket.id}
                                         role="button"
                                         tabIndex={0}
@@ -530,8 +531,8 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                         </div>
                                         <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                                             <span>Personal entry</span>
-                                            <span className="flex items-center text-green-600">
-                                                <ShieldCheck size={12} className="mr-1" /> Valid
+                                            <span className={`flex items-center ${isCheckedIn ? 'text-amber-700' : 'text-green-600'}`}>
+                                                <ShieldCheck size={12} className="mr-1" /> {isCheckedIn ? 'Checked In' : 'Valid'}
                                             </span>
                                         </div>
                                     </div>

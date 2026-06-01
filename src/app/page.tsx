@@ -16,6 +16,7 @@ import { parsePublicProductDeepLink } from "@/lib/publicProductDeepLink";
 export default function HomePage() {
   const { isAuthenticated, isLoading, login } = useAuth();
   const router = useRouter();
+  const [isRoutingAuthCallback, setIsRoutingAuthCallback] = useState(false);
   const [publicProductLink, setPublicProductLink] = useState<{
     productId: string;
     discountCode?: string;
@@ -24,6 +25,20 @@ export default function HomePage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const hash = window.location.hash.replace(/^#/, "");
+    const hashParams = new URLSearchParams(hash);
+    const hasAuthCallbackPayload =
+      hashParams.has("access_token") ||
+      hashParams.has("refresh_token") ||
+      hashParams.has("error") ||
+      hashParams.has("error_code");
+    if (hasAuthCallbackPayload) {
+      setIsRoutingAuthCallback(true);
+      window.location.replace(
+        `/auth/callback${window.location.search}${window.location.hash}`,
+      );
+      return;
+    }
     setPublicProductLink(parsePublicProductDeepLink(window.location.search));
   }, []);
 
@@ -61,7 +76,7 @@ export default function HomePage() {
     });
   }, []);
 
-  if (isLoading) {
+  if (isLoading || isRoutingAuthCallback) {
     return <SessionLoadingScreen />;
   }
 

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   LayoutDashboard, Users, CalendarDays, Store, Banknote, 
   Target, Mail, Trophy, FileText, CheckSquare, Database, 
@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { ViewState, UserRole } from '../types/index';
 import { useAuth } from '../context/AuthContext';
+import { EntitlementService } from '../../services/entitlementService';
+import type { WalletItem } from '../../types/access';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -30,8 +32,19 @@ const WORKSPACE_ROLES = [
   UserRole.GATE_KEEPER
 ];
 
+function hasEligibleSelfAttendanceTicket(items: WalletItem[]): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return items.some((item) => {
+    if (item.type !== 'TICKET' || item.status !== 'ACTIVE') return false;
+    if (!item.expiryDate) return true;
+    return new Date(item.expiryDate).getTime() >= today.getTime();
+  });
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, toggleSidebar, userRole, isPersonalZone, onToggleZone }) => {
   const { user, logout } = useAuth();
+  const [canSelfAttend, setCanSelfAttend] = useState(false);
   
   const isStaffIdentity = 
     user?.email?.includes('maxwell.com') || 
@@ -98,6 +111,31 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
 
   const isMemberMode = isPersonalZone || userRole === UserRole.MEMBER;
 
+  useEffect(() => {
+    if (!isMemberMode || !user?.id) {
+      setCanSelfAttend(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const wallet = await EntitlementService.getMyWallet(user.id);
+        if (!cancelled) {
+          setCanSelfAttend(hasEligibleSelfAttendanceTicket(wallet));
+        }
+      } catch {
+        if (!cancelled) {
+          setCanSelfAttend(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isMemberMode, user?.id]);
+
   return (
     <>
       {isOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={toggleSidebar}></div>}
@@ -151,6 +189,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
                     <button onClick={() => onNavigate(ViewState.STORE_CATALOG)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.STORE_CATALOG ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                         <ShoppingBag size={18} className="mr-3" /> Store
                     </button>
+                    {canSelfAttend && (
+                        <button onClick={() => onNavigate(ViewState.MEMBER_ATTENDANCE)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.MEMBER_ATTENDANCE ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                            <ScanLine size={18} className="mr-3" /> Self Attendance
+                        </button>
+                    )}
                     <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4">Learning</div>
                     <button onClick={() => onNavigate(ViewState.ENABLEMENT)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.ENABLEMENT ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                         <GraduationCap size={18} className="mr-3" /> Success Toolkit

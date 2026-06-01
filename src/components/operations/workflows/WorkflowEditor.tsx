@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { OpsTemplate, OpsTemplateItem } from '../../../types/ops';
 import { Product, UserRole } from '../../../types/index';
 import { DataService } from '../../../services/dataService';
-import { apiRequest } from '../../../repositories/api/apiClient';
+import { apiRequest, ApiRequestError } from '../../../repositories/api/apiClient';
 import { Save, Plus, Trash2, ArrowDown, Settings, Zap, Briefcase, Clock, GripVertical, CheckCircle2 } from 'lucide-react';
 
 interface WorkflowEditorProps {
@@ -48,10 +48,14 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ template, onSave, onCan
         const loadSystemTriggers = async () => {
             setSystemTriggersLoading(true);
             try {
-                const data = await apiRequest<OpsSystemTriggerOption[]>('/store/ops-system-triggers');
+                const data = await apiRequest<OpsSystemTriggerOption[]>('/store/ops-system-triggers', {
+                    skipBackendFailureTracking: true,
+                });
                 setSystemTriggers(data);
             } catch (error) {
-                console.error('[WorkflowEditor] Failed to fetch system triggers:', error);
+                if (!(error instanceof ApiRequestError && error.status === 404)) {
+                    console.error('[WorkflowEditor] Failed to fetch system triggers:', error);
+                }
                 setSystemTriggers([]);
             } finally {
                 setSystemTriggersLoading(false);

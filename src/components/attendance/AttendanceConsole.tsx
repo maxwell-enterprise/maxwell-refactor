@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AttendanceService } from '../../services/attendanceService';
 import { DataService } from '../../services/dataService';
-import { AttendanceRecord, Event, Member } from '../../types/index';
+import { AttendanceRecord, Event, Member, UserProfile } from '../../types/index';
 import { EventGateConfig } from '../../types/attendance';
 import { 
     Calendar, Users, ArrowRight, BarChart3, Download, Search, 
@@ -12,6 +12,28 @@ import WhatsAppQuickAction from '../common/WhatsAppQuickAction';
 import UnassignedTicketMonitor from './UnassignedTicketMonitor';
 import ParticipantManager from './ParticipantManager';
 import SentInvitationsMonitor from './SentInvitationsMonitor'; // New Import
+import { subscribeAttendanceUpdated } from '../../services/attendanceRealtime';
+import { UserService } from '../../services/userService';
+
+const getAttendanceMethodLabel = (method: AttendanceRecord['method']) => {
+    switch (method) {
+        case 'SELF_SCAN':
+            return 'Self Check-In';
+        case 'LINK_CLICKED':
+            return 'Online Join';
+        case 'ADMIN_OVERRIDE':
+            return 'Admin Override';
+        default:
+            return 'Gate Scan';
+    }
+};
+
+const getAttendanceChannelLabel = (record: AttendanceRecord) => {
+    if (record.method === 'SELF_SCAN') return 'Self Check-In';
+    if (record.method === 'LINK_CLICKED') return 'Online Session';
+    if (record.method === 'ADMIN_OVERRIDE') return 'Admin Override';
+    return record.gateId || 'Gate Scan';
+};
 
 const AttendanceConsole: React.FC = () => {
     // Top Level Tabs
@@ -21,6 +43,7 @@ const AttendanceConsole: React.FC = () => {
     const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [allMembers, setAllMembers] = useState<Member[]>([]); // For missing list
+    const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
     
     // Filters
@@ -52,14 +75,32 @@ const AttendanceConsole: React.FC = () => {
         }
     }, [selectedEventId, activeTab]);
 
+    useEffect(() => {
+        if (activeTab !== 'LIVE_DASHBOARD') return;
+
+        return subscribeAttendanceUpdated((payload) => {
+            if (!selectedEventId) return;
+            if (payload.eventId !== selectedEventId) return;
+            void loadAttendance(selectedEventId);
+        });
+    }, [activeTab, selectedEventId]);
+
     const loadAttendance = async (eventId: string) => {
         setLoading(true);
-        const [attData, memData] = await Promise.all([
-            AttendanceService.getAttendance(eventId),
-            DataService.getMembers()
+        const [allEvents, attData, memData, userData] = await Promise.all([
+            DataService.getEvents(),
+            AttendanceService.getAttendance(),
+            DataService.getMembers(),
+            UserService.getAllUsers().catch(() => [])
         ]);
-        setRecords(attData);
+        const childEventIds = allEvents
+            .filter((event) => event.parentEventId === eventId)
+            .map((event) => event.id);
+        const relevantEventIds = new Set([eventId, ...childEventIds]);
+        const filteredAttendance = attData.filter((record) => relevantEventIds.has(record.eventId));
+        setRecords(filteredAttendance);
         setAllMembers(memData);
+        setAllUsers(userData);
         setLoading(false);
     };
 
@@ -71,6 +112,44 @@ const AttendanceConsole: React.FC = () => {
         return [];
     }, [selectedEvent]);
 
+    const userLookup = useMemo(() => {
+        const map = new Map<string, UserProfile>();
+        allUsers.forEach(user => {
+            map.set(user.id, user);
+        });
+        return map;
+    }, [allUsers]);
+
+    const getOperatorLabel = (record: AttendanceRecord) => {
+        if (record.method === 'SELF_SCAN') {
+            return 'Self Check-In';
+        }
+
+        if (record.method === 'LINK_CLICKED') {
+            return 'Online Join';
+        }
+
+        if (record.method === 'ADMIN_OVERRIDE') {
+            return 'Admin Override';
+        }
+
+        const matchedUser = record.scannedByUserId ? userLookup.get(record.scannedByUserId) : undefined;
+        if (matchedUser?.fullName?.trim()) {
+            return matchedUser.fullName.trim();
+        }
+
+        if (record.scannerDevice?.trim()) {
+            return record.scannerDevice.trim();
+        }
+
+        if (record.scannedByUserId?.trim()) {
+            const suffix = record.scannedByUserId.trim().slice(-6);
+            return `Operator ${suffix}`;
+        }
+
+        return 'Unknown Operator';
+    };
+
     // --- METRICS ---
     const totalPresent = records.length;
     const capacity = selectedEvent?.capacity || 0;
@@ -80,7 +159,7 @@ const AttendanceConsole: React.FC = () => {
     const gateStats = useMemo(() => {
         const stats: Record<string, number> = {};
         records.forEach(r => {
-            const g = r.gateId || 'Unknown';
+            const g = getAttendanceChannelLabel(r);
             stats[g] = (stats[g] || 0) + 1;
         });
         return stats;
@@ -110,7 +189,11 @@ const AttendanceConsole: React.FC = () => {
 
     const filteredRecords = records.filter(r => 
         (filterTier === 'ALL' || r.ticketTier === filterTier) &&
-        (r.memberName.toLowerCase().includes(searchTerm.toLowerCase()) || r.verificationCode?.includes(searchTerm))
+        (
+            r.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            r.verificationCode?.includes(searchTerm) ||
+            getOperatorLabel(r).toLowerCase().includes(searchTerm.toLowerCase())
+        )
     );
 
     return (
@@ -243,7 +326,9 @@ const AttendanceConsole: React.FC = () => {
                                         <tr>
                                             <th className="p-2 sm:p-3 whitespace-nowrap">Time</th>
                                             <th className="p-2 sm:p-3 min-w-[100px]">Attendee</th>
-                                            <th className="p-2 sm:p-3">Gate</th>
+                                            <th className="p-2 sm:p-3">Channel</th>
+                                            <th className="p-2 sm:p-3">Method</th>
+                                            <th className="p-2 sm:p-3">Operator</th>
                                             <th className="p-2 sm:p-3">Tier</th>
                                         </tr>
                                     </thead>
@@ -252,7 +337,23 @@ const AttendanceConsole: React.FC = () => {
                                             <tr key={r.id} className="hover:bg-slate-50">
                                                 <td className="p-2 sm:p-3 font-mono text-slate-500 text-xs sm:text-sm whitespace-nowrap">{new Date(r.scannedAt).toLocaleTimeString()}</td>
                                                 <td className="p-2 sm:p-3 font-medium break-words max-w-[140px] sm:max-w-none">{r.memberName}</td>
-                                                <td className="p-2 sm:p-3 text-slate-600 break-words">{r.gateId || 'Self-Scan'}</td>
+                                                <td className="p-2 sm:p-3 text-slate-600 break-words">{getAttendanceChannelLabel(r)}</td>
+                                                <td className="p-2 sm:p-3">
+                                                    <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-xs ${
+                                                        r.method === 'GATE_SCAN'
+                                                            ? 'bg-purple-100 text-purple-700'
+                                                            : r.method === 'LINK_CLICKED'
+                                                                ? 'bg-cyan-100 text-cyan-700'
+                                                                : r.method === 'ADMIN_OVERRIDE'
+                                                                    ? 'bg-amber-100 text-amber-700'
+                                                                    : 'bg-blue-100 text-blue-700'
+                                                    }`}>
+                                                        {getAttendanceMethodLabel(r.method)}
+                                                    </span>
+                                                </td>
+                                                <td className="p-2 sm:p-3 text-slate-600 break-words max-w-[180px] sm:max-w-none">
+                                                    {getOperatorLabel(r)}
+                                                </td>
                                                 <td className="p-2 sm:p-3">
                                                     <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-xs ${r.ticketTier === 'VIP' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
                                                         {r.ticketTier}
