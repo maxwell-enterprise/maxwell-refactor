@@ -6,14 +6,18 @@ import { useAuth } from '../context/AuthContext';
 import { Users, Calendar, BrainCircuit, Search, ChevronRight, User } from 'lucide-react';
 import WhatsAppQuickAction from './common/WhatsAppQuickAction';
 import RoundTableModal from './tribe/RoundTableModal';
+import AddMemberModal from './tribe/AddMemberModal';
+import { useToast } from '../context/ToastContext';
 
 const MyTribe: React.FC = () => {
     const { user } = useAuth();
+    const { showToast } = useToast();
     const [members, setMembers] = useState<TribeMember[]>([]);
     const [sessions, setSessions] = useState<TribeMentoringSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMember, setSelectedMember] = useState<TribeMember | null>(null);
     const [showRoundTable, setShowRoundTable] = useState(false);
+    const [showAddMember, setShowAddMember] = useState(false);
     const tribeDataSourceMode = TribeService.getDataSourceMode();
 
     useEffect(() => {
@@ -35,21 +39,43 @@ const MyTribe: React.FC = () => {
         setLoading(false);
     };
 
+    const handleCopyReferralLink = async () => {
+        const referralLink = TribeService.getReferralLink(user?.id || '');
+        if (!referralLink) {
+            showToast('Referral link is not available.', 'error');
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(referralLink);
+            showToast('Referral link copied.', 'success');
+        } catch {
+            showToast('Failed to copy referral link.', 'error');
+        }
+    };
+
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-8 animate-fade-in relative">
-            <div className="flex justify-between items-end">
+            <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center">
                         <Users className="mr-3 text-indigo-600" /> My Tribe
                     </h1>
                     <p className="text-slate-500 mt-1">Manage your mentees and Round Table groups.</p>
                 </div>
-                <button 
-                    onClick={() => setShowRoundTable(true)}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 transition-colors"
-                >
-                    Start Round Table
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                    <button
+                        onClick={() => setShowAddMember(true)}
+                        className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-emerald-700 transition-colors"
+                    >
+                        Add Member
+                    </button>
+                    <button 
+                        onClick={() => setShowRoundTable(true)}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 transition-colors"
+                    >
+                        Start Round Table
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -65,8 +91,10 @@ const MyTribe: React.FC = () => {
 
                     {!loading && members.length === 0 && (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                            Member data for this feature is not available yet.
-                            {tribeDataSourceMode === 'UNWIRED' && ' The team is wiring up the backend for this screen.'}
+                            No tribe members assigned yet.
+                            {tribeDataSourceMode === 'UNWIRED'
+                              ? ' Backend for this screen is not configured.'
+                              : ' Assign mentees in CRM (nTagStatus = your user id) or check your facilitator account.'}
                         </div>
                     )}
 
@@ -119,15 +147,34 @@ const MyTribe: React.FC = () => {
                                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                         <div className="h-full bg-indigo-500" style={{width: `${member.mentoringProgress}%`}}></div>
                                     </div>
-                                    <div className="flex justify-between items-center pt-2 border-t border-slate-50">
-                                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${member.paymentStatus === 'PAID' ? 'bg-green-50 text-green-700' : member.paymentStatus === 'OVERDUE' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                                            {member.paymentStatus}
-                                        </span>
-                                        <div className="text-[10px] text-slate-400">Next: {member.nextEventDate || 'TBD'}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                                     <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                                         <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${member.paymentStatus === 'PAID' ? 'bg-green-50 text-green-700' : member.paymentStatus === 'OVERDUE' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                                             {member.paymentStatus}
+                                         </span>
+                                         <div className="text-[10px] text-slate-400">Next: {member.nextEventDate || 'TBD'}</div>
+                                     </div>
+                                     {(member.facilitatorType || member.facilitatorName) && (
+                                         <div className="pt-2 border-t border-slate-50 flex items-start justify-between gap-3">
+                                             <div>
+                                                 <div className="text-[10px] uppercase tracking-widest text-slate-400">Facilitator Tribe</div>
+                                                 <div className="mt-1 flex items-center gap-2">
+                                                     {member.facilitatorType && (
+                                                         <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-indigo-50 text-indigo-700">
+                                                             {member.facilitatorType}
+                                                         </span>
+                                                     )}
+                                                     {member.facilitatorName && (
+                                                         <span className="text-[11px] text-slate-600 font-medium truncate">
+                                                             {member.facilitatorName}
+                                                         </span>
+                                                     )}
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     )}
+                                 </div>
+                             </div>
+                         ))}
                     </div>
                 </div>
 
@@ -160,7 +207,9 @@ const MyTribe: React.FC = () => {
                         <p className="text-xs text-indigo-200 mb-4 relative z-10">Share your referral link to invite new members.</p>
                         <div className="bg-white/10 p-3 rounded-lg flex items-center justify-between mb-3 relative z-10">
                             <code className="text-xs font-mono truncate mr-2">{TribeService.getReferralLink(user?.id || '')}</code>
-                            <button className="text-xs font-bold hover:text-indigo-200">Copy</button>
+                            <button onClick={handleCopyReferralLink} className="text-xs font-bold hover:text-indigo-200">
+                                Copy
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -172,6 +221,13 @@ const MyTribe: React.FC = () => {
                     facilitatorId={user.id} 
                     onClose={() => setShowRoundTable(false)}
                     onSuccess={() => { setShowRoundTable(false); loadTribe(); }}
+                />
+            )}
+            {showAddMember && user && (
+                <AddMemberModal
+                    facilitatorName={user.fullName}
+                    onClose={() => setShowAddMember(false)}
+                    onSuccess={() => { setShowAddMember(false); loadTribe(); }}
                 />
             )}
         </div>

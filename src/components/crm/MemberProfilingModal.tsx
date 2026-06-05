@@ -1,9 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Member, SocialProfile } from '../../types/index';
 import { DataService } from '../../services/dataService';
-import { X, Save, Instagram, Briefcase, Globe, Users, Award, ShieldCheck } from 'lucide-react';
+import { X, Save, Instagram, Briefcase, ShieldCheck, Search, UserCheck } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
+import { UserRole } from '../../types/index';
 
 interface MemberProfilingModalProps {
     member: Member;
@@ -13,7 +15,14 @@ interface MemberProfilingModalProps {
 
 const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onClose, onSuccess }) => {
     const { showToast } = useToast();
+    const { userRole } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoadingFacilitators, setIsLoadingFacilitators] = useState(false);
+    const [facilitatorOptions, setFacilitatorOptions] = useState<Member[]>([]);
+    const [facilitatorSearch, setFacilitatorSearch] = useState('');
+    const [selectedFacilitator, setSelectedFacilitator] = useState<Member | null>(null);
+    const [showFacilitatorMenu, setShowFacilitatorMenu] = useState(false);
+    const isSuperAdmin = userRole === UserRole.SUPER_ADMIN;
     
     // Initial State from Member or Defaults
     const [profile, setProfile] = useState<SocialProfile>(member.socialProfile || {
@@ -28,6 +37,46 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
     // Helper for array inputs
     const [bizAccInput, setBizAccInput] = useState('');
     const [commInput, setCommInput] = useState('');
+
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+
+        let cancelled = false;
+        setIsLoadingFacilitators(true);
+
+        void DataService.getMembers()
+            .then((members) => {
+                if (cancelled) return;
+                const facilitators = members
+                    .filter((candidate) => candidate.lifecycleStage === 'FACILITATOR')
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                setFacilitatorOptions(facilitators);
+                const current = facilitators.find(
+                    (candidate) =>
+                        candidate.name.trim().toLowerCase() ===
+                        (member.facilitatorName || '').trim().toLowerCase(),
+                ) || null;
+                setSelectedFacilitator(current);
+                setFacilitatorSearch(current?.name || '');
+            })
+            .catch(() => {
+                if (cancelled) return;
+                showToast('Failed to load facilitator options.', 'error');
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoadingFacilitators(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isSuperAdmin, member.facilitatorName, showToast]);
+
+    const filteredFacilitators = facilitatorOptions.filter((candidate) => {
+        const query = facilitatorSearch.trim().toLowerCase();
+        if (!query) return true;
+        return candidate.name.toLowerCase().includes(query);
+    });
 
     const handleAddArrayItem = (field: 'businessAccounts' | 'communities', value: string, setter: (v: string) => void) => {
         if (!value.trim()) return;
@@ -46,6 +95,17 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
     };
 
     const handleSave = async () => {
+        if (
+            isSuperAdmin &&
+            facilitatorSearch.trim() &&
+            !selectedFacilitator &&
+            facilitatorSearch.trim().toLowerCase() !==
+                (member.facilitatorName || '').trim().toLowerCase()
+        ) {
+            showToast('Please select a facilitator from the dropdown list.', 'error');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             // Logic: Check qualification
@@ -67,12 +127,25 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
                 tags: updatedTags
             };
 
+            if (
+                isSuperAdmin &&
+                selectedFacilitator &&
+                selectedFacilitator.name.trim().toLowerCase() !==
+                    (member.facilitatorName || '').trim().toLowerCase()
+            ) {
+                updatedMember.facilitatorName = selectedFacilitator.name;
+            }
+
             await DataService.updateMember(member.id, updatedMember);
             showToast('Member profile updated successfully.', 'success');
             onSuccess();
             onClose();
         } catch (e) {
-            showToast('Failed to update profile.', 'error');
+            const message =
+                e instanceof Error && e.message.trim()
+                    ? e.message
+                    : 'Failed to update profile.';
+            showToast(message, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -80,7 +153,7 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
 
     return (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]">
+            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]">
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                     <div>
                         <h3 className="font-bold text-slate-900 flex items-center gap-2">
@@ -208,6 +281,87 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
                             </div>
                         </div>
                     </div>
+
+                    {isSuperAdmin && (
+                        <div className="space-y-4 pt-4 border-t border-slate-100">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
+                                <UserCheck size={14} className="mr-2"/> Facilitator Assignment
+                            </h4>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Current Facilitator</div>
+                                    <div className="mt-2 text-sm font-semibold text-slate-900">
+                                        {member.facilitatorName || 'Not assigned'}
+                                    </div>
+                                    <div className="mt-2">
+                                        {member.facilitatorType ? (
+                                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                                                {member.facilitatorType}
+                                            </span>
+                                        ) : (
+                                            <span className="text-xs text-slate-400">No facilitator type yet</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="relative">
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Facilitator Name</label>
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                                        <input
+                                            type="text"
+                                            className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                            value={facilitatorSearch}
+                                            onFocus={() => setShowFacilitatorMenu(true)}
+                                            onChange={(e) => {
+                                                setFacilitatorSearch(e.target.value);
+                                                setSelectedFacilitator(null);
+                                                setShowFacilitatorMenu(true);
+                                            }}
+                                            onBlur={() => {
+                                                window.setTimeout(() => setShowFacilitatorMenu(false), 120);
+                                            }}
+                                            placeholder="Search facilitator by name..."
+                                        />
+                                    </div>
+                                    <p className="mt-2 text-xs text-slate-500">
+                                        Save will set type to <b>ASSIGN</b> if empty before, or <b>MOVE</b> if reassigned.
+                                    </p>
+
+                                    {showFacilitatorMenu && (
+                                        <div className="absolute z-10 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+                                            {isLoadingFacilitators ? (
+                                                <div className="px-3 py-3 text-sm text-slate-500">Loading facilitators...</div>
+                                            ) : filteredFacilitators.length === 0 ? (
+                                                <div className="px-3 py-3 text-sm text-slate-500">No facilitator found.</div>
+                                            ) : (
+                                                filteredFacilitators.slice(0, 12).map((candidate) => (
+                                                    <button
+                                                        key={candidate.id}
+                                                        type="button"
+                                                        onMouseDown={() => {
+                                                            setSelectedFacilitator(candidate);
+                                                            setFacilitatorSearch(candidate.name);
+                                                            setShowFacilitatorMenu(false);
+                                                        }}
+                                                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors ${
+                                                            selectedFacilitator?.id === candidate.id
+                                                                ? 'bg-blue-50 text-blue-700'
+                                                                : 'hover:bg-slate-50 text-slate-700'
+                                                        }`}
+                                                    >
+                                                        <span className="font-medium">{candidate.name}</span>
+                                                        <span className="text-xs text-slate-400">{candidate.email}</span>
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">

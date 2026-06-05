@@ -45,8 +45,12 @@ export default function HomePage() {
   useEffect(() => {
     if (isLoading || !isAuthenticated) return;
 
+    const currentSearch =
+      typeof window !== "undefined" ? window.location.search : "";
+    const currentParams = new URLSearchParams(currentSearch);
+    const referralRef = currentParams.get("ref")?.trim();
     const link = parsePublicProductDeepLink(
-      typeof window !== "undefined" ? window.location.search : "",
+      currentSearch,
     );
     if (link) {
       const q = new URLSearchParams();
@@ -56,6 +60,10 @@ export default function HomePage() {
       if (link.source) q.set("source", link.source);
       q.set("checkout", "1");
       router.replace(`/dashboard?${q.toString()}`);
+      return;
+    }
+    if (referralRef) {
+      router.replace(`/dashboard?ref=${encodeURIComponent(referralRef)}`);
       return;
     }
     router.replace("/dashboard");

@@ -1,13 +1,30 @@
 
-import { TribeMember, PayoutTransaction, TribeMentoringSession, PayoutRule } from '../types/tribe';
-import { MEMBER_DATA } from '../constants';
+import { TribeMember, PayoutTransaction, TribeMentoringSession } from '../types/tribe';
 import { EntitlementService } from './entitlementService';
 import { EnablementService } from './enablementService';
-import { DataService } from './dataService'; // Import DataService
+import { DataService } from './dataService';
 import { APP_CONFIG } from '../lib/config';
 import { DevDatabase } from '../utils/devDatabase';
 import { supabase } from '../lib/supabaseClient';
 import { apiRequest } from '../repositories/api/apiClient';
+import {
+  mapDownlineToTribeMember,
+  mapSessionRowToTribeSession,
+  type TribeDownlineApiRow,
+  type TribeSessionApiRow,
+} from '../lib/tribeMappers';
+
+export interface CreateTribeMemberInput {
+    memberName: string;
+    phone: string;
+    email: string;
+    positionOccupation: string;
+    company: string;
+    domicile: string;
+    instagram: string;
+    linkedin: string;
+    facilitatorName: string;
+}
 
 const SEED_SESSIONS: TribeMentoringSession[] = [
     { id: 'SES-001', facilitatorId: 'fac-1', title: 'March Review', description: 'Laws of Growth', date: '2025-03-15', time: '19:00 WIB', meetingLink: 'https://zoom.us/j/123', attendeeIds: ['M002', 'M003'], status: 'SCHEDULED' }
@@ -18,20 +35,44 @@ const SEED_PAYOUTS: PayoutTransaction[] = [
     { id: 'PAY-002', sourceTransactionId: 'TRX-9999', sourceMemberName: 'Julia Tan', productName: 'Masterclass Ticket', beneficiaryId: 'fac-1', amount: 150000, ruleApplied: 'Fixed Bounty', status: 'PENDING', createdAt: '2025-03-01T10:00:00Z' }
 ];
 
+function membersViaApi(): boolean {
+  return !APP_CONFIG.USE_MOCK && APP_CONFIG.DOMAINS.MEMBERS === 'API';
+}
+
+async function fetchTribeDownlineFromApi(): Promise<TribeMember[]> {
+  const rows = await apiRequest<TribeDownlineApiRow[]>(`/me/tribe/members`);
+  return rows.map((row) => mapDownlineToTribeMember(row));
+}
+
+async function fetchTribeSessionsFromApi(): Promise<TribeMentoringSession[]> {
+  const rows = await apiRequest<TribeSessionApiRow[]>(`/me/tribe/sessions`);
+  return rows.map((row) => mapSessionRowToTribeSession(row));
+}
+
 export const TribeService = {
-    getDataSourceMode: (): 'MOCK' | 'SUPABASE' | 'UNWIRED' => {
+    getDataSourceMode: (): 'MOCK' | 'SUPABASE' | 'API' | 'UNWIRED' => {
         if (APP_CONFIG.USE_MOCK) return 'MOCK';
+        if (membersViaApi()) return 'API';
         if (supabase) return 'SUPABASE';
         return 'UNWIRED';
     },
     
     getMyTribe: async (facilitatorId: string): Promise<TribeMember[]> => {
+        const trimmedId = facilitatorId?.trim();
+        if (!trimmedId) return [];
+
+        if (membersViaApi()) {
+            try {
+                return await fetchTribeDownlineFromApi();
+            } catch (error) {
+                console.error('[TribeService] getMyTribe API failed:', error);
+                return [];
+            }
+        }
+
         if (APP_CONFIG.USE_MOCK) {
-            // FETCH REAL PERSISTENT DATA instead of static seed
             const allMembers = await DataService.getMembers();
-            // In a real app, filtering would be by 'assignedFacilitatorId'
-            // For mock, we simply take a slice to simulate the facilitator's group
-            const myMembersRaw = allMembers.slice(0, 8); 
+            const myMembersRaw = allMembers.slice(0, 8);
 
             return new Promise(resolve => {
                 setTimeout(async () => {
@@ -56,10 +97,52 @@ export const TribeService = {
         }
         
         if (!supabase) return [];
-        return []; 
+
+        const { data } = await supabase
+            .from('members')
+            .select('public_id, name, email, phone, program, joinMonth, lifecycleStage, tags, engagement')
+            .eq('nTagStatus', trimmedId);
+        if (!data?.length) return [];
+
+        return data.map((row: Record<string, unknown>) =>
+            mapDownlineToTribeMember({
+                memberId: String(row.public_id ?? row.id ?? ''),
+                name: String(row.name ?? ''),
+                email: String(row.email ?? ''),
+                phone: String(row.phone ?? ''),
+                program: String(row.program ?? ''),
+                joinDate: String(row.joinMonth ?? ''),
+                lifecycleStage: String(row.lifecycleStage ?? 'MEMBER'),
+                tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+                engagement:
+                    row.engagement && typeof row.engagement === 'object'
+                        ? (row.engagement as TribeDownlineApiRow['engagement'])
+                        : null,
+            }),
+        );
     },
 
-    getReferralLink: (facilitatorId: string): string => `${window.location.origin}/register?ref=${facilitatorId}`,
+    getReferralLink: (facilitatorId: string): string => `${window.location.origin}/?ref=${encodeURIComponent(facilitatorId)}`,
+
+    createMember: async (input: CreateTribeMemberInput): Promise<void> => {
+        const now = new Date().toISOString().slice(0, 7);
+        await apiRequest('/members', {
+            method: 'POST',
+            body: JSON.stringify({
+                name: input.memberName.trim(),
+                phone: input.phone.trim(),
+                email: input.email.trim(),
+                jobTitle: input.positionOccupation.trim(),
+                company: input.company.trim(),
+                domicile: input.domicile.trim(),
+                instagram: input.instagram.trim(),
+                linkedinUrl: input.linkedin.trim(),
+                facilitatorName: input.facilitatorName.trim(),
+                facilitatorType: 'REGISTER',
+                joinMonth: now,
+            }),
+        });
+    },
 
     getMyCommissions: async (facilitatorId: string): Promise<PayoutTransaction[]> => {
         if (APP_CONFIG.DOMAINS.TRANSACTIONS === 'API') {
@@ -120,6 +203,18 @@ export const TribeService = {
     },
 
     getMentoringSessions: async (facilitatorId: string): Promise<TribeMentoringSession[]> => {
+        const trimmedId = facilitatorId?.trim();
+        if (!trimmedId) return [];
+
+        if (membersViaApi()) {
+            try {
+                return await fetchTribeSessionsFromApi();
+            } catch (error) {
+                console.error('[TribeService] getMentoringSessions API failed:', error);
+                return [];
+            }
+        }
+
         if (APP_CONFIG.USE_MOCK) {
             try {
                 if(await DevDatabase.isEmpty('tribe_mentoring_sessions')) await DevDatabase.bulkAdd('tribe_mentoring_sessions', SEED_SESSIONS);
@@ -129,7 +224,19 @@ export const TribeService = {
         }
         if (!supabase) return [];
         const { data } = await supabase.from('tribe_mentoring_sessions').select('*').eq('facilitatorId', facilitatorId);
-        return data || [];
+        if (!data?.length) return [];
+        return (data as TribeSessionApiRow[]).map((row) =>
+            mapSessionRowToTribeSession({
+                id: String(row.id),
+                facilitatorId: String(row.facilitatorId),
+                facilitatorName: String(row.facilitatorName ?? ''),
+                eventName: String(row.eventName ?? ''),
+                memberId: String(row.memberId ?? ''),
+                memberName: String(row.memberName ?? ''),
+                notes: String(row.notes ?? ''),
+                createdAt: String(row.createdAt ?? new Date().toISOString()),
+            }),
+        );
     },
 
     createSession: async (session: Omit<TribeMentoringSession, 'id'>): Promise<TribeMentoringSession> => {
