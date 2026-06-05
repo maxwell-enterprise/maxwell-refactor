@@ -110,6 +110,8 @@ const LeadsDashboard: React.FC = () => {
                             </th>
                             <th className="px-6 py-4">Lead Name</th>
                             <th className="px-6 py-4">Company / Role</th>
+                            <th className="px-6 py-4">Facilitator Name</th>
+                            <th className="px-6 py-4">Facilitator Type</th>
                             <th className="px-6 py-4">Interest</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4 text-right">Actions</th>
@@ -117,9 +119,9 @@ const LeadsDashboard: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {loading ? (
-                            <tr><td colSpan={6} className="p-8 text-center text-slate-400">Loading pipeline...</td></tr>
+                            <tr><td colSpan={8} className="p-8 text-center text-slate-400">Loading pipeline...</td></tr>
                         ) : filteredLeads.length === 0 ? (
-                            <tr><td colSpan={6} className="p-8 text-center text-slate-400">No active leads found.</td></tr>
+                            <tr><td colSpan={8} className="p-8 text-center text-slate-400">No active leads found.</td></tr>
                         ) : (
                             filteredLeads.map(lead => (
                                 <tr 
@@ -141,6 +143,18 @@ const LeadsDashboard: React.FC = () => {
                                     <td className="px-6 py-4">
                                         <div className="font-medium text-slate-800">{lead.company || '-'}</div>
                                         <div className="text-xs text-slate-500">{lead.jobTitle}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="font-medium text-slate-800">{lead.facilitatorName || '-'}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {lead.facilitatorType ? (
+                                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                                                {lead.facilitatorType}
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-400">-</span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">

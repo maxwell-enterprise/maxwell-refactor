@@ -133,6 +133,8 @@ export interface Member {
   lifecycleStage: LifecycleStage;
   company?: string;
   jobTitle?: string;
+  domicile?: string;
+  instagram?: string;
   industry?: string;
   tags?: string[];
   address?: {
@@ -146,6 +148,9 @@ export interface Member {
   birthDate?: string;
   gender?: string;
   linkedinUrl?: string;
+  facilitatorName?: string;
+  facilitatorType?: string;
+  inheritanceChain?: string[];
   serviceLevel?: string;
   achievements?: any[]; 
   earnedDoneTags?: string[];

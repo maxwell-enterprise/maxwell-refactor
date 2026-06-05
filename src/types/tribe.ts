@@ -44,6 +44,8 @@ export interface TribeMember {
     
     // Mentoring
     mentoringProgress: number; // 0-100%
+    facilitatorName?: string;
+    facilitatorType?: string;
 }
 
 export interface TribeMentoringSession {
