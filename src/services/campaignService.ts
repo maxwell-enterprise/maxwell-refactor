@@ -1,5 +1,6 @@
 import { Campaign } from '../types/index';
 import { apiRequest } from '../repositories/api/apiClient';
+import { sanitizeCampaignSourceCodeInput } from '../lib/campaignSourceCode';
 
 const normalizeOptionalString = (value?: string) => {
   if (value == null) return undefined;
@@ -21,7 +22,7 @@ const buildGeneratedLink = (
 };
 
 const sanitizeCampaignPayload = (data: Partial<Campaign>) => {
-  const sourceCode = normalizeOptionalString(data.sourceCode) || '';
+  const sourceCode = sanitizeCampaignSourceCodeInput(normalizeOptionalString(data.sourceCode) || '');
   const targetProductId = normalizeOptionalString(data.targetProductId);
   const linkedDiscountCode = normalizeOptionalString(data.linkedDiscountCode);
 

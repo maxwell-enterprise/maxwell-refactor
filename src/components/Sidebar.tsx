@@ -5,7 +5,7 @@ import {
   Target, Mail, Trophy, FileText, CheckSquare, Database, 
   LayoutTemplate, ShieldAlert, BarChart2, School, Percent, CircuitBoard,
   UserCircle, Briefcase, GraduationCap, Settings, LogOut, Sparkles, ShoppingBag,
-  MonitorPlay, ScanLine, Grid3X3, Award, Tag, HardDrive
+  MonitorPlay, ScanLine, Grid3X3, Award, Tag, HardDrive, DollarSign
 } from 'lucide-react';
 import { ViewState, UserRole } from '../types/index';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +23,7 @@ interface SidebarProps {
   userRole: UserRole;
   isPersonalZone: boolean;
   onToggleZone: (isPersonal: boolean) => void;
+  profileGateActive?: boolean;
 }
 
 const WORKSPACE_ROLES = [
@@ -45,7 +46,16 @@ function hasEligibleSelfAttendanceTicket(items: WalletItem[]): boolean {
   });
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, toggleSidebar, userRole, isPersonalZone, onToggleZone }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  currentView,
+  onNavigate,
+  isOpen,
+  toggleSidebar,
+  userRole,
+  isPersonalZone,
+  onToggleZone,
+  profileGateActive = false,
+}) => {
   const { logout, user } = useAuth();
   const [pendingGiftCount, setPendingGiftCount] = useState(0);
   const [canSelfAttend, setCanSelfAttend] = useState(false);
@@ -54,8 +64,38 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
   const showWorkspaceMyZoneToggle = userRole !== UserRole.MEMBER;
 
   const handleSwitchContext = (targetZone: 'WORKSPACE' | 'MY_ZONE') => {
+      if (profileGateActive) return;
       onToggleZone(targetZone === 'MY_ZONE');
       onNavigate(ViewState.DASHBOARD); 
+  };
+
+  const navButtonClass = (view: ViewState, enabled: boolean) => {
+    const active = currentView === view;
+    if (!enabled) {
+      return 'w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600/40 cursor-not-allowed opacity-45';
+    }
+    return `w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+      active
+        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50'
+        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+    }`;
+  };
+
+  const workspaceNavButtonClass = (view: ViewState, enabled: boolean) => {
+    const active = currentView === view;
+    if (!enabled) {
+      return 'w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all text-slate-600/40 cursor-not-allowed opacity-45';
+    }
+    return `w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+      active
+        ? 'bg-blue-600 text-white shadow-md'
+        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+    }`;
+  };
+
+  const handleNavClick = (view: ViewState) => {
+    if (profileGateActive && view !== ViewState.SETTINGS) return;
+    onNavigate(view);
   };
 
   const workspaceMenuGroups = [
@@ -73,6 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
       items: [
         { id: ViewState.CRM, label: 'Member Database', icon: <Users size={18} />, resourceId: 'crm_members', roleReq: [UserRole.SUPER_ADMIN, UserRole.SALES, UserRole.OPERATIONS, UserRole.FINANCE] },
         { id: ViewState.LEADS, label: 'Sales Pipeline', icon: <Target size={18} />, resourceId: 'crm_leads', roleReq: [UserRole.SUPER_ADMIN, UserRole.SALES, UserRole.MARKETING] },
+        { id: ViewState.PAID_CONVERSIONS, label: 'Paid Conversions', icon: <DollarSign size={18} />, resourceId: 'mkt_paid_conversions', roleReq: [UserRole.SUPER_ADMIN, UserRole.SALES, UserRole.MARKETING] },
         { id: ViewState.MARKETING, label: 'Campaigns', icon: <Sparkles size={18} />, resourceId: 'mkt_campaigns', roleReq: [UserRole.SUPER_ADMIN, UserRole.MARKETING] },
         { id: ViewState.CMS_ADMIN, label: 'Content Hub', icon: <LayoutTemplate size={18} />, resourceId: 'cms_content', roleReq: [UserRole.SUPER_ADMIN, UserRole.MARKETING] }, 
         { id: ViewState.COMMUNICATION, label: 'Comms & WA', icon: <Mail size={18} />, resourceId: 'sys_communication', roleReq: [UserRole.SUPER_ADMIN, UserRole.MARKETING, UserRole.OPERATIONS] },
@@ -215,7 +256,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
              </div>
 
              {showWorkspaceMyZoneToggle && (
-                 <div className="bg-slate-800 p-1 rounded-xl flex shadow-inner border border-slate-700/50 relative overflow-hidden">
+                 <div className={`bg-slate-800 p-1 rounded-xl flex shadow-inner border border-slate-700/50 relative overflow-hidden ${profileGateActive ? 'opacity-50 pointer-events-none' : ''}`}>
                      <div 
                         className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-slate-700 rounded-lg shadow-sm transition-all duration-300 ease-out ${isMemberMode ? 'translate-x-[calc(100%+4px)]' : 'translate-x-1'}`}
                      ></div>
@@ -239,13 +280,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
             {isMemberMode ? (
                 <div className="px-3 space-y-1">
                     <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">Personal Growth</div>
-                    <button onClick={() => onNavigate(ViewState.DASHBOARD)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.DASHBOARD ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                    <button onClick={() => handleNavClick(ViewState.DASHBOARD)} disabled={profileGateActive} className={navButtonClass(ViewState.DASHBOARD, !profileGateActive)}>
                         <LayoutDashboard size={18} className="mr-3" /> Dashboard
                     </button>
-                    <button onClick={() => onNavigate(ViewState.EVENT_MARKETPLACE)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.EVENT_MARKETPLACE ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                    <button onClick={() => handleNavClick(ViewState.EVENT_MARKETPLACE)} disabled={profileGateActive} className={navButtonClass(ViewState.EVENT_MARKETPLACE, !profileGateActive)}>
                         <CalendarDays size={18} className="mr-3" /> Event Catalogue
                     </button>
-                    <button onClick={() => onNavigate(ViewState.WALLET)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.WALLET ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                    <button onClick={() => handleNavClick(ViewState.WALLET)} disabled={profileGateActive} className={navButtonClass(ViewState.WALLET, !profileGateActive)}>
                         <Banknote size={18} className="mr-3" /> My Wallet
                         {pendingGiftCount > 0 && (
                           <Badge
@@ -256,31 +297,43 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
                           </Badge>
                         )}
                     </button>
-                    <button onClick={() => onNavigate(ViewState.STORE_CATALOG)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.STORE_CATALOG ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                    <button onClick={() => handleNavClick(ViewState.STORE_CATALOG)} disabled={profileGateActive} className={navButtonClass(ViewState.STORE_CATALOG, !profileGateActive)}>
                         <ShoppingBag size={18} className="mr-3" /> Store
                     </button>
                     {canSelfAttend && (
-                        <button onClick={() => onNavigate(ViewState.MEMBER_ATTENDANCE)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.MEMBER_ATTENDANCE ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                        <button onClick={() => handleNavClick(ViewState.MEMBER_ATTENDANCE)} disabled={profileGateActive} className={navButtonClass(ViewState.MEMBER_ATTENDANCE, !profileGateActive)}>
                             <ScanLine size={18} className="mr-3" /> Self Attendance
                         </button>
                     )}
                     <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4">Learning</div>
-                    <button onClick={() => onNavigate(ViewState.ENABLEMENT)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.ENABLEMENT ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                    <button onClick={() => handleNavClick(ViewState.ENABLEMENT)} disabled={profileGateActive} className={navButtonClass(ViewState.ENABLEMENT, !profileGateActive)}>
                         <GraduationCap size={18} className="mr-3" /> Success Toolkit
                     </button>
-                    <button onClick={() => onNavigate(ViewState.AI_COACH)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.AI_COACH ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                    <button onClick={() => handleNavClick(ViewState.AI_COACH)} disabled={profileGateActive} className={navButtonClass(ViewState.AI_COACH, !profileGateActive)}>
                         <Sparkles size={18} className="mr-3" /> AI Coach
                     </button>
-                    <button onClick={() => onNavigate(ViewState.MY_TRIBE)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.MY_TRIBE ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                    <button onClick={() => handleNavClick(ViewState.MY_TRIBE)} disabled={profileGateActive} className={navButtonClass(ViewState.MY_TRIBE, !profileGateActive)}>
                         <Users size={18} className="mr-3" /> My Tribe
                     </button>
                     <div className="my-4 border-t border-slate-800 mx-3"></div>
-                    <button onClick={() => onNavigate(ViewState.SETTINGS)} className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${currentView === ViewState.SETTINGS ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                    <button onClick={() => handleNavClick(ViewState.SETTINGS)} className={navButtonClass(ViewState.SETTINGS, true)}>
                         <Settings size={18} className="mr-3" /> Settings
                     </button>
                 </div>
             ) : (
-                workspaceMenuGroups.map((group, idx) => (
+                <>
+                {profileGateActive && (
+                  <div className="px-3 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => handleNavClick(ViewState.SETTINGS)}
+                      className="w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-bold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-900/50"
+                    >
+                      <Settings size={18} className="mr-3" /> Account Settings
+                    </button>
+                  </div>
+                )}
+                {workspaceMenuGroups.map((group, idx) => (
                   <div key={idx} className="mb-6 px-3">
                     {group.title && (
                       <h4 className="px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{group.title}</h4>
@@ -300,12 +353,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
                         .map(item => (
                         <button
                           key={item.id}
-                          onClick={() => onNavigate(item.id)}
-                          className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all ${
-                            currentView === item.id 
-                            ? 'bg-blue-600 text-white shadow-md' 
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                          }`}
+                          onClick={() => handleNavClick(item.id)}
+                          disabled={profileGateActive}
+                          className={workspaceNavButtonClass(item.id, !profileGateActive)}
                         >
                           <span className={`mr-3 ${currentView === item.id ? 'text-white' : 'text-slate-500 group-hover:text-white'}`}>{item.icon}</span>
                           {item.label}
@@ -313,7 +363,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
                       ))}
                     </div>
                   </div>
-                ))
+                ))}
+                </>
             )}
         </div>
 

@@ -19,6 +19,9 @@ import {
   setWorkspaceToken,
 } from '../lib/workspaceAuthToken';
 import { workspaceFetch } from '../lib/workspaceApi';
+import { CampaignAttributionService } from '../services/campaignAttributionService';
+import { PaidConversionService } from '../services/paidConversionService';
+import { isProfileComplete as resolveProfileComplete } from '../lib/profileCompletion';
 
 /** Identity + RBAC live in Nest (`/fe/auth/*`). UI only stores JWT and calls session. */
 const USE_WORKSPACE =
@@ -53,6 +56,7 @@ interface AuthContextType {
   refreshSession: (opts?: { silent?: boolean }) => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isProfileComplete: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -89,6 +93,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
             role: string;
             roles?: string[];
             phone?: string | null;
+            jobTitle?: string | null;
+            company?: string | null;
+            domicile?: string | null;
+            instagram?: string | null;
+            linkedinUrl?: string | null;
             customRole?: {
               id: string;
               name: string;
@@ -121,6 +130,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
             role: string;
             roles?: string[];
             phone?: string | null;
+            jobTitle?: string | null;
+            company?: string | null;
+            domicile?: string | null;
+            instagram?: string | null;
+            linkedinUrl?: string | null;
             customRole?: {
               id: string;
               name: string;
@@ -166,6 +180,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       typeof data.user.phone === 'string' && data.user.phone.trim()
         ? data.user.phone.trim()
         : undefined;
+    const optionalText = (value: string | null | undefined) =>
+      typeof value === 'string' && value.trim() ? value.trim() : undefined;
     setUser({
       id: data.user.id,
       email,
@@ -179,12 +195,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           : null,
       avatarUrl: data.user.image || undefined,
       phone,
+      jobTitle: optionalText(data.user.jobTitle),
+      company: optionalText(data.user.company),
+      domicile: optionalText(data.user.domicile),
+      instagram: optionalText(data.user.instagram),
+      linkedinUrl: optionalText(data.user.linkedinUrl),
       provider: 'email',
     });
     if (!silent) {
       setIsLoading(false);
     }
   }, []);
+
+  /** After sign-in, record campaign attribution once per browser session (even without purchase). */
+  useEffect(() => {
+    if (!user?.email || APP_CONFIG.USE_MOCK_GLOBAL || !USE_WORKSPACE) return;
+    if (!getWorkspaceToken()) return;
+
+    const sessionKey = 'maxwell_campaign_signin_tracked';
+    if (typeof window !== 'undefined' && sessionStorage.getItem(sessionKey)) return;
+
+    const source = CampaignAttributionService.getSource();
+    if (!source) return;
+
+    void PaidConversionService.trackSignIn({
+      campaignSourceCode: source,
+      name: user.fullName,
+    })
+      .then(() => {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(sessionKey, '1');
+        }
+      })
+      .catch(() => {
+        /* best-effort; do not block session */
+      });
+  }, [user?.email]);
 
   // --- Nest JWT session (default) ---
   useEffect(() => {
@@ -367,6 +413,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const isAuthenticated = user !== null;
   const userRole = user?.role || UserRole.GUEST;
+  const isProfileComplete = resolveProfileComplete(user);
 
   return (
     <AuthContext.Provider
@@ -378,6 +425,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         refreshSession,
         isAuthenticated,
         isLoading,
+        isProfileComplete,
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'maxwell_workspace_jwt';
-/** Must match `VIEW_STORAGE_KEY` in `App.tsx` — cleared on login so default dashboard wins. */
-const DASHBOARD_VIEW_SESSION_KEY = 'maxwell_current_view';
+/** Cleared on login so default dashboard wins — see `clearDashboardNavigationSession`. */
+import { clearDashboardNavigationSession } from './dashboardNavigation';
 const TOKEN_CHANGED_EVENT = 'maxwell:workspace-token-changed';
 const BACKEND_DOWN_REDIRECT_GUARD = 'maxwell:backend-down-redirected-at';
 const BACKEND_FAILURE_COUNTER_KEY = 'maxwell:backend-failure-counter';
@@ -21,11 +21,7 @@ export function setWorkspaceToken(token: string | null): void {
   if (typeof window === 'undefined') return;
   const prev = localStorage.getItem(STORAGE_KEY);
   const clearSavedDashboardView = () => {
-    try {
-      sessionStorage.removeItem(DASHBOARD_VIEW_SESSION_KEY);
-    } catch {
-      /* ignore */
-    }
+    clearDashboardNavigationSession();
   };
 
   if (!token) {
