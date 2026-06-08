@@ -22,6 +22,7 @@ export const CUSTOM_VIEW_FEATURES: readonly CustomViewFeature[] = [
   { id: toViewFeatureId(ViewState.MY_TASKS), view: ViewState.MY_TASKS, label: 'Action Center', resourceId: null },
   { id: toViewFeatureId(ViewState.CRM), view: ViewState.CRM, label: 'Member Database', resourceId: 'crm_members' },
   { id: toViewFeatureId(ViewState.LEADS), view: ViewState.LEADS, label: 'Sales Pipeline', resourceId: 'crm_leads' },
+  { id: toViewFeatureId(ViewState.PAID_CONVERSIONS), view: ViewState.PAID_CONVERSIONS, label: 'Paid Conversions', resourceId: 'mkt_paid_conversions' },
   { id: toViewFeatureId(ViewState.MARKETING), view: ViewState.MARKETING, label: 'Campaigns', resourceId: 'mkt_campaigns' },
   { id: toViewFeatureId(ViewState.CMS_ADMIN), view: ViewState.CMS_ADMIN, label: 'Content Hub', resourceId: 'cms_content' },
   { id: toViewFeatureId(ViewState.COMMUNICATION), view: ViewState.COMMUNICATION, label: 'Comms & WA', resourceId: 'sys_communication' },

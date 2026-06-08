@@ -18,6 +18,8 @@ import { useToast } from '../context/ToastContext';
 import { useDialog } from '../context/DialogContext';
 import { markRbacInboxRead } from '../lib/rbacInboxClient';
 import type { GiftAllocation } from '../types/access';
+import ProfileCompletionBanner from '../components/settings/ProfileCompletionBanner';
+import { getMissingProfileFieldLabels } from '../lib/profileCompletion';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -25,9 +27,17 @@ interface DashboardLayoutProps {
   onNavigate: (view: ViewState) => void;
   isPersonalZone: boolean;
   onToggleZone: (isPersonal: boolean) => void;
+  profileGateActive?: boolean;
 }
 
-const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView, onNavigate, isPersonalZone, onToggleZone }) => {
+const DashboardLayout: React.FC<DashboardLayoutProps> = ({
+  children,
+  currentView,
+  onNavigate,
+  isPersonalZone,
+  onToggleZone,
+  profileGateActive = false,
+}) => {
   const { user, userRole, logout } = useAuth();
   const { showToast } = useToast();
   const { confirm } = useDialog();
@@ -64,6 +74,22 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   const hasUnreadNotifications =
     (pendingTasks.length > 0 || pendingGifts.length > 0) && notificationsSeenDigest !== notificationsDigest;
 
+  const missingProfileLabels = useMemo(
+    () => (profileGateActive ? getMissingProfileFieldLabels(user) : []),
+    [profileGateActive, user],
+  );
+
+  const openCommandPalette = useCallback(() => {
+    if (profileGateActive) {
+      showToast(
+        'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+        'info',
+      );
+      return;
+    }
+    setIsCmdOpen(true);
+  }, [profileGateActive, showToast]);
+
   const markNotificationsAsSeen = useCallback(() => {
     setNotificationsSeenDigest(notificationsDigest);
   }, [notificationsDigest]);
@@ -91,12 +117,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
       const handleKeyDown = (e: KeyboardEvent) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
               e.preventDefault();
-              setIsCmdOpen(prev => !prev);
+              openCommandPalette();
           }
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [openCommandPalette]);
 
   // Tasks for header bell: role changes matter; view switches should not re-hit all backends.
   useEffect(() => {
@@ -147,6 +173,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
     : userRole.replace('Super ', '');
 
   const handleNotificationItemClick = async (task: UnifiedTask) => {
+    if (profileGateActive) {
+      showToast(
+        'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+        'info',
+      );
+      return;
+    }
     markNotificationsAsSeen();
     const inboxId = task.metadata?.rbacInboxId;
     if (task.source === 'SYSTEM' && inboxId) {
@@ -174,6 +207,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   };
 
   const handleGiftNotificationClick = (gift: GiftAllocation) => {
+    if (profileGateActive) {
+      showToast(
+        'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+        'info',
+      );
+      return;
+    }
     markNotificationsAsSeen();
     setShowNotifications(false);
     onNavigate(ViewState.WALLET);
@@ -182,6 +222,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
   /** Close mobile drawer after navigation; desktop layout ignores `isSidebarOpen` via `lg:translate-x-0`. */
   const handleNavigate = (view: ViewState) => {
     onNavigate(view);
+    setIsSidebarOpen(false);
+  };
+
+  const goToProfileSettings = () => {
+    onNavigate(ViewState.SETTINGS);
     setIsSidebarOpen(false);
   };
 
@@ -228,6 +273,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
         userRole={userRole}
         isPersonalZone={isPersonalZone}
         onToggleZone={onToggleZone}
+        profileGateActive={profileGateActive}
       />
 
       {/* No overflow-x-hidden here — it clips wide tables/cards; <main> handles scroll */}
@@ -260,7 +306,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                 
                 {/* Mobile Search Trigger */}
                 <button 
-                  onClick={() => setIsCmdOpen(true)}
+                  onClick={openCommandPalette}
                   className="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
                 >
                   <Search size={24} />
@@ -285,8 +331,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                 
                 {/* Global Command Trigger (Desktop) */}
                 <div 
-                    onClick={() => setIsCmdOpen(true)}
-                    className="hidden lg:flex relative group w-72 cursor-pointer"
+                    onClick={openCommandPalette}
+                    className={`hidden lg:flex relative group w-72 ${profileGateActive ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                 >
                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <Search size={16} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
@@ -304,7 +350,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                 </div>
 
                 {/* --- NEW PERSONA SWITCHER --- */}
-                {canOpenPersonaSwitcher && (
+                {canOpenPersonaSwitcher && !profileGateActive && (
                 <div className="hidden md:block">
                     <button 
                         onClick={() => setShowPersonaModal(true)}
@@ -325,7 +371,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                 )}
                  
                 {/* Divider */}
-                {canOpenPersonaSwitcher && (
+                {canOpenPersonaSwitcher && !profileGateActive && (
                   <div className="hidden md:block w-px h-8 bg-slate-200 mx-1"></div>
                 )}
 
@@ -430,6 +476,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                                     <button 
                                         type="button"
                                         onClick={() => {
+                                          if (profileGateActive) {
+                                            showToast(
+                                              'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+                                              'info',
+                                            );
+                                            return;
+                                          }
                                           markNotificationsAsSeen();
                                           onNavigate(ViewState.MY_TASKS);
                                           setShowNotifications(false);
@@ -444,7 +497,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
                     </div>
                     
                     {/* Profile */}
-                    <div className="flex items-center gap-3 pl-1 cursor-pointer group" onClick={() => onNavigate(ViewState.SETTINGS)}>
+                    <div className="flex items-center gap-3 pl-1 cursor-pointer group" onClick={goToProfileSettings}>
                       <div className="text-right hidden md:block">
                           <div className="text-sm font-bold text-slate-800 leading-none group-hover:text-blue-600 transition-colors">{user?.fullName}</div>
                           <div className="text-[10px] text-slate-400 font-medium mt-1 uppercase tracking-wide">Online</div>
@@ -471,6 +524,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentView
         {/* --- MODERN HEADER END --- */}
 
         <main className="relative flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col overflow-y-auto bg-slate-50 p-0">
+          {profileGateActive && currentView !== ViewState.SETTINGS && (
+            <ProfileCompletionBanner
+              missingLabels={missingProfileLabels}
+              onGoToSettings={goToProfileSettings}
+            />
+          )}
           {children}
         </main>
 

@@ -32,6 +32,7 @@ export enum ViewState {
   DASHBOARD = 'DASHBOARD',
   CRM = 'CRM',
   LEADS = 'LEADS',
+  PAID_CONVERSIONS = 'PAID_CONVERSIONS',
   FINANCE = 'FINANCE',
   OPERATIONS = 'OPERATIONS',
   EVENTS_ADMIN = 'EVENTS_ADMIN',
@@ -93,6 +94,11 @@ export interface UserProfile {
   activeCustomRoleId?: string | null;
   avatarUrl?: string;
   phone?: string;
+  jobTitle?: string;
+  company?: string;
+  domicile?: string;
+  instagram?: string;
+  linkedinUrl?: string;
   provider: 'email' | 'google';
 }
 

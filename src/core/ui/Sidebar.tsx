@@ -5,7 +5,7 @@ import {
   Target, Mail, Trophy, FileText, CheckSquare, Database, 
   LayoutTemplate, ShieldAlert, BarChart2, School, Percent, CircuitBoard,
   UserCircle, Briefcase, GraduationCap, Settings, LogOut, Sparkles, ShoppingBag,
-  MonitorPlay, ScanLine, Grid3X3, Award, Tag, HardDrive
+  MonitorPlay, ScanLine, Grid3X3, Award, Tag, HardDrive, DollarSign
 } from 'lucide-react';
 import { ViewState, UserRole } from '../types/index';
 import { useAuth } from '../context/AuthContext';
@@ -72,6 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
       items: [
         { id: ViewState.CRM, label: 'Member Database', icon: <Users size={18} />, resourceId: 'crm_members', roleReq: [UserRole.SUPER_ADMIN, UserRole.SALES, UserRole.OPERATIONS, UserRole.FINANCE] },
         { id: ViewState.LEADS, label: 'Sales Pipeline', icon: <Target size={18} />, resourceId: 'crm_leads', roleReq: [UserRole.SUPER_ADMIN, UserRole.SALES, UserRole.MARKETING] },
+        { id: ViewState.PAID_CONVERSIONS, label: 'Paid Conversions', icon: <DollarSign size={18} />, resourceId: 'mkt_paid_conversions', roleReq: [UserRole.SUPER_ADMIN, UserRole.SALES, UserRole.MARKETING] },
         { id: ViewState.MARKETING, label: 'Campaigns', icon: <Sparkles size={18} />, resourceId: 'mkt_campaigns', roleReq: [UserRole.SUPER_ADMIN, UserRole.MARKETING] },
         { id: ViewState.CMS_ADMIN, label: 'Content Hub', icon: <LayoutTemplate size={18} />, resourceId: 'cms_content', roleReq: [UserRole.SUPER_ADMIN, UserRole.MARKETING] }, 
         { id: ViewState.COMMUNICATION, label: 'Comms & WA', icon: <Mail size={18} />, resourceId: 'sys_communication', roleReq: [UserRole.SUPER_ADMIN, UserRole.MARKETING, UserRole.OPERATIONS] },

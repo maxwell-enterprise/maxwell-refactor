@@ -7,11 +7,57 @@ import { UserNotificationPreferencesService } from '../../services/userNotificat
 import { workspaceFetch } from '../../lib/workspaceApi';
 import { UserRole } from '../../types/index';
 import { useAccountDeletionRealtime } from '../../hooks/useAccountDeletionRealtime';
+import {
+  formatIndonesianPhoneInput,
+  hasIndonesianPhoneNumber,
+} from '../../lib/indonesianPhone';
+import {
+  capitalizeProfileWords,
+  type ProfileCapitalizeField,
+} from '../../lib/formatProfileText';
+import {
+  getProfileValidationError,
+  getMissingProfileFieldLabels,
+  type ProfileCompletionInput,
+} from '../../lib/profileCompletion';
+import ProfileCompletionBanner from './ProfileCompletionBanner';
 
 const NOTIF_DEV_MSG =
   'These notification toggles cannot be enabled yet. This feature is still in development.';
 
 const MIN_DELETION_REASON_LEN = 80;
+
+type ProfileFormData = ProfileCompletionInput & {
+  instagram: string;
+  linkedinUrl: string;
+};
+
+function validateRequiredProfileFields(data: ProfileFormData): string | null {
+  return getProfileValidationError(data);
+}
+
+function applyProfileTextFormatting(data: ProfileFormData): ProfileFormData {
+  return {
+    ...data,
+    fullName: capitalizeProfileWords(data.fullName),
+    jobTitle: capitalizeProfileWords(data.jobTitle),
+    company: capitalizeProfileWords(data.company),
+    domicile: capitalizeProfileWords(data.domicile),
+  };
+}
+
+const RequiredLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+    {children} <span className="text-red-500 normal-case">*</span>
+  </label>
+);
+
+const profileInputClass = (hasError: boolean) =>
+  `w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 ${
+    hasError
+      ? 'border-red-300 bg-red-50 focus:ring-red-400 focus:border-red-400'
+      : 'border-slate-300 focus:ring-blue-500 focus:border-blue-500'
+  }`;
 
 type DeletionStatus =
   | { status: 'NONE' }
@@ -24,7 +70,7 @@ type DeletionStatus =
     };
 
 const ProfileSettings: React.FC = () => {
-    const { user, logout, refreshSession } = useAuth();
+    const { user, logout, refreshSession, isProfileComplete } = useAuth();
     const { showToast } = useToast();
     const avatarInputRef = useRef<HTMLInputElement | null>(null);
     
@@ -33,13 +79,19 @@ const ProfileSettings: React.FC = () => {
 
     // Profile State
     const [formData, setFormData] = useState({
-        fullName: user?.fullName || '',
+        fullName: capitalizeProfileWords(user?.fullName || ''),
         email: user?.email || '',
-        phone: user?.phone || '',
+        phone: formatIndonesianPhoneInput(user?.phone || ''),
+        jobTitle: capitalizeProfileWords(user?.jobTitle || ''),
+        company: capitalizeProfileWords(user?.company || ''),
+        domicile: capitalizeProfileWords(user?.domicile || ''),
+        instagram: user?.instagram || '',
+        linkedinUrl: user?.linkedinUrl || '',
     });
     const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
     const [avatarPayload, setAvatarPayload] = useState<string | null | undefined>(undefined);
     const [isAvatarBroken, setIsAvatarBroken] = useState(false);
+    const [profileShowErrors, setProfileShowErrors] = useState(false);
 
     const [deletionModalOpen, setDeletionModalOpen] = useState(false);
     const [deletionReason, setDeletionReason] = useState('');
@@ -62,13 +114,28 @@ const ProfileSettings: React.FC = () => {
     useEffect(() => {
         setFormData((prev) => ({
             ...prev,
-            fullName: user?.fullName || '',
+            fullName: capitalizeProfileWords(user?.fullName || ''),
             email: user?.email || '',
-            phone: user?.phone || '',
+            phone: formatIndonesianPhoneInput(user?.phone || ''),
+            jobTitle: capitalizeProfileWords(user?.jobTitle || ''),
+            company: capitalizeProfileWords(user?.company || ''),
+            domicile: capitalizeProfileWords(user?.domicile || ''),
+            instagram: user?.instagram || '',
+            linkedinUrl: user?.linkedinUrl || '',
         }));
         setAvatarPreview(user?.avatarUrl ?? null);
         setIsAvatarBroken(false);
-    }, [user?.fullName, user?.email, user?.avatarUrl, user?.phone]);
+    }, [
+        user?.fullName,
+        user?.email,
+        user?.avatarUrl,
+        user?.phone,
+        user?.jobTitle,
+        user?.company,
+        user?.domicile,
+        user?.instagram,
+        user?.linkedinUrl,
+    ]);
 
     useEffect(() => {
         if (!user?.id) return;
@@ -189,17 +256,40 @@ const ProfileSettings: React.FC = () => {
         }
     };
 
+    const handleCapitalizedFieldBlur = (field: ProfileCapitalizeField) => {
+        setFormData((prev) => ({
+            ...prev,
+            [field]: capitalizeProfileWords(prev[field]),
+        }));
+    };
+
     const handleSaveProfile = async () => {
         if (!user) return;
+
+        const normalized = applyProfileTextFormatting(formData);
+        setFormData(normalized);
+
+        const validationError = validateRequiredProfileFields(normalized);
+        if (validationError) {
+            setProfileShowErrors(true);
+            showToast(validationError, 'error');
+            return;
+        }
+
         setIsLoading(true);
         try {
             const res = await workspaceFetch('/me/profile', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    fullName: formData.fullName,
-                    email: formData.email,
-                    phone: formData.phone,
+                    fullName: normalized.fullName,
+                    email: normalized.email,
+                    phone: normalized.phone,
+                    jobTitle: normalized.jobTitle,
+                    company: normalized.company,
+                    domicile: normalized.domicile,
+                    instagram: normalized.instagram,
+                    linkedinUrl: normalized.linkedinUrl,
                     image: avatarPayload,
                 }),
             });
@@ -216,6 +306,7 @@ const ProfileSettings: React.FC = () => {
                 return;
             }
             setAvatarPayload(undefined);
+            setProfileShowErrors(false);
             await refreshSession();
             showToast('Profile updated successfully', 'success');
         } catch {
@@ -383,6 +474,16 @@ const ProfileSettings: React.FC = () => {
 
             <h1 className="text-2xl font-bold text-slate-900 mb-6">Account Settings</h1>
 
+            {!isProfileComplete && (
+              <div className="mb-6 overflow-hidden rounded-xl border border-amber-200">
+                <ProfileCompletionBanner
+                  missingLabels={getMissingProfileFieldLabels(user)}
+                  onGoToSettings={() => setActiveTab('PROFILE')}
+                  compact
+                />
+              </div>
+            )}
+
             <div className="flex flex-col md:flex-row gap-8">
                 {/* Sidebar Navigation */}
                 <div className="w-full md:w-64 flex-shrink-0">
@@ -507,44 +608,122 @@ const ProfileSettings: React.FC = () => {
                                 )}
                                 <div>
                                     <h2 className="text-lg font-bold text-slate-900">Personal Information</h2>
-                                    <p className="text-sm text-slate-500">Update your public profile and contact details.</p>
+                                    <p className="text-sm text-slate-500">
+                                        Update your public profile and contact details.{' '}
+                                        <span className="text-red-500">*</span> wajib diisi.
+                                    </p>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+                                        <RequiredLabel>Full Name</RequiredLabel>
                                         <input 
                                             type="text" 
-                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className={profileInputClass(
+                                              profileShowErrors && !formData.fullName.trim(),
+                                            )}
                                             value={formData.fullName}
                                             onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                                            onBlur={() => handleCapitalizedFieldBlur('fullName')}
+                                            placeholder="Full name"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Job Title</label>
+                                        <RequiredLabel>Position / Title</RequiredLabel>
                                         <input 
                                             type="text" 
-                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-500 cursor-not-allowed outline-none"
-                                            value={(user?.role || 'MEMBER').replace(/_/g, ' ')}
-                                            readOnly
-                                            disabled
+                                            className={profileInputClass(
+                                              profileShowErrors && !formData.jobTitle.trim(),
+                                            )}
+                                            value={formData.jobTitle}
+                                            onChange={(e) => setFormData({...formData, jobTitle: e.target.value})}
+                                            onBlur={() => handleCapitalizedFieldBlur('jobTitle')}
+                                            placeholder="e.g. CEO"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label>
-                                        <input 
-                                            type="email" 
-                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={formData.email}
-                                            onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
+                                        <RequiredLabel>Phone</RequiredLabel>
                                         <input 
                                             type="tel" 
-                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className={profileInputClass(
+                                              profileShowErrors &&
+                                                !hasIndonesianPhoneNumber(formData.phone),
+                                            )}
                                             value={formData.phone}
-                                            onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                            onFocus={() => {
+                                              if (!formData.phone.trim()) {
+                                                setFormData((prev) => ({
+                                                  ...prev,
+                                                  phone: '+62 ',
+                                                }));
+                                              }
+                                            }}
+                                            onChange={(e) =>
+                                              setFormData({
+                                                ...formData,
+                                                phone: formatIndonesianPhoneInput(e.target.value),
+                                              })
+                                            }
+                                            placeholder="+62 812..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <RequiredLabel>Email Address</RequiredLabel>
+                                        <input 
+                                            type="email" 
+                                            className={profileInputClass(
+                                              profileShowErrors &&
+                                                (!formData.email.trim() ||
+                                                  !formData.email.includes('@')),
+                                            )}
+                                            value={formData.email}
+                                            onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                            placeholder="email@..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <RequiredLabel>Company</RequiredLabel>
+                                        <input 
+                                            type="text" 
+                                            className={profileInputClass(
+                                              profileShowErrors && !formData.company.trim(),
+                                            )}
+                                            value={formData.company}
+                                            onChange={(e) => setFormData({...formData, company: e.target.value})}
+                                            onBlur={() => handleCapitalizedFieldBlur('company')}
+                                            placeholder="Company"
+                                        />
+                                    </div>
+                                    <div>
+                                        <RequiredLabel>Domicile</RequiredLabel>
+                                        <input 
+                                            type="text" 
+                                            className={profileInputClass(
+                                              profileShowErrors && !formData.domicile.trim(),
+                                            )}
+                                            value={formData.domicile}
+                                            onChange={(e) => setFormData({...formData, domicile: e.target.value})}
+                                            onBlur={() => handleCapitalizedFieldBlur('domicile')}
+                                            placeholder="City / Region"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instagram</label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={formData.instagram}
+                                            onChange={(e) => setFormData({...formData, instagram: e.target.value})}
+                                            placeholder="@username"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">LinkedIn</label>
+                                        <input 
+                                            type="url" 
+                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={formData.linkedinUrl}
+                                            onChange={(e) => setFormData({...formData, linkedinUrl: e.target.value})}
+                                            placeholder="linkedin.com/in/..."
                                         />
                                     </div>
                                 </div>

@@ -8,6 +8,7 @@ import LandingPage from './components/LandingPage';
 import BackgroundWorker from './components/system/BackgroundWorker';
 import { resolveView } from './features/dashboard/logic/viewResolver';
 import SessionLoadingScreen from './components/system/SessionLoadingScreen';
+import { useToast } from './context/ToastContext';
 import { CampaignAttributionService } from './services/campaignAttributionService';
 import { CampaignService } from './services/campaignService';
 import {
@@ -15,42 +16,14 @@ import {
   CUSTOM_VIEW_FEATURE_BY_VIEW,
   toViewFeatureId,
 } from './constants/customRoleFeatures';
-
-/** Persists last admin screen so refresh on `/dashboard` returns to the same view (same tab). */
-const VIEW_STORAGE_KEY = 'maxwell_current_view';
-
-function toFeatureSlug(view: ViewState): string {
-  return String(view).toLowerCase().replace(/_/g, '-');
-}
-
-function fromFeatureSlug(slug: string): ViewState | null {
-  const normalized = slug.trim().toUpperCase().replace(/-/g, '_');
-  if (normalized === 'STORE') {
-    return ViewState.STORE_CATALOG;
-  }
-  const values = Object.values(ViewState) as string[];
-  return values.includes(normalized) ? (normalized as ViewState) : null;
-}
-
-/** Sync with `?view=` on first paint so campaign `/dashboard?view=store&product=…` does not flash the wrong tab. */
-function readInitialViewFromUrlOrStorage(): ViewState {
-  if (typeof window === 'undefined') return ViewState.DASHBOARD;
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const viewParam = params.get('view');
-    if (viewParam) {
-      const parsed = fromFeatureSlug(viewParam);
-      if (parsed) return parsed;
-    }
-    const raw = sessionStorage.getItem(VIEW_STORAGE_KEY);
-    if (raw && (Object.values(ViewState) as string[]).includes(raw)) {
-      return raw as ViewState;
-    }
-  } catch {
-    /* ignore */
-  }
-  return ViewState.DASHBOARD;
-}
+import {
+  persistPersonalZone,
+  persistView,
+  readInitialPersonalZone,
+  readStoredView,
+  resolvePersonalZoneForView,
+  toFeatureSlug,
+} from './lib/dashboardNavigation';
 
 const CAMPAIGN_QUERY_KEYS = [
   'product',
@@ -61,24 +34,17 @@ const CAMPAIGN_QUERY_KEYS = [
   'autocheckout',
 ] as const;
 
-/** Consumer routes that exist only under the My Zone sidebar (not in workspace rail). */
-const MY_ZONE_ONLY_VIEWS: ReadonlySet<ViewState> = new Set([
-  ViewState.WALLET,
-  ViewState.STORE_CATALOG,
-  ViewState.EVENT_MARKETPLACE,
-  ViewState.ENABLEMENT,
-  ViewState.AI_COACH,
-  ViewState.MY_TRIBE,
-  ViewState.SETTINGS,
-]);
-
 const App: React.FC = () => {
-  const { user, userRole, isAuthenticated, isLoading, login } = useAuth();
-  const [currentView, setCurrentViewState] = useState<ViewState>(readInitialViewFromUrlOrStorage);
+  const { user, userRole, isAuthenticated, isLoading, login, isProfileComplete } = useAuth();
+  const { showToast } = useToast();
+  const profileGateActive = isAuthenticated && !isProfileComplete;
+  const [currentView, setCurrentViewState] = useState<ViewState>(readStoredView);
   const [redirectingGuestFromDashboard, setRedirectingGuestFromDashboard] =
     useState(false);
 
-  const [isPersonalZone, setIsPersonalZone] = useState(false);
+  const [isPersonalZone, setIsPersonalZoneState] = useState(() =>
+    readInitialPersonalZone(readStoredView(), UserRole.GUEST),
+  );
 
   useEffect(() => {
     SeedService.init().catch(err => console.error("Seeding failed", err));
@@ -100,60 +66,47 @@ const App: React.FC = () => {
     });
   }, []);
 
-  /** URL `?view=` wins over sessionStorage so bookmarks/deep links are correct; otherwise restore last screen. */
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const viewParam = params.get('view');
-    if (viewParam) {
-      const parsed = fromFeatureSlug(viewParam);
-      if (parsed) {
-        startTransition(() => {
-          setCurrentViewState(parsed);
-        });
-      }
-      return;
-    }
-    try {
-      const raw = sessionStorage.getItem(VIEW_STORAGE_KEY);
-      if (raw && (Object.values(ViewState) as string[]).includes(raw)) {
-        startTransition(() => {
-          setCurrentViewState(raw as ViewState);
-        });
-      }
-    } catch {
-      /* ignore */
-    }
+  const setPersonalZone = useCallback((isPersonal: boolean) => {
+    persistPersonalZone(isPersonal);
+    setIsPersonalZoneState(isPersonal);
   }, []);
 
   const setCurrentView = useCallback((v: ViewState) => {
-    try {
-      sessionStorage.setItem(VIEW_STORAGE_KEY, v);
-    } catch {
-      /* ignore */
+    if (profileGateActive && v !== ViewState.SETTINGS) {
+      showToast(
+        'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+        'info',
+      );
+      return;
     }
+    persistView(v);
     startTransition(() => {
       setCurrentViewState(v);
     });
-  }, []);
+  }, [profileGateActive, showToast]);
 
   /**
-   * Sidebar "Workspace" vs "My Zone" must match the screen you are on.
-   * Pure members always live in My Zone. Staff (e.g. Sales) default to Workspace,
-   * but deep links like `?view=wallet` or Store / Wallet flows are **consumer** routes
-   * that only exist under the My Zone menu — auto-switch so the rail is not stuck on CRM/Ops.
+   * Align zone rail with exclusive routes only.
+   * DASHBOARD is shared — keep last My Zone / Workspace toggle.
    */
   useEffect(() => {
-    if (userRole === UserRole.MEMBER) {
-      setIsPersonalZone(true);
-      return;
+    if (!isAuthenticated) return;
+    const resolved = resolvePersonalZoneForView(currentView, userRole);
+    if (resolved === null) return;
+    setIsPersonalZoneState(resolved);
+    persistPersonalZone(resolved);
+  }, [isAuthenticated, userRole, currentView]);
+
+  /** Incomplete profile: only Dashboard + Settings; deep links fall back to Dashboard. */
+  useEffect(() => {
+    if (!profileGateActive) return;
+    if (
+      currentView !== ViewState.SETTINGS &&
+      currentView !== ViewState.DASHBOARD
+    ) {
+      setCurrentView(ViewState.DASHBOARD);
     }
-    if (MY_ZONE_ONLY_VIEWS.has(currentView)) {
-      setIsPersonalZone(true);
-    } else {
-      setIsPersonalZone(false);
-    }
-  }, [userRole, currentView]);
+  }, [profileGateActive, currentView, setCurrentView]);
 
   useEffect(() => {
     const customRole = user?.customRole;
@@ -232,7 +185,8 @@ const App: React.FC = () => {
         currentView={currentView} 
         onNavigate={setCurrentView}
         isPersonalZone={isPersonalZone}
-        onToggleZone={setIsPersonalZone}
+        onToggleZone={setPersonalZone}
+        profileGateActive={profileGateActive}
       >
         {resolveView(currentView, userRole, isPersonalZone, setCurrentView)}
       </DashboardLayout>

@@ -19,6 +19,7 @@ export const SECURE_RESOURCES: ResourceDefinition[] = [
   // SALES (CRM)
   { id: 'crm_members', name: 'Member Database', category: 'SALES', description: 'Paid customers (Retain & Upsell)', supportsScoping: true, supportsAuthority: false },
   { id: 'crm_leads', name: 'Leads Pipeline', category: 'SALES', description: 'Guests & Prospects (Acquisition)', supportsScoping: true, supportsAuthority: false }, // UPDATED
+  { id: 'mkt_paid_conversions', name: 'Paid Conversions', category: 'MARKETING', description: 'Paid transactions with campaign & PIC attribution', supportsScoping: true, supportsAuthority: false },
   
   // OPS (Strictly Internal)
   { id: 'ops_event_mgmt', name: 'Event Operations', category: 'OPERATIONS', description: 'Workflows, Logistics, Gate Scanner', supportsScoping: false, supportsAuthority: false },
@@ -98,6 +99,7 @@ export const DEFAULT_ROLES: Role[] = [
     permissions: ['SALES_VIEW'],
     policies: {
         'crm_leads': { resourceId: 'crm_leads', accessLevel: 'FULL', scope: 'ALL' }, // Full access to Leads
+        'mkt_paid_conversions': { resourceId: 'mkt_paid_conversions', accessLevel: 'FULL', scope: 'ALL' },
         'crm_members': { resourceId: 'crm_members', accessLevel: 'READ', scope: 'TEAM' }, // Read-only for paid members
         'mkt_campaigns': { resourceId: 'mkt_campaigns', accessLevel: 'READ', scope: 'ALL' },
         'mkt_discounts': { resourceId: 'mkt_discounts', accessLevel: 'READ', scope: 'ALL' },
@@ -131,6 +133,7 @@ export const DEFAULT_ROLES: Role[] = [
     permissions: ['MKT_VIEW'],
     policies: {
         'mkt_campaigns': { resourceId: 'mkt_campaigns', accessLevel: 'FULL', scope: 'ALL' },
+        'mkt_paid_conversions': { resourceId: 'mkt_paid_conversions', accessLevel: 'FULL', scope: 'ALL' },
         'mkt_discounts': { resourceId: 'mkt_discounts', accessLevel: 'FULL', scope: 'ALL' },
         'crm_leads': { resourceId: 'crm_leads', accessLevel: 'READ', scope: 'ALL' }, // Marketing targets leads
         'crm_members': { resourceId: 'crm_members', accessLevel: 'READ', scope: 'ALL' },
