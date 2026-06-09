@@ -1,4 +1,4 @@
-import type { TribeMember, TribeMentoringSession } from '../types/tribe';
+import type { TribeMember, TribeMemberNote, TribeMentoringSession } from '../types/tribe';
 
 export type TribeDownlineApiRow = {
   memberId: string;
@@ -27,6 +27,14 @@ export type TribeSessionApiRow = {
   facilitatorId: string;
   facilitatorName: string;
   eventName: string;
+  memberId: string;
+  memberName: string;
+  notes: string;
+  createdAt: string;
+};
+
+export type TribeMemberNoteApiRow = {
+  id: string;
   memberId: string;
   memberName: string;
   notes: string;
@@ -117,5 +125,17 @@ export function mapSessionRowToTribeSession(
     meetingLink: undefined,
     attendeeIds: row.memberId ? [row.memberId] : [],
     status: 'SCHEDULED',
+  };
+}
+
+export function mapNoteRowToTribeMemberNote(
+  row: TribeMemberNoteApiRow,
+): TribeMemberNote {
+  return {
+    id: row.id,
+    memberId: row.memberId,
+    memberName: row.memberName,
+    notes: row.notes?.trim() || '',
+    createdAt: row.createdAt,
   };
 }

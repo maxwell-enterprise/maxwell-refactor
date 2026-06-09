@@ -61,6 +61,10 @@ function isMemberOnly(user: UserProfile): boolean {
   return roles.length === 1 && roles[0] === UserRole.MEMBER;
 }
 
+function getMaxRoleSlots(roles: readonly UserRole[]): number {
+  return roles.includes(UserRole.FACILITATOR) ? 3 : 2;
+}
+
 function selectRoleOptionsForUser(user: UserProfile): RolePickerOption[] {
   const builtIn = Array.from(
     new Set(
@@ -369,6 +373,7 @@ const UserAccessManager: React.FC = () => {
       (role) => role !== UserRole.MEMBER,
     );
     const selectedCount = currentNonMemberRoles.length + (hasCustomRole ? 1 : 0);
+    const currentMaxSlots = getMaxRoleSlots(currentNonMemberRoles);
 
     if (selectedRole === CUSTOM_ROLE_OPTION) {
       if (hasCustomRole) {
@@ -397,9 +402,9 @@ const UserAccessManager: React.FC = () => {
         }
         return;
       }
-      if (selectedCount >= 2) {
+      if (selectedCount >= currentMaxSlots) {
         showToast(
-          'Maksimal 2 role. Lepas salah satu role dulu untuk menambah Custom role.',
+          `Maksimal ${currentMaxSlots} role. Lepas salah satu role dulu untuk menambah Custom role.`,
           'error',
         );
         return;
@@ -414,10 +419,16 @@ const UserAccessManager: React.FC = () => {
 
     const isTryingNewRole = !currentRoles.includes(selectedRole);
     let nextRoles: UserRole[];
+    const projectedRolesForAdd = isTryingNewRole
+      ? [...currentNonMemberRoles, selectedRole].filter(
+          (role, index, self) => self.indexOf(role) === index,
+        )
+      : currentNonMemberRoles.filter((role) => role !== selectedRole);
+    const nextMaxSlots = getMaxRoleSlots(projectedRolesForAdd);
 
-    if (isTryingNewRole && selectedCount >= 2) {
+    if (isTryingNewRole && selectedCount >= nextMaxSlots) {
       showToast(
-        'Maksimal 2 role. Lepas salah satu role dulu untuk mengganti role ini.',
+        `Maksimal ${nextMaxSlots} role. Lepas salah satu role dulu untuk mengganti role ini.`,
         'error',
       );
       return;
@@ -430,8 +441,8 @@ const UserAccessManager: React.FC = () => {
       }
     } else {
       const withoutMember = currentRoles.filter((role) => role !== UserRole.MEMBER);
-      if (withoutMember.length >= 2) {
-        showToast('Maximum 2 roles per user.', 'error');
+      if (withoutMember.length >= nextMaxSlots) {
+        showToast(`Maximum ${nextMaxSlots} roles per user.`, 'error');
         return;
       }
       nextRoles = [...withoutMember, selectedRole];
@@ -710,6 +721,10 @@ const UserAccessManager: React.FC = () => {
                             const roleSelectOptions = selectRoleOptionsForUser(user);
                             const customRole = customRolesByUserId[user.id];
                             const isSavingRole = savingRoleUserId === user.id;
+                            const nonMemberAssignedRoles = assignedRoles.filter(
+                              (role) => role !== UserRole.MEMBER,
+                            );
+                            const roleSlotLimit = getMaxRoleSlots(nonMemberAssignedRoles);
                             return (
                             <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                 <td className="px-6 py-4">
@@ -759,7 +774,7 @@ const UserAccessManager: React.FC = () => {
                                         {openRolePickerUserId === user.id && !isSavingRole && (
                                             <div className="absolute left-0 top-full z-20 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
                                                 <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                                                    Select up to 2 roles
+                                                    Select up to {roleSlotLimit} roles
                                                 </p>
                                                 <div className="space-y-1">
                                                     {roleSelectOptions.map((role) => {
@@ -767,12 +782,19 @@ const UserAccessManager: React.FC = () => {
                                                           role === CUSTOM_ROLE_OPTION
                                                             ? Boolean(customRole)
                                                             : assignedRoles.includes(role);
-                                                        const selectedCount = assignedRoles.filter(
-                                                          (assignedRole) => assignedRole !== UserRole.MEMBER,
-                                                        ).length + (customRole ? 1 : 0);
+                                                        const projectedRoles = role === CUSTOM_ROLE_OPTION
+                                                          ? nonMemberAssignedRoles
+                                                          : checked
+                                                            ? nonMemberAssignedRoles
+                                                            : [...nonMemberAssignedRoles, role].filter(
+                                                                (assignedRole, index, self) =>
+                                                                  self.indexOf(assignedRole) === index,
+                                                              );
+                                                        const projectedLimit = getMaxRoleSlots(projectedRoles);
+                                                        const selectedCount = nonMemberAssignedRoles.length + (customRole ? 1 : 0);
                                                         const disabledByLimit =
                                                           !checked &&
-                                                          selectedCount >= 2;
+                                                          selectedCount >= projectedLimit;
                                                         const label = role === CUSTOM_ROLE_OPTION ? 'Custom' : role;
                                                         return (
                                                             <button

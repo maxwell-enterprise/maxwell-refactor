@@ -1,5 +1,5 @@
 
-import { TribeMember, PayoutTransaction, TribeMentoringSession } from '../types/tribe';
+import { TribeMember, TribeMemberNote, PayoutTransaction, TribeMentoringSession } from '../types/tribe';
 import { EntitlementService } from './entitlementService';
 import { EnablementService } from './enablementService';
 import { DataService } from './dataService';
@@ -9,8 +9,10 @@ import { supabase } from '../lib/supabaseClient';
 import { apiRequest } from '../repositories/api/apiClient';
 import {
   mapDownlineToTribeMember,
+  mapNoteRowToTribeMemberNote,
   mapSessionRowToTribeSession,
   type TribeDownlineApiRow,
+  type TribeMemberNoteApiRow,
   type TribeSessionApiRow,
 } from '../lib/tribeMappers';
 
@@ -30,6 +32,8 @@ const SEED_SESSIONS: TribeMentoringSession[] = [
     { id: 'SES-001', facilitatorId: 'fac-1', title: 'March Review', description: 'Laws of Growth', date: '2025-03-15', time: '19:00 WIB', meetingLink: 'https://zoom.us/j/123', attendeeIds: ['M002', 'M003'], status: 'SCHEDULED' }
 ];
 
+const NOTE_MARKER_EVENT = '__TRIBE_MEMBER_NOTE__';
+
 const SEED_PAYOUTS: PayoutTransaction[] = [
     { id: 'PAY-001', sourceTransactionId: 'TRX-9988', sourceMemberName: 'David Pratomo', productName: 'Full Access 2025', beneficiaryId: 'fac-1', amount: 2400000, ruleApplied: '10% Commission', status: 'PAID', createdAt: '2025-01-02T10:00:00Z', paidAt: '2025-02-01T10:00:00Z' },
     { id: 'PAY-002', sourceTransactionId: 'TRX-9999', sourceMemberName: 'Julia Tan', productName: 'Masterclass Ticket', beneficiaryId: 'fac-1', amount: 150000, ruleApplied: 'Fixed Bounty', status: 'PENDING', createdAt: '2025-03-01T10:00:00Z' }
@@ -47,6 +51,23 @@ async function fetchTribeDownlineFromApi(): Promise<TribeMember[]> {
 async function fetchTribeSessionsFromApi(): Promise<TribeMentoringSession[]> {
   const rows = await apiRequest<TribeSessionApiRow[]>(`/me/tribe/sessions`);
   return rows.map((row) => mapSessionRowToTribeSession(row));
+}
+
+function resolveLatestMemberNotes(
+    rows: TribeMemberNoteApiRow[],
+): TribeMemberNote[] {
+    const latestByMember = new Map<string, TribeMemberNote>();
+    rows.forEach((row) => {
+        const normalized = mapNoteRowToTribeMemberNote(row);
+        if (!normalized.memberId) return;
+        const existing = latestByMember.get(normalized.memberId);
+        if (!existing || new Date(normalized.createdAt).getTime() >= new Date(existing.createdAt).getTime()) {
+            latestByMember.set(normalized.memberId, normalized);
+        }
+    });
+    return Array.from(latestByMember.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
 }
 
 export const TribeService = {
@@ -219,11 +240,15 @@ export const TribeService = {
             try {
                 if(await DevDatabase.isEmpty('tribe_mentoring_sessions')) await DevDatabase.bulkAdd('tribe_mentoring_sessions', SEED_SESSIONS);
                 const all = await DevDatabase.getAll<TribeMentoringSession>('tribe_mentoring_sessions');
-                return all.filter(s => s.facilitatorId === facilitatorId);
+                return all.filter(s => s.facilitatorId === facilitatorId && s.title !== NOTE_MARKER_EVENT);
             } catch(e) { return SEED_SESSIONS; }
         }
         if (!supabase) return [];
-        const { data } = await supabase.from('tribe_mentoring_sessions').select('*').eq('facilitatorId', facilitatorId);
+        const { data } = await supabase
+            .from('tribe_mentoring_sessions')
+            .select('*')
+            .eq('facilitatorId', facilitatorId)
+            .neq('eventName', NOTE_MARKER_EVENT);
         if (!data?.length) return [];
         return (data as TribeSessionApiRow[]).map((row) =>
             mapSessionRowToTribeSession({
@@ -237,6 +262,90 @@ export const TribeService = {
                 createdAt: String(row.createdAt ?? new Date().toISOString()),
             }),
         );
+    },
+
+    getMemberNotes: async (facilitatorId: string): Promise<TribeMemberNote[]> => {
+        const trimmedId = facilitatorId?.trim();
+        if (!trimmedId) return [];
+
+        if (membersViaApi()) {
+            try {
+                const rows = await apiRequest<TribeMemberNoteApiRow[]>(`/me/tribe/member-notes`);
+                return rows.map((row) => mapNoteRowToTribeMemberNote(row));
+            } catch (error) {
+                console.error('[TribeService] getMemberNotes API failed:', error);
+                return [];
+            }
+        }
+
+        if (APP_CONFIG.USE_MOCK) {
+            try {
+                if(await DevDatabase.isEmpty('tribe_mentoring_sessions')) await DevDatabase.bulkAdd('tribe_mentoring_sessions', SEED_SESSIONS);
+                const all = await DevDatabase.getAll<(TribeMemberNoteApiRow & { facilitatorId?: string; eventName?: string })>('tribe_mentoring_sessions');
+                const rows = all
+                    .filter((row) => row.facilitatorId === facilitatorId && row.eventName === NOTE_MARKER_EVENT)
+                    .map((row) => ({
+                        id: String(row.id),
+                        memberId: String(row.memberId ?? ''),
+                        memberName: String(row.memberName ?? ''),
+                        notes: String(row.notes ?? ''),
+                        createdAt: String(row.createdAt ?? new Date().toISOString()),
+                    }));
+                return resolveLatestMemberNotes(rows);
+            } catch {
+                return [];
+            }
+        }
+
+        if (!supabase) return [];
+        const { data } = await supabase
+            .from('tribe_mentoring_sessions')
+            .select('id, facilitatorId, eventName, memberId, memberName, notes, createdAt')
+            .eq('facilitatorId', facilitatorId)
+            .eq('eventName', NOTE_MARKER_EVENT);
+        if (!data?.length) return [];
+        return resolveLatestMemberNotes(
+            (data as (TribeMemberNoteApiRow & { notes?: string | null })[])
+                .filter((row) => row.memberId)
+                .map((row) => ({
+                    id: String(row.id),
+                    memberId: String(row.memberId),
+                    memberName: String(row.memberName ?? ''),
+                    notes: String(row.notes ?? ''),
+                    createdAt: String(row.createdAt ?? new Date().toISOString()),
+                })),
+        );
+    },
+
+    saveMemberNote: async (memberId: string, note: string): Promise<TribeMemberNote> => {
+        const trimmedMemberId = memberId.trim();
+        const trimmedNote = note.trim();
+        if (!trimmedMemberId) throw new Error('Member id is required');
+        if (!trimmedNote) throw new Error('Note is required');
+
+        if (membersViaApi()) {
+            const row = await apiRequest<TribeMemberNoteApiRow>(`/me/tribe/member-notes/${encodeURIComponent(trimmedMemberId)}`, {
+                method: 'PUT',
+                body: JSON.stringify({ note: trimmedNote }),
+            });
+            return mapNoteRowToTribeMemberNote(row);
+        }
+
+        throw new Error('Member note editing requires API backend.');
+    },
+
+    deleteMemberNote: async (memberId: string): Promise<void> => {
+        const trimmedMemberId = memberId.trim();
+        if (!trimmedMemberId) throw new Error('Member id is required');
+
+        if (membersViaApi()) {
+            await apiRequest(`/me/tribe/member-notes/${encodeURIComponent(trimmedMemberId)}`, {
+                method: 'DELETE',
+            });
+            return;
+        }
+
+        throw new Error('Member note deletion requires API backend.');
     },
 
     createSession: async (session: Omit<TribeMentoringSession, 'id'>): Promise<TribeMentoringSession> => {

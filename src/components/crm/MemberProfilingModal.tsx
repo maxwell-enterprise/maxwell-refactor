@@ -4,8 +4,7 @@ import { Member, SocialProfile } from '../../types/index';
 import { DataService } from '../../services/dataService';
 import { X, Save, Instagram, Briefcase, ShieldCheck, Search, UserCheck } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { useAuth } from '../../context/AuthContext';
-import { UserRole } from '../../types/index';
+import { useAccess } from '../../context/SecurityContext';
 
 interface MemberProfilingModalProps {
     member: Member;
@@ -15,14 +14,14 @@ interface MemberProfilingModalProps {
 
 const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onClose, onSuccess }) => {
     const { showToast } = useToast();
-    const { userRole } = useAuth();
+    const { can: canAssignFacilitatorAccess } = useAccess('crm_member_facilitator_assignment');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoadingFacilitators, setIsLoadingFacilitators] = useState(false);
     const [facilitatorOptions, setFacilitatorOptions] = useState<Member[]>([]);
     const [facilitatorSearch, setFacilitatorSearch] = useState('');
     const [selectedFacilitator, setSelectedFacilitator] = useState<Member | null>(null);
     const [showFacilitatorMenu, setShowFacilitatorMenu] = useState(false);
-    const isSuperAdmin = userRole === UserRole.SUPER_ADMIN;
+    const canAssignFacilitator = canAssignFacilitatorAccess('WRITE');
     
     // Initial State from Member or Defaults
     const [profile, setProfile] = useState<SocialProfile>(member.socialProfile || {
@@ -39,7 +38,7 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
     const [commInput, setCommInput] = useState('');
 
     useEffect(() => {
-        if (!isSuperAdmin) return;
+        if (!canAssignFacilitator) return;
 
         let cancelled = false;
         setIsLoadingFacilitators(true);
@@ -70,7 +69,7 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
         return () => {
             cancelled = true;
         };
-    }, [isSuperAdmin, member.facilitatorName, showToast]);
+    }, [canAssignFacilitator, member.facilitatorName, showToast]);
 
     const filteredFacilitators = facilitatorOptions.filter((candidate) => {
         const query = facilitatorSearch.trim().toLowerCase();
@@ -96,7 +95,7 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
 
     const handleSave = async () => {
         if (
-            isSuperAdmin &&
+            canAssignFacilitator &&
             facilitatorSearch.trim() &&
             !selectedFacilitator &&
             facilitatorSearch.trim().toLowerCase() !==
@@ -128,7 +127,7 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
             };
 
             if (
-                isSuperAdmin &&
+                canAssignFacilitator &&
                 selectedFacilitator &&
                 selectedFacilitator.name.trim().toLowerCase() !==
                     (member.facilitatorName || '').trim().toLowerCase()
@@ -282,7 +281,7 @@ const MemberProfilingModal: React.FC<MemberProfilingModalProps> = ({ member, onC
                         </div>
                     </div>
 
-                    {isSuperAdmin && (
+                    {canAssignFacilitator && (
                         <div className="space-y-4 pt-4 border-t border-slate-100">
                             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                                 <UserCheck size={14} className="mr-2"/> Facilitator Assignment

@@ -48,6 +48,14 @@ export interface TribeMember {
     facilitatorType?: string;
 }
 
+export interface TribeMemberNote {
+    id: string;
+    memberId: string;
+    memberName: string;
+    notes: string;
+    createdAt: string;
+}
+
 export interface TribeMentoringSession {
     id: string;
     facilitatorId: string;

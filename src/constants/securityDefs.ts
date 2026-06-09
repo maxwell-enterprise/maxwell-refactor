@@ -18,6 +18,7 @@ export const SECURE_RESOURCES: ResourceDefinition[] = [
   
   // SALES (CRM)
   { id: 'crm_members', name: 'Member Database', category: 'SALES', description: 'Paid customers (Retain & Upsell)', supportsScoping: true, supportsAuthority: false },
+  { id: 'crm_member_facilitator_assignment', name: 'Facilitator Assignment', category: 'SALES', description: 'Assign or move facilitator ownership from member profiling', supportsScoping: false, supportsAuthority: false },
   { id: 'crm_leads', name: 'Leads Pipeline', category: 'SALES', description: 'Guests & Prospects (Acquisition)', supportsScoping: true, supportsAuthority: false }, // UPDATED
   { id: 'mkt_paid_conversions', name: 'Paid Conversions', category: 'MARKETING', description: 'Paid transactions with campaign & PIC attribution', supportsScoping: true, supportsAuthority: false },
   

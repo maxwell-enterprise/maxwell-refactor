@@ -35,6 +35,11 @@ const hasMeaningfulPhoneNumber = (phone: string): boolean => {
     return normalized.length > 2;
 };
 
+const isValidEmail = (email: string): boolean => {
+    const trimmed = email.trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+};
+
 const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({ 
     donorId, donorName, selectedTickets, onClose, onSuccess 
 }) => {
@@ -145,16 +150,24 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     const handleSaveDistribution = async () => {
         setIsSubmitting(true);
         try {
-            // Filter rows that are NEWLY filled and AVAILABLE
-            const toDistribute = rows.filter(r => 
-                r.status === 'AVAILABLE' &&
-                r.recipientName.trim() &&
-                r.recipientEmail.trim() &&
-                hasMeaningfulPhoneNumber(r.recipientPhone)
-            );
+            const incompleteRow = assignableRows.find((row) => {
+                if (!row.recipientName.trim()) return true;
+                if (!row.recipientEmail.trim() || !isValidEmail(row.recipientEmail)) return true;
+                if (!hasMeaningfulPhoneNumber(row.recipientPhone)) return true;
+                return false;
+            });
+
+            if (incompleteRow) {
+                showToast(
+                    'Recipient name, email, and WhatsApp are required for every invitation before sending.',
+                    'error'
+                );
+                return;
+            }
+
+            const toDistribute = rows.filter((r) => r.status === 'AVAILABLE');
 
             if (toDistribute.length === 0) {
-                // If no new distribution, just close (maybe they just clicked send without filling)
                 onSuccess(); // Triggers reload in parent
                 return;
             }
@@ -272,7 +285,10 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                 <tbody className="divide-y divide-slate-100">
                                     {(activeTab === 'ASSIGN' ? assignableRows : historyRows).map((row, idx) => {
                                         const isLocked = activeTab === 'HISTORY';
-                                        
+                                        const nameInvalid = !row.recipientName.trim();
+                                        const emailInvalid = !row.recipientEmail.trim() || !isValidEmail(row.recipientEmail);
+                                        const phoneInvalid = !hasMeaningfulPhoneNumber(row.recipientPhone);
+                                         
                                         return (
                                             <tr key={row.allocationId || row.ticketId} className="hover:bg-slate-50 transition-colors">
                                                 <td className="px-6 py-4 text-center text-slate-400 font-mono text-xs">
@@ -283,7 +299,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                                         <span className="font-bold text-slate-700">{row.recipientName}</span>
                                                     ) : (
                                                         <input 
-                                                            type="text" placeholder="Name" className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            type="text" placeholder="Name *" className={`w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${nameInvalid ? 'border-red-300 bg-red-50/40' : 'border-slate-200'}`}
                                                             value={row.recipientName}
                                                             onChange={(e) => updateRow(idx, 'recipientName', e.target.value)}
                                                         />
@@ -294,7 +310,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                                         <span className="text-slate-500 font-mono text-xs">{row.recipientEmail}</span>
                                                     ) : (
                                                         <input 
-                                                            type="email" placeholder="Email" className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            type="email" placeholder="Email *" className={`w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${emailInvalid ? 'border-red-300 bg-red-50/40' : 'border-slate-200'}`}
                                                             value={row.recipientEmail}
                                                             onChange={(e) => updateRow(idx, 'recipientEmail', e.target.value)}
                                                         />
@@ -305,7 +321,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                                         <span className="text-slate-500 text-xs font-mono">{row.recipientPhone || '-'}</span>
                                                     ) : (
                                                         <input 
-                                                            type="tel" placeholder="8123456789" className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            type="tel" placeholder="WhatsApp *" className={`w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${phoneInvalid ? 'border-red-300 bg-red-50/40' : 'border-slate-200'}`}
                                                             value={row.recipientPhone}
                                                             onChange={(e) => updateRow(idx, 'recipientPhone', e.target.value)}
                                                         />
@@ -374,7 +390,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                             </button>
                             <button 
                                 onClick={handleSaveDistribution}
-                                disabled={isSubmitting || assignableRows.every(r => !r.recipientName)}
+                                disabled={isSubmitting || assignableRows.length === 0}
                                 className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center"
                             >
                                 {isSubmitting ? <Loader2 className="animate-spin mr-2"/> : <Send size={16} className="mr-2"/>}
