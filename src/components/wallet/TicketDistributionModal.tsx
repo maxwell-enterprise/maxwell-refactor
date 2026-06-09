@@ -35,6 +35,15 @@ const hasMeaningfulPhoneNumber = (phone: string): boolean => {
     return normalized.length > 2;
 };
 
+const hasAnyInvitationInput = (row: {
+    recipientName: string;
+    recipientEmail: string;
+    recipientPhone: string;
+}): boolean =>
+    !!row.recipientName.trim() ||
+    !!row.recipientEmail.trim() ||
+    hasMeaningfulPhoneNumber(row.recipientPhone);
+
 const isValidEmail = (email: string): boolean => {
     const trimmed = email.trim();
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
@@ -150,7 +159,16 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     const handleSaveDistribution = async () => {
         setIsSubmitting(true);
         try {
-            const incompleteRow = assignableRows.find((row) => {
+            const rowsToDistribute = assignableRows.filter((row) =>
+                hasAnyInvitationInput(row),
+            );
+
+            if (rowsToDistribute.length === 0) {
+                showToast('Isi minimal 1 baris invitation sebelum mengirim.', 'error');
+                return;
+            }
+
+            const incompleteRow = rowsToDistribute.find((row) => {
                 if (!row.recipientName.trim()) return true;
                 if (!row.recipientEmail.trim() || !isValidEmail(row.recipientEmail)) return true;
                 if (!hasMeaningfulPhoneNumber(row.recipientPhone)) return true;
@@ -159,27 +177,20 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
 
             if (incompleteRow) {
                 showToast(
-                    'Recipient name, email, and WhatsApp are required for every invitation before sending.',
+                    'Recipient name, email, and WhatsApp wajib lengkap untuk setiap baris invitation yang diisi.',
                     'error'
                 );
                 return;
             }
 
-            const toDistribute = rows.filter((r) => r.status === 'AVAILABLE');
-
-            if (toDistribute.length === 0) {
-                onSuccess(); // Triggers reload in parent
-                return;
-            }
-
-            await EntitlementService.distributeTickets(donorId, donorName, toDistribute.map(r => ({
+            await EntitlementService.distributeTickets(donorId, donorName, rowsToDistribute.map(r => ({
                 name: r.recipientName,
                 email: r.recipientEmail,
                 phone: normalizePhone(r.recipientPhone), // Normalize here before sending
                 ticketId: r.ticketId
             })));
 
-            showToast(`Successfully sent ${toDistribute.length} tickets!`, "success");
+            showToast(`Successfully sent ${rowsToDistribute.length} tickets!`, "success");
             
             // Reload local data to move items to History tab
             await loadAllocations(); 
@@ -285,9 +296,13 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                 <tbody className="divide-y divide-slate-100">
                                     {(activeTab === 'ASSIGN' ? assignableRows : historyRows).map((row, idx) => {
                                         const isLocked = activeTab === 'HISTORY';
-                                        const nameInvalid = !row.recipientName.trim();
-                                        const emailInvalid = !row.recipientEmail.trim() || !isValidEmail(row.recipientEmail);
-                                        const phoneInvalid = !hasMeaningfulPhoneNumber(row.recipientPhone);
+                                        const rowHasInput = hasAnyInvitationInput(row);
+                                        const nameInvalid = rowHasInput && !row.recipientName.trim();
+                                        const emailInvalid =
+                                            rowHasInput &&
+                                            (!row.recipientEmail.trim() || !isValidEmail(row.recipientEmail));
+                                        const phoneInvalid =
+                                            rowHasInput && !hasMeaningfulPhoneNumber(row.recipientPhone);
                                          
                                         return (
                                             <tr key={row.allocationId || row.ticketId} className="hover:bg-slate-50 transition-colors">
