@@ -4,7 +4,7 @@ import { Member } from '../types/index';
 import { DataService } from '../services/dataService';
 import { isSalesPipelineLead } from '../lib/memberLifecycleViews';
 import { useToast } from '../context/ToastContext';
-import { Search, Filter, Mail, ChevronRight, UserPlus, Target, UserCog, CheckCircle, Award, Square, CheckSquare, X } from 'lucide-react';
+import { Search, Filter, Mail, ChevronRight, Target, UserCog, CheckCircle, Square, CheckSquare, X } from 'lucide-react';
 import WhatsAppQuickAction from './common/WhatsAppQuickAction';
 import DeepResearchPanel from './crm/DeepResearchPanel';
 import MemberProfilingModal from './crm/MemberProfilingModal';
@@ -18,6 +18,9 @@ const LeadsDashboard: React.FC = () => {
     const [profilingTarget, setProfilingTarget] = useState<Member | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [showQualifiedOnly, setShowQualifiedOnly] = useState(false);
+    const [showUnnamedFacilitatorOnly, setShowUnnamedFacilitatorOnly] = useState(false);
+    const [showUntypedFacilitatorOnly, setShowUntypedFacilitatorOnly] = useState(false);
+    const [isArrByModalOpen, setIsArrByModalOpen] = useState(false);
 
     // SELECTION STATE
     const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
@@ -62,12 +65,25 @@ const LeadsDashboard: React.FC = () => {
         const matchesSearch = l.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         l.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         l.company?.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        if (showQualifiedOnly) {
-            return matchesSearch && l.tags?.includes('Qualified');
-        }
-        return matchesSearch;
+        const matchesQualified = !showQualifiedOnly || l.tags?.includes('Qualified');
+        const matchesUnnamedFacilitator =
+            !showUnnamedFacilitatorOnly || !(l.facilitatorName || '').trim();
+        const matchesUntypedFacilitator =
+            !showUntypedFacilitatorOnly || !(l.facilitatorType || '').trim();
+
+        return (
+            matchesSearch &&
+            matchesQualified &&
+            matchesUnnamedFacilitator &&
+            matchesUntypedFacilitator
+        );
     });
+
+    const activeArrByCount = [
+        showQualifiedOnly,
+        showUnnamedFacilitatorOnly,
+        showUntypedFacilitatorOnly,
+    ].filter(Boolean).length;
 
     return (
         <div className="page-container space-y-5 sm:space-y-6 animate-fade-in relative pb-8">
@@ -81,10 +97,20 @@ const LeadsDashboard: React.FC = () => {
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full lg:w-auto min-w-0">
                     <button 
-                        onClick={() => setShowQualifiedOnly(!showQualifiedOnly)}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center transition-all ${showQualifiedOnly ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}
+                        onClick={() => setIsArrByModalOpen(true)}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center transition-all ${
+                            activeArrByCount > 0
+                                ? 'bg-amber-50 border-amber-300 text-amber-700'
+                                : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'
+                        }`}
                     >
-                        <Award size={14} className="mr-1.5"/> Qualified Only
+                        <Filter size={14} className="mr-1.5"/>
+                        Arr By
+                        {activeArrByCount > 0 && (
+                            <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-600 px-1.5 text-[10px] font-bold text-white">
+                                {activeArrByCount}
+                            </span>
+                        )}
                     </button>
 
                     <div className="relative w-full sm:w-64 min-w-0">
@@ -285,6 +311,94 @@ const LeadsDashboard: React.FC = () => {
                         loadLeads();
                     }}
                 />
+            )}
+
+            {isArrByModalOpen && (
+                <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-scale-in">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
+                            <div>
+                                <h3 className="text-base font-bold text-slate-900">Filter By</h3>
+                                <p className="text-xs text-slate-500 mt-1">Select one or more filters to refine the pipeline.</p>
+                            </div>
+                            <button
+                                onClick={() => setIsArrByModalOpen(false)}
+                                className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="px-6 py-5 space-y-3">
+                            <button
+                                onClick={() => setShowQualifiedOnly((prev) => !prev)}
+                                className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-all ${
+                                    showQualifiedOnly
+                                        ? 'border-amber-300 bg-amber-50'
+                                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="text-sm font-semibold text-slate-800">Qualified Only</span>
+                                {showQualifiedOnly ? (
+                                    <CheckSquare size={18} className="text-amber-600" />
+                                ) : (
+                                    <Square size={18} className="text-slate-300" />
+                                )}
+                            </button>
+
+                            <button
+                                onClick={() => setShowUnnamedFacilitatorOnly((prev) => !prev)}
+                                className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-all ${
+                                    showUnnamedFacilitatorOnly
+                                        ? 'border-amber-300 bg-amber-50'
+                                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="text-sm font-semibold text-slate-800">Unnamed Facilitator</span>
+                                {showUnnamedFacilitatorOnly ? (
+                                    <CheckSquare size={18} className="text-amber-600" />
+                                ) : (
+                                    <Square size={18} className="text-slate-300" />
+                                )}
+                            </button>
+
+                            <button
+                                onClick={() => setShowUntypedFacilitatorOnly((prev) => !prev)}
+                                className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-all ${
+                                    showUntypedFacilitatorOnly
+                                        ? 'border-amber-300 bg-amber-50'
+                                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="text-sm font-semibold text-slate-800">Un-Type Facilitator</span>
+                                {showUntypedFacilitatorOnly ? (
+                                    <CheckSquare size={18} className="text-amber-600" />
+                                ) : (
+                                    <Square size={18} className="text-slate-300" />
+                                )}
+                            </button>
+                        </div>
+
+                        <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100 bg-slate-50">
+                            <button
+                                onClick={() => {
+                                    setShowQualifiedOnly(false);
+                                    setShowUnnamedFacilitatorOnly(false);
+                                    setShowUntypedFacilitatorOnly(false);
+                                }}
+                                className="text-sm font-semibold text-slate-500 hover:text-slate-700"
+                            >
+                                Reset Filters
+                            </button>
+                            <button
+                                onClick={() => setIsArrByModalOpen(false)}
+                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
