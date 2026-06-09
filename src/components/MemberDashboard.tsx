@@ -4,7 +4,7 @@ import { EntitlementService } from '../services/entitlementService';
 import { WalletItem } from '../types/access';
 import { ContractService } from '../services/contractService';
 import { ContractInstance } from '../types/contract';
-import { Calendar, MapPin, Award, Clock, CheckCircle2, Lock, QrCode } from 'lucide-react';
+import { Calendar, MapPin, Award, Clock, Lock, LockOpen, QrCode } from 'lucide-react';
 import type { Member } from '../types/index';
 import { ViewState } from '../types/index';
 import { UserEntitlements, LifecycleStage } from '../types/access';
@@ -28,7 +28,19 @@ interface MemberDashboardProps {
 }
 
 const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
-  const { user } = useAuth();
+  const { user, isProfileComplete } = useAuth();
+  const profileLocked = !isProfileComplete;
+
+  const guardedNavigate = useCallback(
+    (view: ViewState) => {
+      if (profileLocked && view !== ViewState.SETTINGS) {
+        onNavigate(ViewState.SETTINGS);
+        return;
+      }
+      onNavigate(view);
+    },
+    [profileLocked, onNavigate],
+  );
   const [wallet, setWallet] = useState<WalletItem[]>([]);
   const [nextEvent, setNextEvent] = useState<WalletItem | null>(null);
   const [entitlements, setEntitlements] = useState<UserEntitlements | null>(null);
@@ -263,30 +275,46 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                         </span>
                     </div>
                     
-                    <div className="relative px-2">
-                        <div className="absolute top-4 left-0 w-full h-1 bg-slate-100 rounded-full -z-10"></div>
-                        <div 
-                            className="absolute top-4 left-0 h-1 bg-blue-600 rounded-full -z-10 transition-all duration-700 ease-out"
-                            style={{ width: `${progressPercent}%` }}
-                        ></div>
+                    <div className="relative px-4 py-3">
+                        {/* Track line — centered through step dots */}
+                        <div
+                            className="pointer-events-none absolute left-4 right-4 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-200"
+                            aria-hidden
+                        />
+                        <div
+                            className="pointer-events-none absolute left-4 top-1/2 h-1 -translate-y-1/2 rounded-full bg-blue-600 transition-all duration-700 ease-out"
+                            style={{
+                                width: `calc((100% - 2rem) * ${progressPercent / 100})`,
+                            }}
+                            aria-hidden
+                        />
 
-                        <div className="flex justify-between items-start">
+                        <div className="relative flex justify-between items-center">
                             {STAGES.map((stage, idx) => {
                                 const isCompleted = idx < currentStageIdx;
                                 const isCurrent = idx === currentStageIdx;
+                                const isLocked = !isCompleted && !isCurrent;
+                                const StepIcon = isLocked ? Lock : LockOpen;
                                 return (
-                                    <div key={stage.id} className="flex flex-col items-center group">
-                                        <div 
-                                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-500 ease-out z-10
-                                                ${isCurrent ? 'bg-blue-600 border-blue-600 text-white scale-125 shadow-lg' : 
-                                                isCompleted ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-300'}
-                                            `}
+                                    <div key={stage.id} className="relative flex flex-col items-center">
+                                        <div
+                                            className={[
+                                                'relative z-10 flex shrink-0 items-center justify-center rounded-full border-2 transition-all duration-500 ease-out',
+                                                isCurrent
+                                                    ? 'h-10 w-10 scale-110 border-blue-600 bg-white shadow-lg shadow-blue-600/20'
+                                                    : isCompleted
+                                                      ? 'h-8 w-8 border-blue-600 bg-white'
+                                                      : 'h-8 w-8 border-slate-200 bg-white',
+                                            ].join(' ')}
                                         >
-                                            {isCompleted || isCurrent ? (
-                                                <CheckCircle2 size={16} className="text-white" />
-                                            ) : (
-                                                <Lock size={12} />
-                                            )}
+                                            <StepIcon
+                                                size={isCurrent ? 16 : isCompleted ? 14 : 13}
+                                                className={
+                                                    isLocked ? 'text-slate-400' : 'text-blue-600'
+                                                }
+                                                strokeWidth={2.25}
+                                                aria-hidden
+                                            />
                                         </div>
                                     </div>
                                 );
@@ -296,7 +324,14 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                 </div>
 
                 {/* Next Event Card */}
-                <div className="group relative cursor-pointer overflow-hidden rounded-[2.5rem] bg-slate-900 p-8 text-white shadow-xl" onClick={() => onNavigate(ViewState.WALLET)}>
+                <div
+                  className={`group relative overflow-hidden rounded-[2.5rem] bg-slate-900 p-8 text-white shadow-xl ${
+                    profileLocked
+                      ? 'cursor-not-allowed opacity-60'
+                      : 'cursor-pointer'
+                  }`}
+                  onClick={() => guardedNavigate(ViewState.WALLET)}
+                >
                     <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-all scale-125">
                         <Calendar size={140} />
                     </div>
@@ -328,7 +363,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onNavigate(ViewState.MEMBER_ATTENDANCE);
+                                        guardedNavigate(ViewState.MEMBER_ATTENDANCE);
                                     }}
                                     className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-900 transition-colors hover:bg-indigo-50"
                                 >
@@ -341,14 +376,14 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                         <div className="relative z-10 py-10 text-center">
                             <h2 className="text-xl font-bold mb-2">Discover Your Next Masterclass</h2>
                             <p className="text-slate-400 text-sm mb-6">Elevate your leadership with proven signature frameworks.</p>
-                            <button onClick={() => onNavigate(ViewState.STORE_CATALOG)} className="bg-white text-slate-900 px-8 py-3 rounded-2xl font-black text-xs hover:bg-indigo-50">EXPLORE NOW</button>
+                            <button onClick={() => guardedNavigate(ViewState.STORE_CATALOG)} className="bg-white text-slate-900 px-8 py-3 rounded-2xl font-black text-xs hover:bg-indigo-50">EXPLORE NOW</button>
                         </div>
                     )}
                 </div>
             </div>
 
             <div className="lg:col-span-1">
-                <WalletSummaryWidget walletItems={wallet} onNavigate={onNavigate} />
+                <WalletSummaryWidget walletItems={wallet} onNavigate={guardedNavigate} />
             </div>
         </div>
 

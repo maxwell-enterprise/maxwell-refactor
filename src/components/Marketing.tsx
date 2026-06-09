@@ -20,6 +20,13 @@ import AIMarketingAdvisor from './marketing/AIMarketingAdvisor';
 import QRCodeDisplay from './common/QRCodeDisplay';
 import { ExcelHelper } from '../utils/excelHelper';
 import { useCampaignMetricsRealtime } from '../hooks/useCampaignMetricsRealtime';
+import {
+  CAMPAIGN_SOURCE_CODE_EXAMPLE,
+  CAMPAIGN_SOURCE_CODE_RULES_HINT,
+  mapCampaignSourceCodeApiError,
+  sanitizeCampaignSourceCodeInput,
+  validateCampaignSourceCode,
+} from '../lib/campaignSourceCode';
 
 const Marketing: React.FC = () => {
   const { can: canManageCampaigns } = useAccess('mkt_campaigns');
@@ -138,6 +145,11 @@ const Marketing: React.FC = () => {
       });
   }, [campaigns, searchTerm, filterCategory]);
 
+  const sourceCodeValidation = useMemo(
+      () => validateCampaignSourceCode(formData.sourceCode),
+      [formData.sourceCode],
+  );
+
   const handleEditClick = (campaign: Campaign) => {
       setEditingId(campaign.id);
       setFormData({
@@ -156,36 +168,49 @@ const Marketing: React.FC = () => {
   };
 
   const handleSave = async () => {
-      if (!formData.name || !formData.sourceCode) {
-          showToast('Please fill in campaign name and source code', 'error');
+      if (!formData.name?.trim()) {
+          showToast('Isi nama campaign dulu.', 'error');
           return;
       }
 
-      try {
-          if (editingId) {
-              await CampaignService.updateCampaign(editingId, {
-                  name: formData.name,
-                  category: formData.category,
-                  targetProductId: formData.productId,
-                  linkedDiscountCode: formData.discountCode
-              });
-              showToast('Campaign updated successfully', 'success');
-          } else {
+      if (!editingId) {
+          const validation = validateCampaignSourceCode(formData.sourceCode);
+          if (!validation.valid) {
+              showToast(validation.issues[0] ?? 'Source tag tidak valid.', 'error');
+              return;
+          }
+
+          try {
               await CampaignService.createCampaign({
                   name: formData.name,
-                  sourceCode: formData.sourceCode.replace(/\s+/g, '_').toLowerCase(),
+                  sourceCode: validation.normalized,
                   category: formData.category,
                   targetProductId: formData.productId,
                   linkedDiscountCode: formData.discountCode
               });
               showToast('Campaign link generated successfully', 'success');
+              handleCancelEdit();
+              loadCampaignContext();
+          } catch (error) {
+              const raw = error instanceof Error ? error.message : 'Failed to save campaign';
+              showToast(mapCampaignSourceCodeApiError(raw), 'error');
           }
+          return;
+      }
 
+      try {
+          await CampaignService.updateCampaign(editingId, {
+              name: formData.name,
+              category: formData.category,
+              targetProductId: formData.productId,
+              linkedDiscountCode: formData.discountCode
+          });
+          showToast('Campaign updated successfully', 'success');
           handleCancelEdit();
           loadCampaignContext();
       } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to save campaign';
-          showToast(message, 'error');
+          const raw = error instanceof Error ? error.message : 'Failed to save campaign';
+          showToast(mapCampaignSourceCodeApiError(raw), 'error');
       }
   };
 
@@ -224,11 +249,12 @@ const Marketing: React.FC = () => {
               .filter(r => r.Name && r.SourceCode)
               .map(r => ({
                   name: r.Name,
-                  sourceCode: r.SourceCode,
+                  sourceCode: sanitizeCampaignSourceCodeInput(String(r.SourceCode ?? '')),
                   category: r.Category || 'OTHER',
                   targetProductId: r['Target Product ID'],
                   linkedDiscountCode: r['Voucher Code']
-              }));
+              }))
+              .filter(r => validateCampaignSourceCode(r.sourceCode).valid);
           const result = await CampaignService.bulkUpsertCampaigns(items);
           await loadCampaignContext();
           showToast(`Imported ${result.total} campaigns.`, 'success');
@@ -381,13 +407,42 @@ const Marketing: React.FC = () => {
                             <Target size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input 
                                 type="text" 
-                                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm outline-none font-mono ${editingId ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-slate-50 border-slate-300 focus:border-blue-500'}`}
+                                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm outline-none font-mono ${
+                                  editingId
+                                    ? 'bg-slate-100 text-slate-500 border-slate-200'
+                                    : sourceCodeValidation.valid || !formData.sourceCode
+                                      ? 'bg-slate-50 border-slate-300 focus:border-blue-500'
+                                      : 'bg-red-50 border-red-300 focus:border-red-500'
+                                }`}
                                 placeholder="ig_ads_feb"
                                 value={formData.sourceCode}
-                                onChange={e => setFormData({...formData, sourceCode: e.target.value.replace(/\s+/g, '_')})}
+                                onChange={e => setFormData({
+                                  ...formData,
+                                  sourceCode: sanitizeCampaignSourceCodeInput(e.target.value),
+                                })}
                                 disabled={!!editingId}
+                                aria-describedby="source-tag-help source-tag-error"
                             />
                         </div>
+                        {!editingId && (
+                          <>
+                            <p id="source-tag-help" className="mt-1.5 text-[11px] text-slate-500">
+                              {CAMPAIGN_SOURCE_CODE_RULES_HINT} Contoh:{' '}
+                              <span className="font-mono text-slate-600">{CAMPAIGN_SOURCE_CODE_EXAMPLE}</span>
+                            </p>
+                            {sourceCodeValidation.wasAutoFixed && sourceCodeValidation.valid && (
+                              <p className="mt-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                                Simbol diganti _. Hasil:{' '}
+                                <span className="font-mono font-bold">{sourceCodeValidation.normalized}</span>
+                              </p>
+                            )}
+                            {!sourceCodeValidation.valid && formData.sourceCode && (
+                              <p id="source-tag-error" className="mt-1 text-[11px] text-red-600 font-medium">
+                                {sourceCodeValidation.issues[0]}
+                              </p>
+                            )}
+                          </>
+                        )}
                     </div>
 
                     <div>
@@ -420,7 +475,8 @@ const Marketing: React.FC = () => {
 
                     <button 
                         onClick={handleSave}
-                        className={`w-full text-white py-2.5 rounded-lg text-sm font-bold transition-colors shadow-lg flex items-center justify-center
+                        disabled={!editingId && (!formData.name.trim() || !sourceCodeValidation.valid)}
+                        className={`w-full text-white py-2.5 rounded-lg text-sm font-bold transition-colors shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed
                             ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-900 hover:bg-slate-800'}
                         `}
                     >

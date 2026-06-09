@@ -32,6 +32,7 @@ export enum ViewState {
   DASHBOARD = 'DASHBOARD',
   CRM = 'CRM',
   LEADS = 'LEADS',
+  PAID_CONVERSIONS = 'PAID_CONVERSIONS',
   FINANCE = 'FINANCE',
   OPERATIONS = 'OPERATIONS',
   EVENTS_ADMIN = 'EVENTS_ADMIN',
@@ -92,8 +93,13 @@ export interface UserProfile {
   } | null;
   activeCustomRoleId?: string | null;
   avatarUrl?: string;
-  /** From Nest session / `User.abacContext.selfProfile.phone` */
+  /** From Nest session / `User.phone` or legacy `abacContext.selfProfile.phone` */
   phone?: string;
+  jobTitle?: string;
+  company?: string;
+  domicile?: string;
+  instagram?: string;
+  linkedinUrl?: string;
   provider: 'email' | 'google';
 }
 
@@ -413,6 +419,28 @@ export interface Campaign {
   clicks: number;
   conversions: number;
   revenue: number;
+}
+
+export interface PaidConversionRecord {
+  id: string;
+  eventType: 'SIGNED_IN' | 'PAID' | string;
+  paymentTransactionId: string | null;
+  orderId: string | null;
+  buyerEmail: string;
+  buyerName: string | null;
+  buyerMemberId: string | null;
+  campaignSourceCode: string | null;
+  campaignName: string | null;
+  acquisitionType: 'CAMPAIGN' | 'DIRECT' | 'PIC_REFERRAL' | 'ORG_REFERRAL' | 'UNKNOWN' | string;
+  picMemberIdSnapshot: string | null;
+  picNameSnapshot: string | null;
+  picAssignmentIdSnapshot: string | null;
+  amount: number;
+  totalAmount: number;
+  productsSummary: string | null;
+  itemsSnapshot: unknown[] | null;
+  paidAt: string;
+  createdAt: string;
 }
 
 export type ContentType = 'ARTICLE' | 'ADVERTISEMENT' | 'NEWS';

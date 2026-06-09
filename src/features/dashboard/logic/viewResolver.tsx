@@ -13,6 +13,7 @@ const Dashboard = dynamicView(() => import("../../../components/Dashboard"));
 const MemberDashboard = dynamicView(() => import("../../../components/MemberDashboard"));
 const CRM = dynamicView(() => import("../../../components/CRM"));
 const LeadsDashboard = dynamicView(() => import("../../../components/LeadsDashboard"));
+const PaidConversionsDashboard = dynamicView(() => import("../../../components/PaidConversionsDashboard"));
 const FinancePage = dynamicView(() => import("../../../modules/finance/pages/FinancePage"));
 const Operations = dynamicView(() => import("../../../components/Operations"));
 const EventsAdmin = dynamicView(() => import("../../../components/EventsOps"));
@@ -69,6 +70,8 @@ export function resolveView(
       return <CRM />;
     case ViewState.LEADS:
       return <LeadsDashboard />;
+    case ViewState.PAID_CONVERSIONS:
+      return <PaidConversionsDashboard />;
     case ViewState.FINANCE:
       return <FinancePage />;
     case ViewState.OPERATIONS:
