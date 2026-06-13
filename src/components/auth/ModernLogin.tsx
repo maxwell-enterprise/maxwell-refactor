@@ -16,6 +16,24 @@ const USE_WORKSPACE =
 const RECENT_EMAILS_KEY = 'maxwell_recent_login_emails';
 const RECENT_EMAILS_LIMIT = 6;
 
+function navigateToDashboard(returnSearch?: string) {
+  if (typeof window === 'undefined') return;
+  const raw = String(returnSearch ?? '').trim();
+  const qs = raw.startsWith('?') ? raw.slice(1) : raw.startsWith('&') ? raw.slice(1) : raw;
+  const params = new URLSearchParams(qs || undefined);
+  const hasProduct = Boolean(
+    (params.get('product') || params.get('productId') || '').trim(),
+  );
+  if (hasProduct) {
+    if (!params.get('view')) params.set('view', 'store');
+    if (!params.get('checkout') && !params.get('autocheckout')) {
+      params.set('checkout', '1');
+    }
+  }
+  const search = params.toString();
+  window.location.replace(`/dashboard${search ? `?${search}` : ''}`);
+}
+
 interface ModernLoginProps {
   onLogin: (role: UserRole, provider: 'google' | 'email') => void;
   onClose: () => void;
@@ -122,6 +140,22 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
             }
           }
           showToast(msg, 'error');
+          return;
+        }
+        const payload = (await res.json()) as {
+          bypass?: boolean;
+          token?: string;
+        };
+        if (payload.bypass) {
+          if (!payload.token?.trim()) {
+            showToast('Bypass auth response is missing a session token.', 'error');
+            return;
+          }
+          setWorkspaceToken(payload.token.trim());
+          showToast('Bypass auth login successful.', 'success');
+          navigateToDashboard(
+            typeof window !== 'undefined' ? window.location.search || '' : '',
+          );
           return;
         }
         setStep('EMAIL_SENT');
