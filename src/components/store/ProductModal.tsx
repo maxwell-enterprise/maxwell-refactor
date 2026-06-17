@@ -245,9 +245,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                 setFormData(prev => ({ ...prev, items: [...(prev.items || []), newItem!] }));
             }
             
-            // Reset fields for UX
-            setItemLabel(''); 
-            // Keep Type selected for rapid entry
+            // Reset fields for UX (uncheck giftable so the next line defaults to personal)
+            setItemLabel('');
+            setIsTransferable(false);
             showToast('Item added to package', 'success');
         }
     };
@@ -973,7 +973,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                                                                 {item.name}
                                                                 {isExpired && <span className="ml-2 text-[9px] bg-red-200 text-red-800 px-1.5 rounded uppercase font-bold">Expired</span>}
                                                             </div>
-                                                            <div className="text-[10px] text-slate-500 font-mono">{item.type} {item.meta?.targetTier ? `[${item.meta.targetTier}]` : ''}</div>
+                                                            <div className="text-[10px] text-slate-500 font-mono flex flex-wrap items-center gap-1.5">
+                                                                <span>{item.type}{item.meta?.targetTier ? ` [${item.meta.targetTier}]` : ''}</span>
+                                                                {(item.type === 'TICKET' || item.type === 'EVENT_CREDIT') && (
+                                                                    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${item.meta?.isTransferable ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                                        {item.meta?.isTransferable ? (
+                                                                            <><Gift size={9} className="mr-0.5" /> Giftable</>
+                                                                        ) : (
+                                                                            'Personal'
+                                                                        )}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div className="flex shrink-0 items-center justify-end gap-4 sm:justify-start">

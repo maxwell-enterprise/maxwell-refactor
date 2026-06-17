@@ -510,7 +510,7 @@ function generateWalletItems(
                         title: bom.name,
                         subtitle: evt?.name || 'Event admission',
                         status: 'ACTIVE',
-                        isTransferable: bom.meta?.isTransferable ?? true,
+                        isTransferable: bom.meta?.isTransferable ?? false,
                         expiryDate: evt?.date,
                         qrData: evt
                             ? `TICKET:${evt.id}:${userId}:${id}`

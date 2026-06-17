@@ -11,7 +11,7 @@ import { GiftAllocation, WalletItem, WalletMemberHub } from '../types/access';
 import { ViewState } from '../types/index';
 import { 
     QrCode, Ticket, Calendar, Zap, 
-    ShieldCheck, Clock, Search, Share2, Package, ExternalLink
+    ShieldCheck, Clock, Search, Share2, Package, ExternalLink, Gift, User
 } from 'lucide-react';
 import QRCodeDisplay from './common/QRCodeDisplay';
 import { useToast } from '../context/ToastContext';
@@ -24,6 +24,64 @@ import { Badge } from './ui/badge';
 interface WalletProps {
   /** Opens Event Catalogue so users can redeem program credits (Nest-backed events). */
   onNavigate?: (view: ViewState) => void;
+}
+
+type TicketBucket = 'SELF' | 'SHARING_POOL' | 'SHARING_SENT' | 'RECEIVED_GIFT';
+
+function classifyWalletTicket(t: WalletItem): TicketBucket {
+  if (t.sponsoredBy) return 'RECEIVED_GIFT';
+  if (t.isTransferable === true) {
+    const hasRecipient =
+      typeof t.meta?.recipientEmail === 'string' && t.meta.recipientEmail.trim().length > 0;
+    if (t.status === 'PENDING_CLAIM' || t.status === 'GIFT_PENDING' || hasRecipient) {
+      return 'SHARING_SENT';
+    }
+    if (t.status === 'ACTIVE') return 'SHARING_POOL';
+  }
+  return 'SELF';
+}
+
+function groupTicketsByBundleKey(tickets: WalletItem[]): WalletItem[][] {
+  const groups: Record<string, WalletItem[]> = {};
+  for (const t of tickets) {
+    const key = `${t.meta?.eventId ?? 'no-event'}::${t.title}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  }
+  return Object.values(groups);
+}
+
+function resolveEventGroupKey(t: WalletItem): string {
+  const eventId =
+    typeof t.meta?.eventId === 'string' ? t.meta.eventId.trim() : '';
+  if (eventId) return eventId;
+  const subtitle = t.subtitle?.trim();
+  if (subtitle) return `subtitle:${subtitle}`;
+  return `title:${t.title?.trim() || t.id}`;
+}
+
+function resolveEventGroupLabel(tickets: WalletItem[]): string {
+  const first = tickets[0];
+  if (!first) return 'Event';
+  const subtitle = first.subtitle?.trim();
+  if (subtitle) return subtitle;
+  return first.title?.trim() || 'Event';
+}
+
+function groupTicketsByEvent(
+  tickets: WalletItem[],
+): Array<{ eventKey: string; label: string; tickets: WalletItem[] }> {
+  const groups: Record<string, WalletItem[]> = {};
+  for (const t of tickets) {
+    const key = resolveEventGroupKey(t);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  }
+  return Object.entries(groups).map(([eventKey, list]) => ({
+    eventKey,
+    label: resolveEventGroupLabel(list),
+    tickets: list,
+  }));
 }
 
 const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
@@ -104,31 +162,27 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
     return () => window.removeEventListener(WALLET_REFRESH_EVENT, onRefresh);
   }, [user, loadWallet, loadPendingGifts]);
 
-  /** Unassigned transferable tickets (Smart Redeem “Draft” + bulk) — same rules as Event Catalogue “Draft tickets”. */
-  const isUnassignedTransferableTicket = useCallback((t: WalletItem) => {
-      return (
-          t.type === 'TICKET' &&
-          t.status === 'ACTIVE' &&
-          t.isTransferable === true &&
-          !t.meta?.recipientEmail
-      );
-  }, []);
-
-  // --- GROUPING LOGIC FOR TICKETS ---
-  const groupedTickets = useMemo(() => {
+  const ticketBuckets = useMemo(() => {
       const tickets = items.filter(
           (i) => i.type === 'TICKET' && i.status !== 'EXPIRED',
       );
-      const groups: Record<string, WalletItem[]> = {};
-
-      tickets.forEach((t) => {
-          const key = t.meta?.eventId || t.id;
-          if (!groups[key]) groups[key] = [];
-          groups[key].push(t);
-      });
-
-      return Object.values(groups);
+      const buckets: Record<TicketBucket, WalletItem[]> = {
+          SELF: [],
+          SHARING_POOL: [],
+          SHARING_SENT: [],
+          RECEIVED_GIFT: [],
+      };
+      for (const t of tickets) {
+          buckets[classifyWalletTicket(t)].push(t);
+      }
+      return buckets;
   }, [items]);
+
+  const hasOwnedTickets =
+      ticketBuckets.SELF.length > 0 ||
+      ticketBuckets.SHARING_POOL.length > 0 ||
+      ticketBuckets.SHARING_SENT.length > 0 ||
+      ticketBuckets.RECEIVED_GIFT.length > 0;
   
   const creditPasses = useMemo(() => {
        return items.filter(i => i.type === 'CREDIT_PASS' && i.status === 'ACTIVE');
@@ -159,6 +213,199 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   const openDistribution = (tickets: WalletItem[]) => {
       setDistributionContext(tickets);
   };
+
+  const renderPersonalTicketCard = (ticket: WalletItem, footerLabel = 'Self ticket') => {
+      const ticketDate = formatEventDate(ticket.expiryDate);
+      const isCheckedIn = ticket.status === 'USED' || ticket.status === 'CLAIMED';
+      const giftFrom =
+          ticket.sponsoredBy && typeof ticket.sponsoredBy === 'string'
+              ? ticket.sponsoredBy
+              : null;
+      return (
+          <div
+              key={ticket.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setViewingTicket(ticket)}
+              onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setViewingTicket(ticket);
+                  }
+              }}
+              className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
+          >
+              <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-slate-50 p-5">
+                  <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-slate-200 pr-5">
+                      <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{ticketDate.weekday}</span>
+                      <span className="text-4xl font-black leading-none text-slate-800">{ticketDate.day}</span>
+                      <span className="mt-1 text-sm font-bold uppercase tracking-wider text-slate-400">{ticketDate.month}</span>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col justify-center">
+                      <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{ticket.title}</h3>
+                      <p className="mb-2 truncate text-xs text-slate-500">{ticket.subtitle}</p>
+                      <p className="flex items-center text-[10px] font-medium text-slate-400">
+                          <Calendar size={10} className="mr-1.5" /> {ticketDate.full}
+                      </p>
+                      {giftFrom && (
+                          <span className="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
+                              Gift from {giftFrom}
+                          </span>
+                      )}
+                      {ticket.status === 'PENDING_CLAIM' && (
+                          <span className="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
+                              Pending claim
+                          </span>
+                      )}
+                  </div>
+                  <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 translate-y-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg transition-transform group-hover:scale-110">
+                      <QrCode size={24} className="-translate-x-1 -translate-y-1" />
+                  </div>
+              </div>
+              <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  <span>{footerLabel}</span>
+                  <span className={`flex items-center ${isCheckedIn ? 'text-amber-700' : 'text-green-600'}`}>
+                      <ShieldCheck size={12} className="mr-1" /> {isCheckedIn ? 'Checked In' : 'Valid'}
+                  </span>
+              </div>
+          </div>
+      );
+  };
+
+  const renderSharingPoolCard = (pool: WalletItem[]) => {
+      const anchor = pool[0];
+      const dateInfo = formatEventDate(anchor.expiryDate);
+      return (
+          <div key={`pool-${anchor.id}`} className="relative group/bundle">
+              <div className="absolute bottom-0 left-2 right-2 top-2 z-0 scale-[0.95] translate-y-2 transform rounded-[2.5rem] border border-slate-200 bg-white shadow-sm" />
+              <div className="absolute bottom-0 left-4 right-4 top-4 z-0 scale-[0.9] translate-y-4 transform rounded-[2.5rem] border border-slate-200 bg-white shadow-sm" />
+              <div className="relative z-10 overflow-hidden rounded-[2.5rem] border border-indigo-200 bg-white p-1 shadow-md">
+                  <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-indigo-50 p-5">
+                      <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-indigo-200 pr-5">
+                          <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-indigo-400">{dateInfo.weekday}</span>
+                          <span className="text-4xl font-black leading-none text-indigo-900">{dateInfo.day}</span>
+                          <span className="mt-1 text-sm font-bold uppercase tracking-wider text-indigo-400">{dateInfo.month}</span>
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col justify-center">
+                          <div className="mb-1 flex items-center">
+                              <span className="mr-2 rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                                  Assign recipients
+                              </span>
+                          </div>
+                          <h3 className="mb-1 truncate text-lg font-bold leading-tight text-indigo-900">{anchor.title}</h3>
+                          <p className="mb-1 truncate text-xs text-indigo-600">{anchor.subtitle}</p>
+                          <p className="truncate text-xs text-indigo-600">
+                              <span className="rounded bg-white px-1.5 font-black">{pool.length}</span>{' '}
+                              {pool.length === 1 ? 'ticket ready to share' : 'tickets ready to share'}
+                          </p>
+                      </div>
+                      <div className="flex items-center pl-2">
+                          <button
+                              type="button"
+                              onClick={() => openDistribution(pool)}
+                              className="rounded-xl bg-indigo-600 p-4 text-white shadow-lg transition-all hover:bg-indigo-700 active:scale-95 group-hover/bundle:scale-105"
+                              aria-label="Open ticket distribution"
+                          >
+                              <Share2 size={20} />
+                          </button>
+                      </div>
+                  </div>
+                  <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-indigo-500">
+                      <span>Sharing ticket</span>
+                      <span>Bulk assign</span>
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
+  const renderSentTicketCard = (ticket: WalletItem) => {
+      const ticketDate = formatEventDate(ticket.expiryDate);
+      const recipientEmail =
+          typeof ticket.meta?.recipientEmail === 'string' ? ticket.meta.recipientEmail : '';
+      const recipientName =
+          typeof ticket.meta?.recipientName === 'string' && ticket.meta.recipientName.trim()
+              ? ticket.meta.recipientName.trim()
+              : recipientEmail.split('@')[0] || 'Guest';
+      const isPending = ticket.status === 'PENDING_CLAIM' || ticket.status === 'GIFT_PENDING';
+      return (
+          <div
+              key={ticket.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setViewingTicket(ticket)}
+              onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setViewingTicket(ticket);
+                  }
+              }}
+              className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-violet-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
+          >
+              <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-violet-50/70 p-5">
+                  <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-violet-200 pr-5">
+                      <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-violet-400">{ticketDate.weekday}</span>
+                      <span className="text-4xl font-black leading-none text-violet-900">{ticketDate.day}</span>
+                      <span className="mt-1 text-sm font-bold uppercase tracking-wider text-violet-400">{ticketDate.month}</span>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col justify-center">
+                      <span className="mb-1 inline-flex w-fit rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                          {isPending ? 'Awaiting acceptance' : 'Sent to guest'}
+                      </span>
+                      <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{ticket.title}</h3>
+                      <p className="mb-1 truncate text-xs text-slate-600">
+                          To: {recipientName}
+                          {recipientEmail ? ` (${recipientEmail})` : ''}
+                      </p>
+                  </div>
+                  <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition-transform group-hover:scale-110">
+                      <Share2 size={24} className="-translate-x-1 -translate-y-1" />
+                  </div>
+              </div>
+              <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-violet-500">
+                  <span>Sharing ticket</span>
+                  <span>{isPending ? 'Pending' : 'Delivered'}</span>
+              </div>
+          </div>
+      );
+  };
+
+  const renderEventGroupHeader = (label: string) => (
+      <h4 className="ml-1 border-l-4 border-indigo-500 pl-2 text-sm font-bold uppercase tracking-widest text-slate-400">
+          {label}
+      </h4>
+  );
+
+  const renderTicketsByEventGroup = (
+      tickets: WalletItem[],
+      renderTicket: (ticket: WalletItem) => React.ReactNode,
+  ) =>
+      groupTicketsByEvent(tickets).map((group) => (
+          <div key={group.eventKey} className="space-y-3">
+              {renderEventGroupHeader(group.label)}
+              <div className="space-y-4">{group.tickets.map((ticket) => renderTicket(ticket))}</div>
+          </div>
+      ));
+
+  const renderTicketSection = (
+      icon: React.ReactNode,
+      title: string,
+      description: string,
+      children: React.ReactNode,
+  ) => (
+      <section className="space-y-3">
+          <div className="flex items-start gap-3 px-1">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200">
+                  {icon}
+              </div>
+              <div className="min-w-0">
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-700">{title}</h3>
+                  <p className="text-xs text-slate-500">{description}</p>
+              </div>
+          </div>
+          <div className="space-y-4">{children}</div>
+      </section>
+  );
 
   const emptyShell =
     'rounded-[2rem] border-2 border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm sm:rounded-[2.5rem] sm:py-20';
@@ -401,184 +648,123 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
             )}
 
             {activeTab === 'TICKETS' && (
-                <div className="space-y-6">
-                    {pendingGifts.length > 0 && (
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between rounded-[2rem] border border-amber-200 bg-amber-50 px-5 py-4">
-                                <div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Pending acceptance</p>
-                                    <p className="mt-1 text-sm font-semibold text-slate-800">
-                                        You have {pendingGiftCount} ticket{pendingGiftCount > 1 ? 's' : ''} waiting in your wallet.
-                                    </p>
+                <div className="space-y-8">
+                    {pendingGifts.length > 0 &&
+                        renderTicketSection(
+                            <Gift size={18} />,
+                            'Gift Tickets',
+                            'Tickets sent to you — accept to add them to your wallet.',
+                            <>
+                                <div className="flex items-center justify-between rounded-[2rem] border border-amber-200 bg-amber-50 px-5 py-4">
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Pending acceptance</p>
+                                        <p className="mt-1 text-sm font-semibold text-slate-800">
+                                            You have {pendingGiftCount} ticket{pendingGiftCount > 1 ? 's' : ''} waiting.
+                                        </p>
+                                    </div>
+                                    <Badge variant="warning" className="min-w-7 justify-center px-2 text-xs font-black">
+                                        {pendingGiftCount}
+                                    </Badge>
                                 </div>
-                                <Badge variant="warning" className="min-w-7 justify-center px-2 text-xs font-black">
-                                    {pendingGiftCount}
-                                </Badge>
-                            </div>
-
-                            {pendingGifts.map((gift) => {
-                                const ticketDate = formatEventDate(gift.createdAt);
-                                return (
-                                    <div
-                                        key={gift.id}
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => setActivePendingGift(gift)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
-                                                setActivePendingGift(gift);
-                                            }
-                                        }}
-                                        className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-amber-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
-                                    >
-                                        <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-amber-50/60 p-5">
-                                            <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-amber-200 pr-5">
-                                                <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-amber-500">{ticketDate.weekday}</span>
-                                                <span className="text-4xl font-black leading-none text-amber-900">{ticketDate.day}</span>
-                                                <span className="mt-1 text-sm font-bold uppercase tracking-wider text-amber-500">{ticketDate.month}</span>
-                                            </div>
-                                            <div className="flex min-w-0 flex-1 flex-col justify-center">
-                                                <div className="mb-2">
-                                                    <Badge variant="warning" className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wide">
-                                                        Pending
-                                                    </Badge>
-                                                </div>
-                                                <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{gift.itemName}</h3>
-                                                <p className="mb-2 truncate text-xs text-slate-600">
-                                                    From {gift.sourceUserName}
-                                                </p>
-                                                <p className="flex items-center text-[10px] font-medium text-slate-500">
-                                                    <Clock size={10} className="mr-1.5" /> Tap to review and accept this ticket
-                                                </p>
-                                            </div>
-                                            <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 items-center justify-center rounded-full bg-amber-500 text-white shadow-lg transition-transform group-hover:scale-110">
-                                                <Ticket size={24} className="-translate-x-1 -translate-y-1" />
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                                            <span>Gifted ticket</span>
-                                            <span>Pending</span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {groupedTickets.length === 0 ? (
-                        <div className={emptyShell}>
-                             <Ticket size={44} strokeWidth={1.25} className="mx-auto mb-4 text-slate-300"/>
-                             <p className="font-bold text-slate-800">Your Wallet is Empty</p>
-                             <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
-                               {pendingGifts.length > 0
-                                 ? 'Open the pending ticket above to accept it into your wallet.'
-                                 : 'Acquired tickets will appear here for you to use or share.'}
-                             </p>
-                        </div>
-                    ) : groupedTickets.map((group, idx) => {
-                        const pool = group.filter(isUnassignedTransferableTicket);
-                        const personal = group.filter((t) => !pool.includes(t));
-                        const anchor = group[0];
-                        const dateInfo = formatEventDate(anchor.expiryDate);
-
-                        return (
-                            <div key={anchor.meta?.eventId ?? anchor.id ?? idx} className="space-y-4">
-                                {groupedTickets.length > 1 && (
-                                    <h3 className="ml-1 border-l-4 border-indigo-500 pl-2 text-sm font-bold uppercase tracking-widest text-slate-400">
-                                        {anchor.title}
-                                    </h3>
-                                )}
-
-                                {personal.map((ticket) => {
-                                     const ticketDate = formatEventDate(ticket.expiryDate);
-                                     const isCheckedIn = ticket.status === 'USED' || ticket.status === 'CLAIMED';
-                                     return (
-                                     <div
-                                        key={ticket.id}
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => setViewingTicket(ticket)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
-                                                setViewingTicket(ticket);
-                                            }
-                                        }}
-                                        className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
-                                    >
-                                        <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-slate-50 p-5">
-                                            <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-slate-200 pr-5">
-                                                <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{ticketDate.weekday}</span>
-                                                <span className="text-4xl font-black leading-none text-slate-800">{ticketDate.day}</span>
-                                                <span className="mt-1 text-sm font-bold uppercase tracking-wider text-slate-400">{ticketDate.month}</span>
-                                            </div>
-                                            <div className="flex min-w-0 flex-1 flex-col justify-center">
-                                                <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{ticket.title}</h3>
-                                                <p className="mb-2 truncate text-xs text-slate-500">{ticket.subtitle}</p>
-                                                <p className="flex items-center text-[10px] font-medium text-slate-400">
-                                                    <Calendar size={10} className="mr-1.5" /> {ticketDate.full}
-                                                </p>
-                                                {ticket.status === 'PENDING_CLAIM' && (
-                                                    <span className="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
-                                                        Pending claim
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 translate-y-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg transition-transform group-hover:scale-110">
-                                                <QrCode size={24} className="-translate-x-1 -translate-y-1" />
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                            <span>Personal entry</span>
-                                            <span className={`flex items-center ${isCheckedIn ? 'text-amber-700' : 'text-green-600'}`}>
-                                                <ShieldCheck size={12} className="mr-1" /> {isCheckedIn ? 'Checked In' : 'Valid'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    );
-                                })}
-
-                                {pool.length > 0 && (
-                                    <div className="relative group/bundle">
-                                        <div className="absolute bottom-0 left-2 right-2 top-2 z-0 scale-[0.95] translate-y-2 transform rounded-[2.5rem] border border-slate-200 bg-white shadow-sm" />
-                                        <div className="absolute bottom-0 left-4 right-4 top-4 z-0 scale-[0.9] translate-y-4 transform rounded-[2.5rem] border border-slate-200 bg-white shadow-sm" />
-                                        <div className="relative z-10 overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-1 shadow-md">
-                                            <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-indigo-50 p-5">
-                                                <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-indigo-200 pr-5">
-                                                    <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-indigo-400">{dateInfo.weekday}</span>
-                                                    <span className="text-4xl font-black leading-none text-indigo-900">{dateInfo.day}</span>
-                                                    <span className="mt-1 text-sm font-bold uppercase tracking-wider text-indigo-400">{dateInfo.month}</span>
+                                {pendingGifts.map((gift) => {
+                                    const ticketDate = formatEventDate(gift.createdAt);
+                                    return (
+                                        <div
+                                            key={gift.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={() => setActivePendingGift(gift)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    setActivePendingGift(gift);
+                                                }
+                                            }}
+                                            className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-amber-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
+                                        >
+                                            <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-amber-50/60 p-5">
+                                                <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-amber-200 pr-5">
+                                                    <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-amber-500">{ticketDate.weekday}</span>
+                                                    <span className="text-4xl font-black leading-none text-amber-900">{ticketDate.day}</span>
+                                                    <span className="mt-1 text-sm font-bold uppercase tracking-wider text-amber-500">{ticketDate.month}</span>
                                                 </div>
                                                 <div className="flex min-w-0 flex-1 flex-col justify-center">
-                                                    <div className="mb-1 flex items-center">
-                                                        <span className="mr-2 rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                                                            Assign recipients
-                                                        </span>
-                                                    </div>
-                                                    <h3 className="mb-1 truncate text-lg font-bold leading-tight text-indigo-900">{anchor.title}</h3>
-                                                    <p className="mb-2 truncate text-xs text-indigo-600">
-                                                        <span className="rounded bg-white px-1.5 font-black">{pool.length}</span>{' '}
-                                                        {pool.length === 1 ? 'ticket needs a guest' : 'tickets need guests'} (draft / bulk).
+                                                    <Badge variant="warning" className="mb-2 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wide">
+                                                        Pending
+                                                    </Badge>
+                                                    <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{gift.itemName}</h3>
+                                                    <p className="mb-2 truncate text-xs text-slate-600">From {gift.sourceUserName}</p>
+                                                    <p className="flex items-center text-[10px] font-medium text-slate-500">
+                                                        <Clock size={10} className="mr-1.5" /> Tap to review and accept
                                                     </p>
                                                 </div>
-                                                <div className="flex items-center pl-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openDistribution(pool)}
-                                                        className="rounded-xl bg-indigo-600 p-4 text-white shadow-lg transition-all hover:bg-indigo-700 active:scale-95 group-hover/bundle:scale-105"
-                                                        aria-label="Open ticket distribution"
-                                                    >
-                                                        <Share2 size={20} />
-                                                    </button>
+                                                <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 items-center justify-center rounded-full bg-amber-500 text-white shadow-lg transition-transform group-hover:scale-110">
+                                                    <Ticket size={24} className="-translate-x-1 -translate-y-1" />
                                                 </div>
                                             </div>
+                                            <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                                                <span>Gift ticket</span>
+                                                <span>Pending</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    );
+                                })}
+                            </>,
+                        )}
+
+                    {!hasOwnedTickets && pendingGifts.length === 0 ? (
+                        <div className={emptyShell}>
+                            <Ticket size={44} strokeWidth={1.25} className="mx-auto mb-4 text-slate-300" />
+                            <p className="font-bold text-slate-800">Your Wallet is Empty</p>
+                            <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
+                                Acquired tickets will appear here for you to use or share.
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            {(ticketBuckets.SELF.length > 0 || ticketBuckets.RECEIVED_GIFT.length > 0) &&
+                                renderTicketSection(
+                                    <User size={18} />,
+                                    'Self Tickets',
+                                    'Personal admission — scan at the gate. These cannot be transferred.',
+                                    renderTicketsByEventGroup(
+                                        [...ticketBuckets.SELF, ...ticketBuckets.RECEIVED_GIFT],
+                                        (ticket) =>
+                                            renderPersonalTicketCard(
+                                                ticket,
+                                                classifyWalletTicket(ticket) === 'RECEIVED_GIFT'
+                                                    ? 'Gift ticket (yours)'
+                                                    : 'Self ticket',
+                                            ),
+                                    ),
                                 )}
-                            </div>
-                        );
-                    })}
+
+                            {ticketBuckets.SHARING_POOL.length > 0 &&
+                                renderTicketSection(
+                                    <Share2 size={18} />,
+                                    'Sharing Tickets',
+                                    'Giftable tickets — assign guests or send invitations in bulk.',
+                                    groupTicketsByEvent(ticketBuckets.SHARING_POOL).map((group) => (
+                                        <div key={group.eventKey} className="space-y-3">
+                                            {renderEventGroupHeader(group.label)}
+                                            <div className="space-y-4">
+                                                {groupTicketsByBundleKey(group.tickets).map((pool) =>
+                                                    renderSharingPoolCard(pool),
+                                                )}
+                                            </div>
+                                        </div>
+                                    )),
+                                )}
+
+                            {ticketBuckets.SHARING_SENT.length > 0 &&
+                                renderTicketSection(
+                                    <Share2 size={18} />,
+                                    'Sent to Guests',
+                                    'Tickets already assigned — waiting for recipients to accept.',
+                                    ticketBuckets.SHARING_SENT.map((ticket) => renderSentTicketCard(ticket)),
+                                )}
+                        </>
+                    )}
                 </div>
             )}
         </div>
