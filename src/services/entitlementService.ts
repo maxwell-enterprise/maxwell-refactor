@@ -423,6 +423,8 @@ export const EntitlementService = {
           newWalletItems.push(...generated);
       }
 
+      applyBuyerSelfTicketReservation(newWalletItems);
+
       if (newWalletItems.length > 0) {
           const repo = RepositoryFactory.getEntitlementRepository();
           await repo.upsertWalletItems(newWalletItems);
@@ -457,6 +459,26 @@ function resolveCreditPassExpiry(meta?: { expiration?: string; isUnlimited?: boo
     const d = new Date();
     d.setFullYear(d.getFullYear() + 1);
     return d.toISOString().slice(0, 10);
+}
+
+/** See server `checkout-entitlements.service.ts` — mirror for mock/Supabase checkout paths. */
+function applyBuyerSelfTicketReservation(items: WalletItem[]): void {
+    const tickets = items.filter((m) => m.type === 'TICKET');
+    if (tickets.length === 0) return;
+
+    const hasExplicitSelf = tickets.some((t) => t.isTransferable !== true);
+    if (hasExplicitSelf) return;
+
+    const firstGiftable = tickets.find((t) => t.isTransferable === true);
+    if (!firstGiftable) return;
+
+    firstGiftable.isTransferable = false;
+    firstGiftable.meta = {
+        ...(firstGiftable.meta && typeof firstGiftable.meta === 'object'
+            ? firstGiftable.meta
+            : {}),
+        autoBuyerSelf: true,
+    };
 }
 
 function generateWalletItems(
