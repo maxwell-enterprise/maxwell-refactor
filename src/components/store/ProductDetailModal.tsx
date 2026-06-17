@@ -38,6 +38,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'COMPONENTS'>('OVERVIEW');
     const [selectedVariantId, setSelectedVariantId] = useState<string>(initialData(product));
     const [loading, setLoading] = useState(true);
+    const [descriptionExpanded, setDescriptionExpanded] = useState(false);
     
     // UI State for Expanded Component Card
     const [expandedItemIndex, setExpandedItemIndex] = useState<number | null>(null);
@@ -58,6 +59,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     useEffect(() => {
         loadDetails();
     }, [product]);
+
+    useEffect(() => {
+        setDescriptionExpanded(false);
+    }, [product.id]);
+
+    const productDescription = product.description?.trim() ?? '';
+    const showDescriptionToggle = productDescription.length > 200;
 
     const loadDetails = async () => {
         setLoading(true);
@@ -420,8 +428,49 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
                         <div className="min-h-[200px]">
                             {activeTab === 'OVERVIEW' && (
-                                <div className="prose prose-sm max-w-none whitespace-pre-line text-slate-600 leading-relaxed prose-headings:text-slate-900 line-clamp-4">
-                                    {product.description}
+                                <div>
+                                    <div className="relative">
+                                        <div
+                                            className={`prose prose-sm max-w-none whitespace-pre-line text-slate-600 leading-relaxed prose-headings:text-slate-900 custom-scrollbar ${
+                                                descriptionExpanded
+                                                    ? 'max-h-52 overflow-y-auto pr-1'
+                                                    : 'max-h-24 overflow-hidden line-clamp-4'
+                                            }`}
+                                        >
+                                            {productDescription || (
+                                                <span className="text-slate-400 italic">
+                                                    No description provided.
+                                                </span>
+                                            )}
+                                        </div>
+                                        {showDescriptionToggle && !descriptionExpanded && (
+                                            <div
+                                                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent"
+                                                aria-hidden
+                                            />
+                                        )}
+                                    </div>
+                                    {showDescriptionToggle && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setDescriptionExpanded((prev) => !prev)
+                                            }
+                                            className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-800"
+                                        >
+                                            {descriptionExpanded ? (
+                                                <>
+                                                    Tampilkan lebih sedikit
+                                                    <ChevronUp size={16} />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Baca selengkapnya
+                                                    <ChevronDown size={16} />
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
                                 </div>
                             )}
 
