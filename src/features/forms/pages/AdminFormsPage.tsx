@@ -72,17 +72,26 @@ const AdminFormsPage: React.FC = () => {
         }
     };
 
-    const sortedForms = [...forms].sort((a, b) => {
-        let valA: string | number | boolean = a[sortField];
-        let valB: string | number | boolean = b[sortField];
-
-        if (sortField === 'questions') {
-            valA = a.questions.length;
-            valB = b.questions.length;
-        } else if (sortField === 'createdAt') {
-            valA = new Date(a.createdAt).getTime();
-            valB = new Date(b.createdAt).getTime();
+    const getSortValue = (form: FormDefinition): string | number => {
+        switch (sortField) {
+            case 'questions':
+                return form.questions.length;
+            case 'createdAt':
+                return new Date(form.createdAt).getTime();
+            case 'title':
+                return form.title.toLowerCase();
+            case 'isQuiz':
+                return form.isQuiz ? 1 : 0;
+            case 'active':
+                return form.active ? 1 : 0;
+            default:
+                return '';
         }
+    };
+
+    const sortedForms = [...forms].sort((a, b) => {
+        const valA = getSortValue(a);
+        const valB = getSortValue(b);
 
         if (valA < valB) return sortDir === 'asc' ? -1 : 1;
         if (valA > valB) return sortDir === 'asc' ? 1 : -1;
