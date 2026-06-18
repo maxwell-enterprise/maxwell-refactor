@@ -404,7 +404,12 @@ export const EntitlementService = {
   processTransactionEntitlements: async (
       userId: string,
       items: { id: string; variantId?: string; quantity: number }[],
-      opts?: { orderReference?: string },
+      opts?: {
+          orderReference?: string;
+          buyerEmail?: string;
+          buyerName?: string;
+          buyerPhone?: string;
+      },
   ): Promise<void> => {
       const allProducts = await DataService.getProducts();
       const allEvents = await DataService.getEvents();
@@ -424,6 +429,8 @@ export const EntitlementService = {
       }
 
       applyBuyerSelfTicketReservation(newWalletItems);
+      const buyerProfile = await resolveMockBuyerRecipientProfile(userId, opts);
+      stampBuyerSelfRecipientMeta(newWalletItems, buyerProfile);
 
       if (newWalletItems.length > 0) {
           const repo = RepositoryFactory.getEntitlementRepository();
@@ -462,6 +469,24 @@ function resolveCreditPassExpiry(meta?: { expiration?: string; isUnlimited?: boo
 }
 
 /** See server `checkout-entitlements.service.ts` — mirror for mock/Supabase checkout paths. */
+function readWalletMetaString(
+    meta: Record<string, unknown> | undefined,
+    key: string,
+): string {
+    const value = meta?.[key];
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function titleFromCheckoutEmail(email: string): string {
+    const local = email.split('@')[0]?.trim() ?? '';
+    if (!local) return '';
+    return local
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
 function applyBuyerSelfTicketReservation(items: WalletItem[]): void {
     const tickets = items.filter((m) => m.type === 'TICKET');
     if (tickets.length === 0) return;
@@ -478,6 +503,66 @@ function applyBuyerSelfTicketReservation(items: WalletItem[]): void {
             ? firstGiftable.meta
             : {}),
         autoBuyerSelf: true,
+    };
+}
+
+function stampBuyerSelfRecipientMeta(
+    items: WalletItem[],
+    profile: { name: string; email: string; phone?: string },
+): void {
+    const name = profile.name.trim();
+    const email = profile.email.trim().toLowerCase();
+    const phone = profile.phone?.trim() ?? '';
+    if (!name && !email) return;
+
+    for (const item of items) {
+        if (item.type !== 'TICKET') continue;
+        const meta =
+            item.meta && typeof item.meta === 'object'
+                ? { ...item.meta }
+                : {};
+        if (meta.autoBuyerSelf !== true) continue;
+
+        if (!readWalletMetaString(meta, 'recipientName') && name) {
+            meta.recipientName = name;
+        }
+        if (!readWalletMetaString(meta, 'recipientEmail') && email) {
+            meta.recipientEmail = email;
+        }
+        if (!readWalletMetaString(meta, 'recipientPhone') && phone) {
+            meta.recipientPhone = phone;
+        }
+        item.meta = meta;
+    }
+}
+
+async function resolveMockBuyerRecipientProfile(
+    userId: string,
+    opts?: { buyerEmail?: string; buyerName?: string; buyerPhone?: string },
+): Promise<{ name: string; email: string; phone?: string }> {
+    const checkoutEmail = opts?.buyerEmail?.trim().toLowerCase() ?? '';
+    const members = await DataService.getMembers();
+    const member =
+        members.find((row) => row.id === userId) ||
+        (checkoutEmail
+            ? members.find(
+                  (row) => row.email.trim().toLowerCase() === checkoutEmail,
+              )
+            : undefined);
+
+    const resolvedEmail =
+        checkoutEmail || member?.email?.trim().toLowerCase() || '';
+    const resolvedName =
+        opts?.buyerName?.trim() ||
+        member?.name?.trim() ||
+        (resolvedEmail ? titleFromCheckoutEmail(resolvedEmail) : '') ||
+        'Customer';
+    const resolvedPhone = opts?.buyerPhone?.trim() || member?.phone?.trim() || '';
+
+    return {
+        name: resolvedName,
+        email: resolvedEmail,
+        ...(resolvedPhone ? { phone: resolvedPhone } : {}),
     };
 }
 
