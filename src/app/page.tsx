@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import LandingPage from "@/components/LandingPage";
 import SessionLoadingScreen from "@/components/system/SessionLoadingScreen";
 import PublicCampaignProductDeepLink from "@/components/store/PublicCampaignProductDeepLink";
+import PublicFormResponder from "@/components/forms/PublicFormResponder";
 import { useAuth } from "@/context/AuthContext";
 import { CampaignAttributionService } from "@/services/campaignAttributionService";
 import { CampaignService } from "@/services/campaignService";
@@ -23,6 +24,11 @@ export default function HomePage() {
     source?: string;
   } | null>(null);
 
+  const [publicFormLink, setPublicFormLink] = useState<{
+    formId: string;
+    sessionId?: string;
+  } | null>(null);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.replace(/^#/, "");
@@ -39,11 +45,20 @@ export default function HomePage() {
       );
       return;
     }
+    const params = new URLSearchParams(window.location.search);
+    const formId = params.get("formId")?.trim();
+    if (formId) {
+      setPublicFormLink({
+        formId,
+        sessionId: params.get("sessionId")?.trim() || undefined,
+      });
+      return;
+    }
     setPublicProductLink(parsePublicProductDeepLink(window.location.search));
   }, []);
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated) return;
+    if (isLoading || !isAuthenticated || publicFormLink) return;
 
     const currentSearch =
       typeof window !== "undefined" ? window.location.search : "";
@@ -67,7 +82,7 @@ export default function HomePage() {
       return;
     }
     router.replace("/dashboard");
-  }, [isLoading, isAuthenticated, router]);
+  }, [isLoading, isAuthenticated, router, publicFormLink]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -86,6 +101,15 @@ export default function HomePage() {
 
   if (isLoading || isRoutingAuthCallback) {
     return <SessionLoadingScreen />;
+  }
+
+  if (publicFormLink) {
+    return (
+      <PublicFormResponder
+        formId={publicFormLink.formId}
+        sessionId={publicFormLink.sessionId}
+      />
+    );
   }
 
   if (isAuthenticated) {

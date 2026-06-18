@@ -47,6 +47,8 @@ const AutomationCenter = dynamicView(() => import("../../../components/system/Au
 const TagManagement = dynamicView(() => import("../../../components/admin/TagManagement"));
 const SystemMaintenance = dynamicView(() => import("../../../components/admin/SystemMaintenance"));
 const EventMarketplace = dynamicView(() => import("../../../components/EventMarketplace"));
+const AdminFormsPage = dynamicView(() => import("../../../features/forms/pages/AdminFormsPage"));
+const FormHistoryPage = dynamicView(() => import("../../../features/forms/pages/FormHistoryPage"));
 
 /**
  * Pure view resolver: maps ViewState to the corresponding component.
@@ -78,6 +80,8 @@ export function resolveView(
       return <Operations />;
     case ViewState.EVENTS_ADMIN:
       return <EventsAdmin />;
+    case ViewState.FORMS_ADMIN:
+      return <AdminFormsPage />;
     case ViewState.CERTIFICATION_GRID:
       return <CertificationGrid />;
     case ViewState.CERTIFICATION_RULES:
@@ -122,6 +126,8 @@ export function resolveView(
       return <EventMarketplace />;
     case ViewState.ENABLEMENT:
       return <Enablement />;
+    case ViewState.MY_FORMS:
+      return <FormHistoryPage />;
     case ViewState.AI_COACH:
       return <AICoach />;
     case ViewState.SETTINGS:
