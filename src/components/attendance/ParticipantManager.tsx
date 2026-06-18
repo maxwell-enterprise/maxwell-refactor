@@ -9,6 +9,9 @@ import WhatsAppQuickAction from '../common/WhatsAppQuickAction';
 import { UserService } from '../../services/userService';
 
 type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'MISSING';
+type ParticipantStatusFilter = 'NAMED_ONLY' | 'ALL' | ParticipantStatus;
+
+const UNNAMED_PARTICIPANT_LABEL = 'Unnamed Participant';
 type AccessMethod = 'Ticket Scan' | 'Credit Deduction';
 
 interface ParticipantRow {
@@ -69,7 +72,7 @@ const buildFallbackMember = (
             recipientName ||
             toTitleFromEmail(attendance?.memberEmail || recipientEmail) ||
             recipientPhone ||
-            'Unnamed Participant',
+            UNNAMED_PARTICIPANT_LABEL,
         email: attendance?.memberEmail || recipientEmail || '',
         phone: recipientPhone,
         category: 'Member',
@@ -102,7 +105,7 @@ const ParticipantManager: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterTier, setFilterTier] = useState('ALL');
     const [filterGate, setFilterGate] = useState('ALL');
-    const [filterStatus, setFilterStatus] = useState<'ALL' | ParticipantStatus>('ALL');
+    const [filterStatus, setFilterStatus] = useState<ParticipantStatusFilter>('NAMED_ONLY');
     const [profilingMember, setProfilingMember] = useState<Member | null>(null);
 
     useEffect(() => {
@@ -311,6 +314,9 @@ const ParticipantManager: React.FC = () => {
     const filteredRows = useMemo(
         () =>
             participants.filter((row) => {
+                const matchesNaming =
+                    filterStatus !== 'NAMED_ONLY' ||
+                    row.memberName.trim() !== UNNAMED_PARTICIPANT_LABEL;
                 const matchesSearch =
                     row.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     row.memberEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -318,8 +324,17 @@ const ParticipantManager: React.FC = () => {
                     row.operatorLabel.toLowerCase().includes(searchTerm.toLowerCase());
                 const matchesTier = filterTier === 'ALL' || row.ticketTier === filterTier;
                 const matchesGate = filterGate === 'ALL' || row.gateLabel === filterGate;
-                const matchesStatus = filterStatus === 'ALL' || row.status === filterStatus;
-                return matchesSearch && matchesTier && matchesGate && matchesStatus;
+                const matchesStatus =
+                    filterStatus === 'ALL' ||
+                    filterStatus === 'NAMED_ONLY' ||
+                    row.status === filterStatus;
+                return (
+                    matchesNaming &&
+                    matchesSearch &&
+                    matchesTier &&
+                    matchesGate &&
+                    matchesStatus
+                );
             }),
         [participants, searchTerm, filterTier, filterGate, filterStatus],
     );
@@ -393,8 +408,11 @@ const ParticipantManager: React.FC = () => {
                         <select
                             className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold outline-none"
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value as 'ALL' | ParticipantStatus)}
+                            onChange={(e) =>
+                                setFilterStatus(e.target.value as ParticipantStatusFilter)
+                            }
                         >
+                            <option value="NAMED_ONLY">Named Participants</option>
                             <option value="ALL">All Status</option>
                             <option value="REGISTERED">Registered</option>
                             <option value="CHECKED_IN">Checked-In</option>
