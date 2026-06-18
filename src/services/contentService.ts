@@ -65,40 +65,39 @@ export const ContentService = {
         return await RepositoryFactory.getContentRepository().delete(id);
     },
 
-    // --- ANALYTICS (Kept in Service Layer) ---
+    // --- ANALYTICS (public POST endpoints — no auth on landing page) ---
 
     trackView: async (id: string) => {
-        const repo = RepositoryFactory.getContentRepository();
-        const all = await repo.getAll();
-        const post = all.find(c => c.id === id);
-        if (post) {
-            // Optimistic update pattern in Repo/Service
-            await repo.update(id, { 
-                stats: { ...post.stats, views: post.stats.views + 1 } 
-            });
+        try {
+            await apiRequest<{ ok: boolean }>(
+                `/content/posts/${encodeURIComponent(id)}/track-view`,
+                { method: 'POST' },
+            );
+        } catch {
+            /* analytics must not break public UX */
         }
     },
 
-    trackShare: async (id: string, platform: string) => {
-        const repo = RepositoryFactory.getContentRepository();
-        const all = await repo.getAll();
-        const post = all.find(c => c.id === id);
-        if (post) {
-            await repo.update(id, { 
-                stats: { ...post.stats, shares: post.stats.shares + 1 } 
-            });
+    trackShare: async (id: string, _platform: string) => {
+        try {
+            await apiRequest<{ ok: boolean }>(
+                `/content/posts/${encodeURIComponent(id)}/track-share`,
+                { method: 'POST' },
+            );
+        } catch {
+            /* analytics must not break public UX */
         }
     },
 
     trackClick: async (id: string) => {
-        const repo = RepositoryFactory.getContentRepository();
-        const all = await repo.getAll();
-        const post = all.find(c => c.id === id);
-        if (post) {
-            await repo.update(id, { 
-                stats: { ...post.stats, clicks: post.stats.clicks + 1 } 
-            });
+        try {
+            await apiRequest<{ ok: boolean }>(
+                `/content/posts/${encodeURIComponent(id)}/track-click`,
+                { method: 'POST' },
+            );
             CampaignService.trackClick(`cms_${id}`);
+        } catch {
+            /* analytics must not break public UX */
         }
     },
 

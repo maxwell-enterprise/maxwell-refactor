@@ -3,12 +3,12 @@ import { UserRole } from '../types/index';
 import {
   PUBLIC_PROGRAMS,
   PUBLIC_STORE,
-  PUBLIC_ARTICLES,
   DISCOUNT_DATA,
 } from '../constants';
 import { Menu, X, ArrowRight, ShoppingBag, LogIn, Tag } from 'lucide-react';
 import MaxwellScoutWidget from './scout/MaxwellScoutWidget';
 import ModernLogin from './auth/ModernLogin';
+import LandingCmsSection from './landing/LandingCmsSection';
 import { useToast } from '../context/ToastContext';
 
 interface LandingPageProps {
@@ -381,6 +381,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
         </div>
       </section>
 
+      <LandingCmsSection onRequireLogin={openLoginModal} />
+
       {/* Store Preview */}
       <section
         id='store'
@@ -422,35 +424,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                   <button className='p-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-colors'>
                     <ShoppingBag size={14} />
                   </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Articles / Insights */}
-      <section id='articles' className='py-16 bg-white'>
-        <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
-          <h2 className='text-3xl font-bold text-slate-900 mb-8'>
-            Latest Insights
-          </h2>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
-            {PUBLIC_ARTICLES.map((article, idx) => (
-              <div
-                key={idx}
-                className='flex flex-col border-b border-slate-100 pb-8 md:border-none md:pb-0'
-              >
-                <span className='text-xs font-bold text-blue-600 mb-2 uppercase'>
-                  {article.category}
-                </span>
-                <h3 className='text-xl font-bold text-slate-900 mb-3 hover:text-blue-600 cursor-pointer'>
-                  {article.title}
-                </h3>
-                <div className='mt-auto flex items-center text-sm text-slate-500'>
-                  <span>{article.author}</span>
-                  <span className='mx-2'>•</span>
-                  <span>{article.date}</span>
                 </div>
               </div>
             ))}

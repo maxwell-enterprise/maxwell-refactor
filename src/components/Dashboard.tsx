@@ -1,379 +1,532 @@
+'use client';
 
-import React, { useMemo, useEffect, useState } from 'react';
-import { DataService } from '../services/dataService';
-import { Member, ViewState } from '../types/index';
-import { 
-  Users, DollarSign, Award, Activity, Lock, Calendar, Filter, 
-  Globe, Layers, TrendingUp, ArrowUpRight, ArrowDownRight, 
-  Target, BarChart3, Zap 
+import React, { useEffect, useState } from 'react';
+import {
+  Users,
+  DollarSign,
+  Award,
+  Activity,
+  Lock,
+  Calendar,
+  Filter,
+  Globe,
+  Layers,
+  TrendingUp,
+  ArrowUpRight,
+  Target,
+  BarChart3,
+  Zap,
+  AlertCircle,
 } from 'lucide-react';
-import { 
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, AreaChart, Area, Legend 
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+  Legend,
 } from 'recharts';
 import StatCard from './molecules/StatCard';
 import { useAccess } from '../context/SecurityContext';
+import { APP_CONFIG } from '../lib/config';
+import { apiRequest } from '../repositories/api/apiClient';
 
 type TimeRange = 'ALL' | 'LAST_30' | 'THIS_QUARTER' | 'YTD';
-type GrowthPoint = { name: string; members: number; cumulativeMembers: number };
+type RegionFilter = 'ALL' | 'DOMESTIC' | 'INTL';
 
-function parseJoinMonthToDate(joinMonth: string | undefined): Date | null {
-  if (!joinMonth || !/^\d{4}-\d{2}$/.test(joinMonth)) return null;
-  const d = new Date(`${joinMonth}-01T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
+export type ExecutiveDashboardPayload = {
+  filters: {
+    timeRange: TimeRange;
+    program: string;
+    region: RegionFilter;
+  };
+  uniquePrograms: string[];
+  members: {
+    total: number;
+    momPercent: number | null;
+    scholarshipCount: number;
+    scholarshipRate: number;
+    nonGuestCount: number;
+    engagementScore: number;
+    nTagReceivedCount: number;
+    retentionRate: number;
+    qualifiedCount: number;
+    qualifiedRate: number;
+    growthData: Array<{
+      name: string;
+      members: number;
+      cumulativeMembers: number;
+    }>;
+    categoryData: Array<{ name: string; value: number }>;
+  } | null;
+  finance: {
+    totalPaidRevenue: number;
+    momPercent: number | null;
+    payingCustomerCount: number;
+    avgLtv: number;
+  } | null;
+};
+
+const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+
+function formatIDR(num: number) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(num);
 }
 
-function toMonthKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function addMonths(date: Date, delta: number): Date {
-  const next = new Date(date);
-  next.setMonth(next.getMonth() + delta);
-  return next;
+function formatMomPercent(percent: number | null): string | undefined {
+  if (percent === null) return undefined;
+  const sign = percent >= 0 ? '+' : '';
+  return `${sign}${percent.toFixed(1)}%`;
 }
 
 const Dashboard: React.FC = () => {
-  const [members, setMembers] = useState<Member[]>([]);
+  const [data, setData] = useState<ExecutiveDashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // --- FILTERS STATE ---
+  const [error, setError] = useState<string | null>(null);
+
   const [timeRange, setTimeRange] = useState<TimeRange>('ALL');
   const [selectedProgram, setSelectedProgram] = useState<string>('ALL');
-  const [selectedRegion, setSelectedRegion] = useState<string>('ALL');
+  const [selectedRegion, setSelectedRegion] = useState<RegionFilter>('ALL');
 
-  // --- ACCESS CONTROL ---
   const { can: canViewFinance } = useAccess('fin_invoices');
   const { can: canViewMembers } = useAccess('crm_members');
 
   useEffect(() => {
-    if (canViewMembers('READ')) {
-        setLoading(true);
-        DataService.getMembers().then(data => {
-            setMembers(data);
-            setLoading(false);
+    if (APP_CONFIG.DOMAINS.DASHBOARD !== 'API') {
+      setError(
+        'Executive dashboard memakai data server. Set `NEXT_PUBLIC_API_BASE_URL` ke Nest `/fe` dan pastikan `NEXT_PUBLIC_DASHBOARD_BACKEND=API`.',
+      );
+      setData(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const sp = new URLSearchParams({
+          timeRange,
+          program: selectedProgram,
+          region: selectedRegion,
         });
-    }
-  }, [canViewMembers]);
-
-  // --- FILTER LOGIC ---
-  const filteredMembers = useMemo(() => {
-      const now = new Date();
-      return members.filter(m => {
-          // 1. Time Filter
-          let timeMatch = true;
-          const joinDate = new Date(`${m.joinMonth}-01`); // Approx
-          
-          if (timeRange === 'LAST_30') {
-              const thirtyDaysAgo = new Date();
-              thirtyDaysAgo.setDate(now.getDate() - 30);
-              timeMatch = joinDate >= thirtyDaysAgo;
-          } else if (timeRange === 'THIS_QUARTER') {
-              const currentQuarter = Math.floor((now.getMonth() + 3) / 3);
-              const joinQuarter = Math.floor((joinDate.getMonth() + 3) / 3);
-              timeMatch = joinDate.getFullYear() === now.getFullYear() && currentQuarter === joinQuarter;
-          } else if (timeRange === 'YTD') {
-              timeMatch = joinDate.getFullYear() === now.getFullYear();
-          }
-
-          // 2. Program Filter
-          const programMatch = selectedProgram === 'ALL' || m.program === selectedProgram;
-
-          // 3. Region Filter (Mock logic based on Platform/Address)
-          const regionMatch = selectedRegion === 'ALL' || (selectedRegion === 'INTL' ? m.regInUS : !m.regInUS);
-
-          return timeMatch && programMatch && regionMatch;
-      });
-  }, [members, timeRange, selectedProgram, selectedRegion]);
-
-  // --- ANALYTICS CALCULATION ---
-
-  const categoryData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    filteredMembers.forEach(m => counts[m.category] = (counts[m.category] || 0) + 1);
-    return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).sort((a,b) => b.value - a.value);
-  }, [filteredMembers]);
-
-  const growthData = useMemo<GrowthPoint[]>(() => {
-    const monthCounts: Record<string, number> = {};
-    const joinDates: Date[] = [];
-
-    filteredMembers.forEach(member => {
-      const joinDate = parseJoinMonthToDate(member.joinMonth);
-      if (!joinDate) return;
-      const key = toMonthKey(joinDate);
-      monthCounts[key] = (monthCounts[key] || 0) + 1;
-      joinDates.push(joinDate);
-    });
-
-    const now = new Date();
-    let start = addMonths(now, -5);
-    let end = now;
-
-    if (joinDates.length > 0) {
-      joinDates.sort((a, b) => a.getTime() - b.getTime());
-      start = joinDates[0];
-      end = joinDates[joinDates.length - 1];
-      // Keep trajectory readable for small datasets.
-      if (start.getTime() === end.getTime()) {
-        start = addMonths(start, -2);
-        end = addMonths(end, 2);
+        const res = await apiRequest<ExecutiveDashboardPayload>(
+          `/dashboard/executive?${sp.toString()}`,
+        );
+        if (!cancelled) {
+          setData(res);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setData(null);
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    }
+    })();
 
-    const series: GrowthPoint[] = [];
-    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
-    let running = 0;
-    while (cursor.getTime() <= endMonth.getTime()) {
-      const key = toMonthKey(cursor);
-      const monthly = monthCounts[key] || 0;
-      running += monthly;
-      series.push({ name: key, members: monthly, cumulativeMembers: running });
-      cursor = addMonths(cursor, 1);
-    }
-    return series;
-  }, [filteredMembers]);
+    return () => {
+      cancelled = true;
+    };
+  }, [timeRange, selectedProgram, selectedRegion]);
 
-  // Strategic KPIs
-  const totalRevenueEstimate = filteredMembers.length * 15000000;
-  const scholarshipCount = filteredMembers.filter(m => m.scholarship).length;
-  
-  // CLTV: Total Revenue / Total Unique Paying Customers (Simplified)
-  const avgLTV = filteredMembers.length > 0 ? totalRevenueEstimate / filteredMembers.length : 0;
-  
-  // Retention: Active (Received N-Tag as proxy for active) / Total
-  const activeMembers = filteredMembers.filter(m => m.nTagStatus === 'Received').length;
-  const retentionRate = filteredMembers.length > 0 ? (activeMembers / filteredMembers.length) * 100 : 0;
-  const nonGuestMembers = filteredMembers.filter(m => m.lifecycleStage !== 'GUEST').length;
-  const engagementScore = filteredMembers.length > 0 ? (nonGuestMembers / filteredMembers.length) * 100 : 0;
-  const qualifiedMembers = filteredMembers.filter(m => (m.tags || []).includes('Qualified')).length;
-  const qualifiedRate = filteredMembers.length > 0 ? (qualifiedMembers / filteredMembers.length) * 100 : 0;
+  const members = data?.members;
+  const finance = data?.finance;
+  const uniquePrograms = data?.uniquePrograms ?? [];
+  const growthData = members?.growthData ?? [];
+  const categoryData = members?.categoryData ?? [];
 
-  const uniquePrograms = Array.from(new Set(members.map(m => m.program)));
-  const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
-
-  const formatIDR = (num: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
-  };
+  const memberMom = formatMomPercent(members?.momPercent ?? null);
+  const revenueMom = formatMomPercent(finance?.momPercent ?? null);
 
   return (
     <div className="page-container space-y-6 sm:space-y-8 animate-fade-in pb-16 sm:pb-20">
-      
-      {/* 1. HEADER & CONTROL BAR */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4 mb-2 min-w-0">
         <div className="min-w-0">
-           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Executive Dashboard</h1>
-           <p className="text-slate-500 mt-1 flex flex-wrap items-center text-sm sm:text-base gap-x-1">
-              <Activity size={16} className="mr-2 text-green-500"/> 
-              System Status: <span className="font-bold text-slate-700 ml-1">Live & Healthy</span>
-           </p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            Executive Dashboard
+          </h1>
+          <p className="text-slate-500 mt-1 flex flex-wrap items-center text-sm sm:text-base gap-x-1">
+            <Activity size={16} className="mr-2 text-green-500" />
+            Data source:{' '}
+            <span className="font-bold text-slate-700 ml-1">
+              {APP_CONFIG.DOMAINS.DASHBOARD === 'API' ? 'Live database' : 'Unavailable'}
+            </span>
+          </p>
         </div>
-        
-        {/* STRATEGIC FILTER BAR */}
+
         <div className="flex flex-wrap gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
-            {/* Time Filter */}
-            <div className="relative group">
-                <div className="flex items-center px-3 py-2 bg-slate-50 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 group-hover:border-blue-300 transition-all cursor-pointer">
-                    <Calendar size={14} className="mr-2 text-slate-400"/>
-                    {timeRange === 'ALL' ? 'All Time' : timeRange.replace('_', ' ')}
-                </div>
-                <select 
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    value={timeRange}
-                    onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-                >
-                    <option value="ALL">All Time</option>
-                    <option value="LAST_30">Last 30 Days</option>
-                    <option value="THIS_QUARTER">This Quarter</option>
-                    <option value="YTD">Year to Date</option>
-                </select>
+          <div className="relative group">
+            <div className="flex items-center px-3 py-2 bg-slate-50 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 group-hover:border-blue-300 transition-all cursor-pointer">
+              <Calendar size={14} className="mr-2 text-slate-400" />
+              {timeRange === 'ALL' ? 'All Time' : timeRange.replace('_', ' ')}
             </div>
-
-            {/* Program Filter */}
-            <div className="relative group">
-                <div className="flex items-center px-3 py-2 bg-slate-50 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 group-hover:border-blue-300 transition-all cursor-pointer">
-                    <Layers size={14} className="mr-2 text-slate-400"/>
-                    {selectedProgram === 'ALL' ? 'All Programs' : selectedProgram}
-                </div>
-                <select 
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    value={selectedProgram}
-                    onChange={(e) => setSelectedProgram(e.target.value)}
-                >
-                    <option value="ALL">All Programs</option>
-                    {uniquePrograms.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-            </div>
-
-            {/* Region Filter */}
-            <div className="relative group">
-                <div className="flex items-center px-3 py-2 bg-slate-50 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 group-hover:border-blue-300 transition-all cursor-pointer">
-                    <Globe size={14} className="mr-2 text-slate-400"/>
-                    {selectedRegion === 'ALL' ? 'Global' : selectedRegion === 'INTL' ? 'International' : 'Domestic'}
-                </div>
-                <select 
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    value={selectedRegion}
-                    onChange={(e) => setSelectedRegion(e.target.value)}
-                >
-                    <option value="ALL">Global View</option>
-                    <option value="DOMESTIC">Indonesia Only</option>
-                    <option value="INTL">International</option>
-                </select>
-            </div>
-            
-            <button 
-                onClick={() => { setTimeRange('ALL'); setSelectedProgram('ALL'); setSelectedRegion('ALL'); }}
-                className="px-3 py-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                title="Reset Filters"
+            <select
+              className="absolute inset-0 opacity-0 cursor-pointer"
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+              disabled={loading}
             >
-                <Filter size={14} />
-            </button>
+              <option value="ALL">All Time</option>
+              <option value="LAST_30">Last 30 Days</option>
+              <option value="THIS_QUARTER">This Quarter</option>
+              <option value="YTD">Year to Date</option>
+            </select>
+          </div>
+
+          <div className="relative group">
+            <div className="flex items-center px-3 py-2 bg-slate-50 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 group-hover:border-blue-300 transition-all cursor-pointer">
+              <Layers size={14} className="mr-2 text-slate-400" />
+              {selectedProgram === 'ALL' ? 'All Programs' : selectedProgram}
+            </div>
+            <select
+              className="absolute inset-0 opacity-0 cursor-pointer"
+              value={selectedProgram}
+              onChange={(e) => setSelectedProgram(e.target.value)}
+              disabled={loading}
+            >
+              <option value="ALL">All Programs</option>
+              {uniquePrograms.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="relative group">
+            <div className="flex items-center px-3 py-2 bg-slate-50 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 group-hover:border-blue-300 transition-all cursor-pointer">
+              <Globe size={14} className="mr-2 text-slate-400" />
+              {selectedRegion === 'ALL'
+                ? 'Global'
+                : selectedRegion === 'INTL'
+                  ? 'International'
+                  : 'Domestic'}
+            </div>
+            <select
+              className="absolute inset-0 opacity-0 cursor-pointer"
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value as RegionFilter)}
+              disabled={loading}
+            >
+              <option value="ALL">Global View</option>
+              <option value="DOMESTIC">Indonesia Only</option>
+              <option value="INTL">International</option>
+            </select>
+          </div>
+
+          <button
+            onClick={() => {
+              setTimeRange('ALL');
+              setSelectedProgram('ALL');
+              setSelectedRegion('ALL');
+            }}
+            className="px-3 py-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            title="Reset Filters"
+            disabled={loading}
+          >
+            <Filter size={14} />
+          </button>
         </div>
       </div>
 
-      {/* 2. OPERATIONAL KPIs (The "Now") */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {canViewMembers('READ') ? (
-            <StatCard title="Active Members" value={filteredMembers.length} change="+12%" isPositive={true} icon={<Users className="text-blue-600" size={24} />} color="bg-blue-50" />
-        ) : (
-            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 border-dashed flex flex-col items-center justify-center text-slate-400"><Lock size={20} className="mb-2" /><span className="text-xs font-medium">Locked</span></div>
-        )}
+      {error && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <p>{error}</p>
+        </div>
+      )}
 
-        {canViewFinance('READ') ? (
-            <StatCard title="Revenue (Est)" value={formatIDR(totalRevenueEstimate)} change={`${filteredMembers.length} members`} isPositive={true} icon={<DollarSign className="text-emerald-600" size={24} />} color="bg-emerald-50" />
-        ) : (
-            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 border-dashed flex flex-col items-center justify-center text-slate-400"><Lock size={20} className="mb-2" /><span className="text-xs font-medium">Locked</span></div>
-        )}
+      {loading && !data && !error && (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
+          Loading dashboard metrics…
+        </div>
+      )}
 
-        <StatCard title="Impact Scholarships" value={scholarshipCount} change={`${((scholarshipCount / filteredMembers.length || 0) * 100).toFixed(1)}%`} icon={<Award className="text-purple-600" size={24} />} color="bg-purple-50" />
-        <StatCard title="Engagement Score" value={`${engagementScore.toFixed(1)}%`} change={`${nonGuestMembers} active lifecycle`} isPositive={engagementScore >= 50} icon={<Activity className="text-amber-600" size={24} />} color="bg-amber-50" />
-      </div>
+      <div className={`space-y-6 sm:space-y-8 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {canViewMembers('READ') ? (
+            <StatCard
+              title="Active Members"
+              value={members?.total ?? 0}
+              change={memberMom}
+              isPositive={(members?.momPercent ?? 0) >= 0}
+              icon={<Users className="text-blue-600" size={24} />}
+              color="bg-blue-50"
+            />
+          ) : (
+            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 border-dashed flex flex-col items-center justify-center text-slate-400">
+              <Lock size={20} className="mb-2" />
+              <span className="text-xs font-medium">Locked</span>
+            </div>
+          )}
 
-      {/* 3. STRATEGIC INSIGHT CARDS (The "Future") */}
-      <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2 mt-6 sm:mt-8 mb-3 sm:mb-4">
-          <Zap size={14} className="shrink-0 text-yellow-500"/> Strategic Health Indicators
-      </h3>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* LTV CARD */}
+          {canViewFinance('READ') ? (
+            <StatCard
+              title="Paid Revenue"
+              value={formatIDR(finance?.totalPaidRevenue ?? 0)}
+              change={revenueMom}
+              isPositive={(finance?.momPercent ?? 0) >= 0}
+              icon={<DollarSign className="text-emerald-600" size={24} />}
+              color="bg-emerald-50"
+            />
+          ) : (
+            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 border-dashed flex flex-col items-center justify-center text-slate-400">
+              <Lock size={20} className="mb-2" />
+              <span className="text-xs font-medium">Locked</span>
+            </div>
+          )}
+
+          <StatCard
+            title="Impact Scholarships"
+            value={members?.scholarshipCount ?? 0}
+            change={`${(members?.scholarshipRate ?? 0).toFixed(1)}%`}
+            icon={<Award className="text-purple-600" size={24} />}
+            color="bg-purple-50"
+          />
+          <StatCard
+            title="Engagement Score"
+            value={`${(members?.engagementScore ?? 0).toFixed(1)}%`}
+            change={`${members?.nonGuestCount ?? 0} active lifecycle`}
+            isPositive={(members?.engagementScore ?? 0) >= 50}
+            icon={<Activity className="text-amber-600" size={24} />}
+            color="bg-amber-50"
+          />
+        </div>
+
+        <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2 mt-6 sm:mt-8 mb-3 sm:mb-4">
+          <Zap size={14} className="shrink-0 text-yellow-500" /> Strategic Health
+          Indicators
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><TrendingUp size={100} /></div>
-              <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><BarChart3 size={18}/></div>
-                      <span className="text-xs font-bold text-slate-500 uppercase">Customer Lifetime Value</span>
-                  </div>
-                  <div className="text-2xl font-bold text-slate-900">{formatIDR(avgLTV)}</div>
-                  <div className="flex items-center gap-2 mt-3">
-                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded flex items-center"><ArrowUpRight size={12} className="mr-1"/> High Value</span>
-                      <span className="text-[10px] text-slate-400">Avg. revenue per member</span>
-                  </div>
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <TrendingUp size={100} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <BarChart3 size={18} />
+                </div>
+                <span className="text-xs font-bold text-slate-500 uppercase">
+                  Customer Lifetime Value
+                </span>
               </div>
+              <div className="text-2xl font-bold text-slate-900">
+                {canViewFinance('READ')
+                  ? formatIDR(finance?.avgLtv ?? 0)
+                  : '—'}
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded flex items-center">
+                  <ArrowUpRight size={12} className="mr-1" /> Paid orders
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {canViewFinance('READ')
+                    ? `${finance?.payingCustomerCount ?? 0} unique payers`
+                    : 'Finance access required'}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* RETENTION CARD */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={100} /></div>
-              <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                      <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Target size={18}/></div>
-                      <span className="text-xs font-bold text-slate-500 uppercase">Retention Rate</span>
-                  </div>
-                  <div className="text-2xl font-bold text-slate-900">{retentionRate.toFixed(1)}%</div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
-                      <div className="bg-blue-600 h-full rounded-full" style={{width: `${retentionRate}%`}}></div>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-2">Active members vs Total enrolled</p>
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <Users size={100} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                  <Target size={18} />
+                </div>
+                <span className="text-xs font-bold text-slate-500 uppercase">
+                  Retention Rate
+                </span>
               </div>
+              <div className="text-2xl font-bold text-slate-900">
+                {(members?.retentionRate ?? 0).toFixed(1)}%
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
+                <div
+                  className="bg-blue-600 h-full rounded-full"
+                  style={{ width: `${members?.retentionRate ?? 0}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">
+                N-Tag received vs total enrolled
+              </p>
+            </div>
           </div>
 
-          {/* Qualification Health (derived from real members data) */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign size={100} /></div>
-              <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                      <div className="p-2 bg-white/10 rounded-lg text-yellow-400"><Zap size={18}/></div>
-                      <span className="text-xs font-bold text-slate-300 uppercase">Qualification Health</span>
-                  </div>
-                  <div className="text-2xl font-bold">{qualifiedRate.toFixed(1)}%</div>
-                  <p className="text-xs text-slate-400 mt-1">Qualified tag ratio from filtered members</p>
-                  <div className="mt-4 flex gap-2">
-                      <div className="flex-1 bg-white/10 rounded px-2 py-1 text-center">
-                          <div className="text-[9px] text-slate-400 uppercase">Qualified</div>
-                          <div className="text-xs font-bold">{qualifiedMembers}</div>
-                      </div>
-                      <div className="flex-1 bg-white/10 rounded px-2 py-1 text-center">
-                          <div className="text-[9px] text-slate-400 uppercase">Total</div>
-                          <div className="text-xs font-bold">{filteredMembers.length}</div>
-                      </div>
-                  </div>
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <DollarSign size={100} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-white/10 rounded-lg text-yellow-400">
+                  <Zap size={18} />
+                </div>
+                <span className="text-xs font-bold text-slate-300 uppercase">
+                  Qualification Health
+                </span>
               </div>
+              <div className="text-2xl font-bold">
+                {(members?.qualifiedRate ?? 0).toFixed(1)}%
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Qualified tag ratio from filtered members
+              </p>
+              <div className="mt-4 flex gap-2">
+                <div className="flex-1 bg-white/10 rounded px-2 py-1 text-center">
+                  <div className="text-[9px] text-slate-400 uppercase">Qualified</div>
+                  <div className="text-xs font-bold">{members?.qualifiedCount ?? 0}</div>
+                </div>
+                <div className="flex-1 bg-white/10 rounded px-2 py-1 text-center">
+                  <div className="text-[9px] text-slate-400 uppercase">Total</div>
+                  <div className="text-xs font-bold">{members?.total ?? 0}</div>
+                </div>
+              </div>
+            </div>
           </div>
-      </div>
+        </div>
 
-      {/* 4. CHARTS SECTION */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Growth Chart */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex justify-between items-center mb-6">
               <h3 className="font-semibold text-slate-800">Acquisition Trajectory</h3>
               <div className="flex gap-2 text-xs">
-                  <span className="flex items-center text-slate-500"><span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span> New Members</span>
+                <span className="flex items-center text-slate-500">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 mr-1" /> New Members
+                </span>
               </div>
-          </div>
-          {canViewMembers('READ') ? (
+            </div>
+            {canViewMembers('READ') ? (
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={growthData}>
-                    <defs>
-                      <linearGradient id="colorMembers" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} dy={10} minTickGap={30} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'}} />
-                    <Area type="monotone" dataKey="members" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorMembers)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {growthData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={growthData}>
+                      <defs>
+                        <linearGradient id="colorMembers" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#64748b', fontSize: 10 }}
+                        dy={10}
+                        minTickGap={30}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#64748b', fontSize: 10 }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: '12px',
+                          border: 'none',
+                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="members"
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#colorMembers)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-slate-400">
+                    No member acquisitions for the selected filters.
+                  </div>
+                )}
               </div>
-          ) : (
+            ) : (
               <div className="h-72 flex items-center justify-center bg-slate-50 rounded-lg border border-slate-100">
-                  <div className="text-center text-slate-400">
-                      <Users size={32} className="mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Restricted View</p>
-                  </div>
+                <div className="text-center text-slate-400">
+                  <Users size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Restricted View</p>
+                </div>
               </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Category Breakdown */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-          <h3 className="font-semibold text-slate-800 mb-2">Member Distribution</h3>
-          {canViewMembers('READ') ? (
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+            <h3 className="font-semibold text-slate-800 mb-2">Member Distribution</h3>
+            {canViewMembers('READ') ? (
               <div className="flex-1 min-h-[250px] relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={categoryData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                      {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'}} />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{fontSize: '10px'}}/>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-          ) : (
-              <div className="flex-1 flex items-center justify-center bg-slate-50 rounded-lg border border-slate-100">
-                  <div className="text-center text-slate-400">
-                      <Lock size={32} className="mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Restricted</p>
+                {categoryData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${entry.name}`}
+                            fill={COLORS[index % COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: '12px',
+                          border: 'none',
+                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        }}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={36}
+                        iconType="circle"
+                        iconSize={8}
+                        wrapperStyle={{ fontSize: '10px' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-slate-400">
+                    No members for the selected filters.
                   </div>
+                )}
               </div>
-          )}
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-slate-50 rounded-lg border border-slate-100">
+                <div className="text-center text-slate-400">
+                  <Lock size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Restricted</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

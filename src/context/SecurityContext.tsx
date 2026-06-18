@@ -7,6 +7,7 @@ import { PermissionService } from '../services/permissionService';
 import { useAuth } from './AuthContext';
 import { UserRole } from '../types/index';
 import { getWorkspaceToken } from '../lib/workspaceAuthToken';
+import { customRoleGrantsResource } from '../constants/customRoleFeatures';
 
 interface SecurityContextType {
   roles: Role[];
@@ -185,33 +186,15 @@ export const useAccess = (resourceId: string): ResourceAccess => {
         const customProfileActive =
             !!customRole && !!activeCustomRoleId && customRole.id === activeCustomRoleId;
         if (customProfileActive) {
-            if (!customRole.allowedFeatures.includes(resourceId)) {
+            if (!customRoleGrantsResource(customRole.allowedFeatures, resourceId)) {
                 return defaultAccess;
             }
-            // Custom persona should follow selected features directly, even if
-            // base built-in role does not define this resource in DEFAULT_ROLES.
-            const basePolicy = currentRole.policies?.[resourceId];
-            if (!basePolicy) {
-                return {
-                    can: () => true,
-                    scope: 'ALL',
-                    limit: Infinity,
-                    policy: { resourceId, accessLevel: 'FULL', scope: 'ALL' },
-                };
-            }
-            const levels: Record<AccessLevel, number> = {
-                NONE: 0,
-                READ: 1,
-                WRITE: 2,
-                FULL: 3,
-            };
-            const userLevelScore = levels[basePolicy.accessLevel] || 0;
+            // Selected custom views grant full resource access (not base-role READ caps).
             return {
-                can: (requiredLevel: AccessLevel) =>
-                    userLevelScore >= (levels[requiredLevel] || 99),
-                scope: basePolicy.scope,
-                limit: basePolicy.authorityLimit?.maxAmount || 0,
-                policy: basePolicy,
+                can: () => true,
+                scope: 'ALL',
+                limit: Infinity,
+                policy: { resourceId, accessLevel: 'FULL', scope: 'ALL' },
             };
         }
 

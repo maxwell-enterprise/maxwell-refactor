@@ -149,6 +149,8 @@ export const APP_CONFIG = {
     CONTRACTS:      resolveDomainMode(process.env.NEXT_PUBLIC_CONTRACTS_BACKEND),
     /** Youth Impact dashboard → Nest `/fe/youth-impact/metrics` when API */
     YOUTH:          resolveDomainMode(process.env.NEXT_PUBLIC_YOUTH_BACKEND),
+    /** Executive Cockpit → Nest `/fe/dashboard/executive` when API */
+    DASHBOARD:      resolveDomainMode(process.env.NEXT_PUBLIC_DASHBOARD_BACKEND),
   },
 
   // FEATURE FLAGS

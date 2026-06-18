@@ -46,3 +46,18 @@ export const CUSTOM_VIEW_FEATURES: readonly CustomViewFeature[] = [
 
 export const CUSTOM_VIEW_FEATURE_BY_VIEW: ReadonlyMap<ViewState, CustomViewFeature> =
   new Map(CUSTOM_VIEW_FEATURES.map((feature) => [feature.view, feature]));
+
+/** Custom roles store view ids (`view_cms_admin`); IAM resources use slugs (`cms_content`). */
+export function customRoleGrantsResource(
+  allowedFeatures: readonly string[],
+  resourceId: string,
+): boolean {
+  if (allowedFeatures.includes(resourceId)) {
+    return true;
+  }
+  return CUSTOM_VIEW_FEATURES.some(
+    (feature) =>
+      feature.resourceId === resourceId &&
+      allowedFeatures.includes(feature.id),
+  );
+}

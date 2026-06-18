@@ -5,9 +5,10 @@ import { ContentPost, ContentType, ContentStatus } from '../types/index';
 import { STORE_PRODUCTS } from '../constants';
 import { useToast } from '../context/ToastContext';
 import { useAccess } from '../context/SecurityContext';
+import { useDialog } from '../context/DialogContext';
 import { 
     LayoutTemplate, PenTool, BarChart3, Plus, Search, 
-    Edit3, Save, Sparkles, Image as ImageIcon, Link
+    Edit3, Save, Sparkles, Image as ImageIcon, Link, Trash2
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import RichTextEditor from './communication/RichTextEditor'; // REUSED COMPONENT
@@ -27,6 +28,7 @@ const createEmptyEditingPost = (): Partial<ContentPost> => ({
 
 const CMSAdmin: React.FC = () => {
     const { showToast } = useToast();
+    const { confirm } = useDialog();
     const { can } = useAccess('cms_content');
     const canManageContent = can('WRITE');
     const [posts, setPosts] = useState<ContentPost[]>([]);
@@ -91,6 +93,32 @@ const CMSAdmin: React.FC = () => {
         }
         await loadContent();
         setActiveTab('LIST');
+    };
+
+    const handleDeletePost = async (post: ContentPost) => {
+        if (!canManageContent) {
+            showToast('You do not have permission to delete content.', 'error');
+            return;
+        }
+        const ok = await confirm({
+            title: 'Delete content?',
+            message: `"${post.title}" will be permanently removed from the portal.`,
+            confirmLabel: 'Delete',
+            variant: 'danger',
+        });
+        if (!ok) return;
+
+        try {
+            await ContentService.deleteContent(post.id);
+            if (editingPost.id === post.id) {
+                setEditingPost(createEmptyEditingPost());
+                setActiveTab('LIST');
+            }
+            await loadContent();
+            showToast('Content deleted', 'success');
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Failed to delete content', 'error');
+        }
     };
 
     const handleAiGenerate = async () => {
@@ -193,7 +221,10 @@ const CMSAdmin: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="px-3 sm:px-5 py-3 sm:py-4 text-right align-top">
-                                    <button type="button" onClick={() => handleEditPost(post)} disabled={!canManageContent} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors inline-flex touch-target sm:min-h-0 sm:min-w-0 disabled:opacity-40 disabled:cursor-not-allowed"><Edit3 size={18}/></button>
+                                    <div className="inline-flex items-center gap-1">
+                                        <button type="button" onClick={() => handleEditPost(post)} disabled={!canManageContent} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors inline-flex touch-target sm:min-h-0 sm:min-w-0 disabled:opacity-40 disabled:cursor-not-allowed" title="Edit"><Edit3 size={18}/></button>
+                                        <button type="button" onClick={() => void handleDeletePost(post)} disabled={!canManageContent} className="text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors inline-flex touch-target sm:min-h-0 sm:min-w-0 disabled:opacity-40 disabled:cursor-not-allowed" title="Delete"><Trash2 size={18}/></button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -360,11 +391,23 @@ const CMSAdmin: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex gap-3 pt-2">
-                    <button onClick={() => setActiveTab('LIST')} className="flex-1 py-2 border border-slate-300 rounded-lg text-sm text-slate-600 font-bold hover:bg-slate-50">Cancel</button>
-                    <button onClick={handleSave} disabled={!canManageContent} className="flex-[2] py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
-                        <Save size={16} className="mr-2" /> Save Content
-                    </button>
+                <div className="flex flex-col gap-3 pt-2">
+                    {editingPost.id && (
+                        <button
+                            type="button"
+                            onClick={() => void handleDeletePost(editingPost as ContentPost)}
+                            disabled={!canManageContent}
+                            className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Trash2 size={16} /> Delete Content
+                        </button>
+                    )}
+                    <div className="flex gap-3">
+                        <button onClick={() => setActiveTab('LIST')} className="flex-1 py-2 border border-slate-300 rounded-lg text-sm text-slate-600 font-bold hover:bg-slate-50">Cancel</button>
+                        <button onClick={handleSave} disabled={!canManageContent} className="flex-[2] py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Save size={16} className="mr-2" /> Save Content
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
