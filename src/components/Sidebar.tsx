@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { 
   LayoutDashboard, Users, CalendarDays, Store, Banknote, 
   Target, Mail, Trophy, FileText, CheckSquare, Database, 
+  ClipboardList,
   LayoutTemplate, ShieldAlert, BarChart2, School, Percent, CircuitBoard,
   UserCircle, Briefcase, GraduationCap, Settings, LogOut, Sparkles, ShoppingBag,
   MonitorPlay, ScanLine, Grid3X3, Award, Tag, HardDrive, DollarSign
@@ -126,6 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: ViewState.OPERATIONS, label: 'Ops Center', icon: <CircuitBoard size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS] },
         { id: ViewState.EVENTS_ADMIN, label: 'Event Mgmt', icon: <CalendarDays size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS] },
+        { id: ViewState.FORMS_ADMIN, label: 'Forms & Quizzes', icon: <ClipboardList size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS] },
         { id: ViewState.CERTIFICATION_GRID, label: 'Cert. Progress', icon: <Grid3X3 size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.FACILITATOR] },
         { id: ViewState.CERTIFICATION_RULES, label: 'Cert. Rules', icon: <Award size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS] },
         { id: ViewState.TAG_MANAGEMENT, label: 'Tag Master', icon: <Tag size={18} />, resourceId: 'ops_event_mgmt', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.MARKETING] },
@@ -308,6 +310,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4">Learning</div>
                     <button onClick={() => handleNavClick(ViewState.ENABLEMENT)} disabled={profileGateActive} className={navButtonClass(ViewState.ENABLEMENT, !profileGateActive)}>
                         <GraduationCap size={18} className="mr-3" /> Success Toolkit
+                    </button>
+                    <button onClick={() => handleNavClick(ViewState.MY_FORMS)} disabled={profileGateActive} className={navButtonClass(ViewState.MY_FORMS, !profileGateActive)}>
+                        <ClipboardList size={18} className="mr-3" /> My Quizzes & Forms
                     </button>
                     <button onClick={() => handleNavClick(ViewState.AI_COACH)} disabled={profileGateActive} className={navButtonClass(ViewState.AI_COACH, !profileGateActive)}>
                         <Sparkles size={18} className="mr-3" /> AI Coach

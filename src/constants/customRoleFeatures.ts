@@ -30,6 +30,7 @@ export const CUSTOM_VIEW_FEATURES: readonly CustomViewFeature[] = [
   { id: toViewFeatureId(ViewState.YOUTH_ADMIN), view: ViewState.YOUTH_ADMIN, label: 'Youth Impact', resourceId: null },
   { id: toViewFeatureId(ViewState.OPERATIONS), view: ViewState.OPERATIONS, label: 'Ops Center', resourceId: 'ops_event_mgmt' },
   { id: toViewFeatureId(ViewState.EVENTS_ADMIN), view: ViewState.EVENTS_ADMIN, label: 'Event Mgmt', resourceId: 'ops_event_mgmt' },
+  { id: toViewFeatureId(ViewState.FORMS_ADMIN), view: ViewState.FORMS_ADMIN, label: 'Forms & Quizzes', resourceId: 'ops_event_mgmt' },
   { id: toViewFeatureId(ViewState.CERTIFICATION_GRID), view: ViewState.CERTIFICATION_GRID, label: 'Cert. Progress', resourceId: 'ops_event_mgmt' },
   { id: toViewFeatureId(ViewState.CERTIFICATION_RULES), view: ViewState.CERTIFICATION_RULES, label: 'Cert. Rules', resourceId: 'ops_event_mgmt' },
   { id: toViewFeatureId(ViewState.TAG_MANAGEMENT), view: ViewState.TAG_MANAGEMENT, label: 'Tag Master', resourceId: 'ops_event_mgmt' },
