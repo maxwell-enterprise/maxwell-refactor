@@ -1,11 +1,29 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { WalletItem, GiftAllocation } from '../../types/access';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { WalletItem } from '../../types/access';
 import { EntitlementService } from '../../services/entitlementService';
 import { WhatsAppService } from '../../services/whatsappService';
-import { X, Send, Trash2, CheckCircle, Info, MessageSquare, Mail, RotateCcw, User, Loader2, List, UserPlus } from 'lucide-react';
+import {
+    X,
+    Send,
+    CheckCircle,
+    Info,
+    MessageSquare,
+    Mail,
+    RotateCcw,
+    Loader2,
+    List,
+    UserPlus,
+    Upload,
+    FileSpreadsheet,
+} from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useDialog } from '../../context/DialogContext';
+import {
+    downloadInvitationImportTemplate,
+    parseInvitationExcelFile,
+    type InvitationImportRow,
+} from './invitationExcelImport';
 
 interface TicketDistributionModalProps {
     donorId: string;
@@ -54,8 +72,10 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
 }) => {
     const { showToast } = useToast();
     const { confirm } = useDialog();
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [activeTab, setActiveTab] = useState<'ASSIGN' | 'HISTORY'>('ASSIGN');
     
     // Unified Row Data Structure
@@ -143,16 +163,122 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
 
     const updateRow = (idx: number, field: string, value: string) => {
         const next = [...rows];
-        // We only allow editing rows that are in the filtered view, but state holds ALL rows.
-        // We need to find the correct index in the main 'rows' array corresponding to the view.
-        // Simplified: The UI maps directly if we pass the correct object reference, but here we use index of filtered.
-        // Safer approach: update by ticketId
         const targetTicketId = assignableRows[idx].ticketId;
-        const mainIndex = rows.findIndex(r => r.ticketId === targetTicketId);
+        const mainIndex = next.findIndex(r => r.ticketId === targetTicketId);
         
         if (mainIndex >= 0) {
-            (next[mainIndex] as any)[field] = value;
+            const fieldKey = field as 'recipientName' | 'recipientEmail' | 'recipientPhone';
+            next[mainIndex] = { ...next[mainIndex], [fieldKey]: value };
             setRows(next);
+        }
+    };
+
+    const applyImportedRows = (imported: InvitationImportRow[]) => {
+        const slots = rows.filter((r) => r.status === 'AVAILABLE');
+        const fillCount = Math.min(imported.length, slots.length);
+        const next = [...rows];
+
+        for (let i = 0; i < fillCount; i += 1) {
+            const ticketId = slots[i].ticketId;
+            const mainIndex = next.findIndex((r) => r.ticketId === ticketId);
+            if (mainIndex < 0) continue;
+
+            next[mainIndex] = {
+                ...next[mainIndex],
+                recipientName: imported[i].name,
+                recipientEmail: imported[i].email,
+                recipientPhone: imported[i].phone,
+            };
+        }
+
+        setRows(next);
+        return { fillCount, slotCount: slots.length };
+    };
+
+    const handleDownloadTemplate = () => {
+        downloadInvitationImportTemplate();
+        showToast('Template Excel diunduh.', 'info');
+    };
+
+    const handleImportClick = () => {
+        if (assignableRows.length === 0) {
+            showToast('Tidak ada tiket yang bisa di-assign.', 'error');
+            return;
+        }
+        fileInputRef.current?.click();
+    };
+
+    const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (event.target) {
+            event.target.value = '';
+        }
+        if (!file) return;
+
+        if (assignableRows.length === 0) {
+            showToast('Tidak ada tiket yang bisa di-assign.', 'error');
+            return;
+        }
+
+        const approved = await confirm({
+            title: 'Import dari Excel?',
+            message:
+                'Data recipient pada semua baris tiket yang tersedia akan ditimpa dengan isi file Excel. Lanjutkan?',
+            variant: 'warning',
+            confirmLabel: 'Ya, Import',
+            cancelLabel: 'Batal',
+            icon: <Upload size={24} />,
+        });
+        if (!approved) return;
+
+        setIsImporting(true);
+        try {
+            const { rows: imported, skippedEmpty, skippedInvalidEmail } =
+                await parseInvitationExcelFile(file);
+
+            if (imported.length === 0) {
+                showToast(
+                    'Tidak ada baris valid untuk diimport. Pastikan kolom name, email, dan phone terisi dengan benar.',
+                    'error',
+                );
+                return;
+            }
+
+            const { fillCount, slotCount } = applyImportedRows(imported);
+
+            const warnings: string[] = [];
+            if (imported.length > slotCount) {
+                warnings.push(
+                    `${imported.length - slotCount} baris Excel diabaikan (tiket tidak cukup).`,
+                );
+            }
+            if (skippedInvalidEmail > 0) {
+                warnings.push(
+                    `${skippedInvalidEmail} baris dilewati karena email tidak valid.`,
+                );
+            }
+            if (skippedEmpty > 0) {
+                warnings.push(`${skippedEmpty} baris kosong dilewati.`);
+            }
+
+            if (warnings.length > 0) {
+                showToast(
+                    `${fillCount} baris diisi. ${warnings.join(' ')}`,
+                    'info',
+                );
+            } else {
+                showToast(`${fillCount} baris berhasil diimport dari Excel.`, 'success');
+            }
+        } catch (e) {
+            console.error('[TicketDistributionModal] import failed:', e);
+            showToast(
+                e instanceof Error
+                    ? e.message
+                    : 'Gagal membaca file Excel. Gunakan format .xlsx atau .xls.',
+                'error',
+            );
+        } finally {
+            setIsImporting(false);
         }
     };
 
@@ -257,22 +383,60 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                     </button>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex bg-slate-100 p-1 mx-8 mt-4 rounded-xl border border-slate-200 w-fit">
-                    <button 
-                        onClick={() => setActiveTab('ASSIGN')}
-                        className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'ASSIGN' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <UserPlus size={16} className="mr-2"/> Assign New
-                        <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{assignableRows.length}</span>
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('HISTORY')}
-                        className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <List size={16} className="mr-2"/> Invited History
-                        <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{historyRows.length}</span>
-                    </button>
+                {/* Tabs + Excel import (Assign New only) */}
+                <div className="mx-8 mt-4 flex items-center justify-between gap-4">
+                    <div className="flex w-fit rounded-xl border border-slate-200 bg-slate-100 p-1">
+                        <button 
+                            onClick={() => setActiveTab('ASSIGN')}
+                            className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'ASSIGN' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <UserPlus size={16} className="mr-2"/> Assign New
+                            <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{assignableRows.length}</span>
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('HISTORY')}
+                            className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <List size={16} className="mr-2"/> Invited History
+                            <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{historyRows.length}</span>
+                        </button>
+                    </div>
+
+                    {activeTab === 'ASSIGN' && (
+                        <div className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                hidden
+                                accept=".xlsx,.xls"
+                                onChange={handleImportFile}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleDownloadTemplate}
+                                disabled={isImporting}
+                                className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-indigo-600 disabled:opacity-50"
+                                title="Download Excel template"
+                                aria-label="Download invitation import template"
+                            >
+                                <FileSpreadsheet size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleImportClick}
+                                disabled={isImporting || assignableRows.length === 0}
+                                className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-indigo-600 disabled:opacity-50"
+                                title="Import from Excel"
+                                aria-label="Import invitations from Excel"
+                            >
+                                {isImporting ? (
+                                    <Loader2 size={18} className="animate-spin" />
+                                ) : (
+                                    <Upload size={18} />
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex-1 overflow-auto bg-slate-50/50 p-8">
