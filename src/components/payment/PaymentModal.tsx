@@ -421,14 +421,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   /** Recompute line discounts when the cart changes but a code is already applied. */
   useEffect(() => {
+    if (isLoading) return;
     const code = appliedDiscount?.discount.code?.trim();
     if (!code || cart.length === 0) return;
     void applyVoucherCode(code, appliedDiscountOrigin ?? 'manual');
-  }, [cart, appliedDiscount?.discount.code, appliedDiscountOrigin, applyVoucherCode]);
+  }, [cart, appliedDiscount?.discount.code, appliedDiscountOrigin, applyVoucherCode, isLoading]);
 
   /** Realtime: if someone else exhausts the quota / admin disables the voucher while this user is at
-   *  checkout, re-run validation so the displayed totals stay honest. Powered by postgres_changes. */
-  useVoucherRealtime(isOpen && !!appliedDiscount, () => {
+   *  checkout, re-run validation so the displayed totals stay honest. Paused while payment is in-flight. */
+  useVoucherRealtime(isOpen && !!appliedDiscount && !isLoading, () => {
     const code = appliedDiscount?.discount.code?.trim();
     if (!code) return;
     void applyVoucherCode(code, appliedDiscountOrigin ?? 'manual');
@@ -445,6 +446,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     flushSync(() => {
       setIsLoading(true);
       setErrorMessage(null);
+      setVoucherError('');
     });
     snapPayInFlightRef.current = true;
 
@@ -806,7 +808,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 relative">
+        {isLoading && (
+          <div
+            className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div className="flex flex-col items-center gap-2 text-slate-700">
+              <Loader2 size={32} className="animate-spin" aria-hidden />
+              <span className="text-sm font-semibold">Processing payment…</span>
+            </div>
+          </div>
+        )}
+
         {/* Show backend/payment errors in the only visible step (Summary). */}
         {errorMessage && (
           <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2 text-sm text-red-700 animate-pulse">
@@ -1038,11 +1053,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           totalAmount < 0 ||
           isMidtransPopupOpen ||
           isLoadingCheckoutConfig ||
-          isSavingCheckoutConfig
+          isSavingCheckoutConfig ||
+          isLoading
         }
         className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg flex justify-center items-center group disabled:opacity-50"
       >
-        {totalAmount === 0 ? (
+        {isLoading ? (
+          <>
+            <Loader2 size={18} className="mr-2 animate-spin" aria-hidden />
+            Processing…
+          </>
+        ) : totalAmount === 0 ? (
           <>
             Claim free
             <ChevronRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />

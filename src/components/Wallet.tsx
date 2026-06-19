@@ -181,7 +181,6 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   const hasOwnedTickets =
       ticketBuckets.SELF.length > 0 ||
       ticketBuckets.SHARING_POOL.length > 0 ||
-      ticketBuckets.SHARING_SENT.length > 0 ||
       ticketBuckets.RECEIVED_GIFT.length > 0;
   
   const creditPasses = useMemo(() => {
@@ -314,57 +313,6 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                       <span>Sharing ticket</span>
                       <span>Bulk assign</span>
                   </div>
-              </div>
-          </div>
-      );
-  };
-
-  const renderSentTicketCard = (ticket: WalletItem) => {
-      const ticketDate = formatEventDate(ticket.expiryDate);
-      const recipientEmail =
-          typeof ticket.meta?.recipientEmail === 'string' ? ticket.meta.recipientEmail : '';
-      const recipientName =
-          typeof ticket.meta?.recipientName === 'string' && ticket.meta.recipientName.trim()
-              ? ticket.meta.recipientName.trim()
-              : recipientEmail.split('@')[0] || 'Guest';
-      const isPending = ticket.status === 'PENDING_CLAIM' || ticket.status === 'GIFT_PENDING';
-      return (
-          <div
-              key={ticket.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => setViewingTicket(ticket)}
-              onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setViewingTicket(ticket);
-                  }
-              }}
-              className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-violet-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
-          >
-              <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-violet-50/70 p-5">
-                  <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-violet-200 pr-5">
-                      <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-violet-400">{ticketDate.weekday}</span>
-                      <span className="text-4xl font-black leading-none text-violet-900">{ticketDate.day}</span>
-                      <span className="mt-1 text-sm font-bold uppercase tracking-wider text-violet-400">{ticketDate.month}</span>
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-col justify-center">
-                      <span className="mb-1 inline-flex w-fit rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                          {isPending ? 'Awaiting acceptance' : 'Sent to guest'}
-                      </span>
-                      <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{ticket.title}</h3>
-                      <p className="mb-1 truncate text-xs text-slate-600">
-                          To: {recipientName}
-                          {recipientEmail ? ` (${recipientEmail})` : ''}
-                      </p>
-                  </div>
-                  <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition-transform group-hover:scale-110">
-                      <Share2 size={24} className="-translate-x-1 -translate-y-1" />
-                  </div>
-              </div>
-              <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-violet-500">
-                  <span>Sharing ticket</span>
-                  <span>{isPending ? 'Pending' : 'Delivered'}</span>
               </div>
           </div>
       );
@@ -754,14 +702,6 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                             </div>
                                         </div>
                                     )),
-                                )}
-
-                            {ticketBuckets.SHARING_SENT.length > 0 &&
-                                renderTicketSection(
-                                    <Share2 size={18} />,
-                                    'Sent to Guests',
-                                    'Tickets already assigned — waiting for recipients to accept.',
-                                    ticketBuckets.SHARING_SENT.map((ticket) => renderSentTicketCard(ticket)),
                                 )}
                         </>
                     )}
