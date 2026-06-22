@@ -2,14 +2,23 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { DataService } from '../../services/dataService';
 import { AttendanceService } from '../../services/attendanceService';
 import { EntitlementService } from '../../services/entitlementService';
+import { PaymentService } from '../../services/paymentService';
 import { Event, AttendanceRecord, WalletItem, Member, UserProfile } from '../../types/index';
-import { Search, CheckCircle2, Circle, UserCog, Calendar, Filter } from 'lucide-react';
+import { GiftAllocation } from '../../types/access';
+import { Search, CheckCircle2, Circle, UserCog, Calendar, Filter, Ticket } from 'lucide-react';
 import MemberProfilingModal from '../crm/MemberProfilingModal';
 import WhatsAppQuickAction from '../common/WhatsAppQuickAction';
 import { UserService } from '../../services/userService';
+import BuyerWalletTicketsModal from './BuyerWalletTicketsModal';
+import {
+    buildWalletBuyerRows,
+    normalizeEmail,
+    toTitleFromEmail,
+    WalletBuyerRow,
+} from './participantWalletBuyers';
 
 type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'MISSING';
-type ParticipantStatusFilter = 'NAMED_ONLY' | 'ALL' | ParticipantStatus;
+type ParticipantStatusFilter = 'NAMED_ONLY' | 'WALLET_TICKETS' | 'ALL' | ParticipantStatus;
 
 const UNNAMED_PARTICIPANT_LABEL = 'Unnamed Participant';
 type AccessMethod = 'Ticket Scan' | 'Credit Deduction';
@@ -44,17 +53,6 @@ const EMPTY_SOCIAL = {
     occupation: '',
     businessType: '',
     communities: [] as string[],
-};
-
-const normalizeEmail = (value?: string | null) => value?.trim().toLowerCase() ?? '';
-
-const toTitleFromEmail = (email?: string) => {
-    const alias = email ? email.split('@')[0].replace(/[._-]+/g, ' ') : '';
-    return alias
-        .split(' ')
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ');
 };
 
 const buildFallbackMember = (
@@ -101,6 +99,9 @@ const ParticipantManager: React.FC = () => {
     const [selectedEventId, setSelectedEventId] = useState<string>('');
     const [displaySessions, setDisplaySessions] = useState<Event[]>([]);
     const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+    const [walletBuyers, setWalletBuyers] = useState<WalletBuyerRow[]>([]);
+    const [giftAllocations, setGiftAllocations] = useState<GiftAllocation[]>([]);
+    const [selectedWalletBuyer, setSelectedWalletBuyer] = useState<WalletBuyerRow | null>(null);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterTier, setFilterTier] = useState('ALL');
@@ -134,12 +135,15 @@ const ParticipantManager: React.FC = () => {
     const loadParticipants = async (eventId: string) => {
         setLoading(true);
         try {
-            const [internalUsers, walletItems, attendanceRows, crmMembers, eventRows] = await Promise.all([
+            const [internalUsers, walletItems, attendanceRows, crmMembers, eventRows, gifts, payments] =
+                await Promise.all([
                 UserService.getAllUsers().catch(() => [] as UserProfile[]),
                 EntitlementService.getAllWalletItems(),
                 AttendanceService.getAttendance(),
                 DataService.getMembers(),
                 DataService.getEvents(),
+                EntitlementService.getAllGifts().catch(() => [] as GiftAllocation[]),
+                PaymentService.getGatewayLogs().catch(() => []),
             ]);
 
             const selectedEvent = eventRows.find((event) => event.id === eventId);
@@ -296,10 +300,22 @@ const ParticipantManager: React.FC = () => {
             });
 
             setParticipants(rows);
+            setGiftAllocations(gifts);
+            setWalletBuyers(
+                buildWalletBuyerRows({
+                    tickets,
+                    gifts,
+                    userMap,
+                    membersByEmail,
+                    payments,
+                }),
+            );
         } finally {
             setLoading(false);
         }
     };
+
+    const isWalletTicketsMode = filterStatus === 'WALLET_TICKETS';
 
     const selectedEvent = events.find((event) => event.id === selectedEventId);
     const tierOptions = useMemo(
@@ -338,6 +354,17 @@ const ParticipantManager: React.FC = () => {
             }),
         [participants, searchTerm, filterTier, filterGate, filterStatus],
     );
+
+    const filteredWalletBuyers = useMemo(() => {
+        const q = searchTerm.trim().toLowerCase();
+        if (!q) return walletBuyers;
+        return walletBuyers.filter(
+            (row) =>
+                row.buyerName.toLowerCase().includes(q) ||
+                row.buyerEmail.toLowerCase().includes(q) ||
+                row.sourceUserId.toLowerCase().includes(q),
+        );
+    }, [walletBuyers, searchTerm]);
 
     const formatStatus = (status: ParticipantStatus) => {
         if (status === 'CHECKED_IN') return 'Checked-In';
@@ -382,9 +409,10 @@ const ParticipantManager: React.FC = () => {
                             />
                         </div>
                         <select
-                            className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold outline-none"
+                            className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             value={filterTier}
                             onChange={(e) => setFilterTier(e.target.value)}
+                            disabled={isWalletTicketsMode}
                         >
                             <option value="ALL">All Tiers</option>
                             {tierOptions.map((tier) => (
@@ -394,9 +422,10 @@ const ParticipantManager: React.FC = () => {
                             ))}
                         </select>
                         <select
-                            className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold outline-none"
+                            className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             value={filterGate}
                             onChange={(e) => setFilterGate(e.target.value)}
+                            disabled={isWalletTicketsMode}
                         >
                             <option value="ALL">All Gates</option>
                             {gateOptions.map((gate) => (
@@ -413,6 +442,7 @@ const ParticipantManager: React.FC = () => {
                             }
                         >
                             <option value="NAMED_ONLY">Named Participants</option>
+                            <option value="WALLET_TICKETS">Wallet Tickets</option>
                             <option value="ALL">All Status</option>
                             <option value="REGISTERED">Registered</option>
                             <option value="CHECKED_IN">Checked-In</option>
@@ -423,7 +453,10 @@ const ParticipantManager: React.FC = () => {
 
                 <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                     <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-semibold border border-slate-200">
-                        <Filter size={12} /> {filteredRows.length} participants
+                        <Filter size={12} />{' '}
+                        {isWalletTicketsMode
+                            ? `${filteredWalletBuyers.length} purchasers`
+                            : `${filteredRows.length} participants`}
                     </span>
                     {selectedEvent && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-semibold border border-slate-200">
@@ -436,6 +469,68 @@ const ParticipantManager: React.FC = () => {
             <div className="flex-1 overflow-auto">
                 {loading ? (
                     <div className="p-8 text-center text-sm text-slate-400">Loading participants...</div>
+                ) : isWalletTicketsMode ? (
+                    filteredWalletBuyers.length === 0 ? (
+                        <div className="p-8 text-center text-sm text-slate-400">
+                            No ticket purchasers found for this event.
+                        </div>
+                    ) : (
+                        <table className="w-full min-w-[900px] text-left text-xs">
+                            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 font-bold text-slate-500">
+                                <tr>
+                                    <th className="p-3">Purchaser</th>
+                                    <th className="p-3">Total Tickets</th>
+                                    <th className="p-3">Self</th>
+                                    <th className="p-3" title="Giftable tickets not yet assigned">
+                                        Ready
+                                    </th>
+                                    <th className="p-3" title="Assigned — awaiting recipient claim">
+                                        Sent
+                                    </th>
+                                    <th className="p-3">Claimed</th>
+                                    <th className="p-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {filteredWalletBuyers.map((row) => (
+                                    <tr
+                                        key={row.sourceUserId}
+                                        className="cursor-pointer transition-colors hover:bg-indigo-50/60"
+                                        onClick={() => setSelectedWalletBuyer(row)}
+                                    >
+                                        <td className="p-3">
+                                            <div className="font-bold text-slate-900">{row.buyerName}</div>
+                                            {row.buyerEmail ? (
+                                                <div className="text-[10px] text-slate-500">{row.buyerEmail}</div>
+                                            ) : null}
+                                        </td>
+                                        <td className="p-3">
+                                            <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 font-bold text-indigo-700">
+                                                <Ticket size={12} />
+                                                {row.ticketCount}
+                                            </span>
+                                        </td>
+                                        <td className="p-3 text-slate-700">{row.selfCount}</td>
+                                        <td className="p-3 text-slate-700">{row.poolCount}</td>
+                                        <td className="p-3 text-slate-700">{row.pendingShareCount}</td>
+                                        <td className="p-3 text-slate-700">{row.claimedCount}</td>
+                                        <td className="p-3 text-right">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedWalletBuyer(row);
+                                                }}
+                                                className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700"
+                                            >
+                                                View tickets
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )
                 ) : filteredRows.length === 0 ? (
                     <div className="p-8 text-center text-sm text-slate-400">No participants found.</div>
                 ) : (
@@ -561,6 +656,15 @@ const ParticipantManager: React.FC = () => {
                     onSuccess={() => {
                         void loadParticipants(selectedEventId);
                     }}
+                />
+            )}
+
+            {selectedWalletBuyer && (
+                <BuyerWalletTicketsModal
+                    buyer={selectedWalletBuyer}
+                    gifts={giftAllocations}
+                    eventName={selectedEvent?.name}
+                    onClose={() => setSelectedWalletBuyer(null)}
                 />
             )}
         </div>
