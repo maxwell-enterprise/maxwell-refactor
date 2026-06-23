@@ -6,6 +6,7 @@ import { OpsService } from './opsService';
 import { EntitlementService } from './entitlementService'; 
 import { GamificationService } from './gamificationService'; 
 import { APP_CONFIG } from '../lib/config';
+import { resolveEventDisplayTime } from '../lib/eventDisplayTime';
 import { supabase } from '../lib/supabaseClient';
 
 // --- ATTENDANCE LEDGER (Local Cache) ---
@@ -163,7 +164,7 @@ const handleTicketScan = async (data: QRData): Promise<ScanResult> => {
       
       // Early Bird Check
       try {
-          const eventTimeStr = event.recurringMeta?.time || "09:00"; 
+          const eventTimeStr = resolveEventDisplayTime(event) || '09:00'; 
           const eventStart = new Date(`${event.date}T${eventTimeStr.split(' ')[0]}:00`); 
           const scanTime = new Date();
           const diffMinutes = (eventStart.getTime() - scanTime.getTime()) / 60000;

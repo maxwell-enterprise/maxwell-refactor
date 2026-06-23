@@ -12,6 +12,7 @@ import { Calendar, Plus, X, Settings, FolderOpen, Layers, AlertTriangle, Trash2,
 import QRCodeDisplay from './common/QRCodeDisplay';
 import { useToast } from '../context/ToastContext';
 import { useDialog } from '../context/DialogContext'; // NEW IMPORT
+import { syncEventRecurringTime } from '../lib/eventDisplayTime';
 import GateConfigModal from './attendance/GateConfigModal'; 
 
 // Imported Sub-Components
@@ -261,13 +262,13 @@ const EventsAdmin: React.FC = () => {
 
     if (isEditing && eventData.id) {
         const previous = events.find(e => e.id === eventData.id);
-        eventToSave = {
+        eventToSave = syncEventRecurringTime({
             ...(previous ?? (eventData as Event)),
             ...eventData,
             creditTags: finalTags,
-        } as Event;
+        } as Event);
     } else {
-        eventToSave = {
+        eventToSave = syncEventRecurringTime({
             id: `EVT-${Date.now()}`,
             name: eventData.name || 'Untitled Event',
             description: eventData.description || '',
@@ -296,7 +297,7 @@ const EventsAdmin: React.FC = () => {
             tiers: eventData.tiers || [],
             doneTag: eventData.type === 'CONTAINER' ? '' : eventData.doneTag,
             isVisibleInCatalog: eventData.isVisibleInCatalog !== undefined ? eventData.isVisibleInCatalog : true
-        };
+        });
     }
 
     if (saveInFlightRef.current) return;

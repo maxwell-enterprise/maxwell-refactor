@@ -4,6 +4,7 @@ import { WalletItem } from '../../types/access';
 import { X, Calendar, Clock, MapPin, Video, CheckCircle, ShieldCheck, Map, Ticket, ChevronRight, Layers, ArrowLeft, PlayCircle, Globe } from 'lucide-react';
 import QRCodeDisplay from '../common/QRCodeDisplay';
 import { useTicketLogic } from '../../hooks/useTicketLogic';
+import { resolveEventDisplayTime } from '../../lib/eventDisplayTime';
 
 interface TicketDetailModalProps {
     item: WalletItem;
@@ -146,7 +147,7 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
                                                         <span className="flex items-center"><MapPin size={10} className="mr-1"/> Location</span>
                                                     )}
                                                     <span>•</span>
-                                                    <span>{session.recurringMeta?.time || 'TBA'}</span>
+                                                    <span>{resolveEventDisplayTime(session) || 'TBA'}</span>
                                                 </div>
                                             </div>
                                         </div>

@@ -6,6 +6,7 @@ import { CalendarDays, MapPin, Clock, Search, BookOpen, CheckCircle, Monitor } f
 import { useAccess } from '../../context/SecurityContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { resolveEventDisplayTime } from '../../lib/eventDisplayTime';
 
 const EventsCatalog: React.FC = () => {
   const { can } = useAccess('cat_events');
@@ -115,7 +116,7 @@ const EventsCatalog: React.FC = () => {
                             </div>
                             <div className="flex items-center text-sm text-slate-500">
                                 <Clock size={16} className="mr-3 text-slate-400" />
-                                {event.recurringMeta?.time || '09:00 AM - 05:00 PM'}
+                                {resolveEventDisplayTime(event) || '09:00 AM - 05:00 PM'}
                             </div>
                             <div className="flex items-center text-sm text-slate-500">
                                 {event.locationMode === 'ONLINE' ? <Monitor size={16} className="mr-3 text-blue-400"/> : <MapPin size={16} className="mr-3 text-red-400" />}

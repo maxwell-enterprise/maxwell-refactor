@@ -7,6 +7,7 @@ import { EntitlementService } from '../services/entitlementService';
 import { WALLET_REFRESH_EVENT } from '../services/paymentService';
 import { subscribeAttendanceUpdated } from '../services/attendanceRealtime';
 import { useToast } from '../context/ToastContext';
+import { resolveEventDisplayTime } from '../lib/eventDisplayTime';
 import { QrCode, Monitor, Info, Layers } from 'lucide-react';
 
 export type TicketTab = 'ACCESS' | 'VIRTUAL' | 'DETAILS' | 'SESSIONS';
@@ -134,7 +135,10 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     // 2. Determine Display Context (Master Event or Selected Session)
     const activeContext = selectedSession || eventData;
     const mode = activeContext?.locationMode || liveItem.meta?.locationMode || 'OFFLINE';
-    const activeContextTime = activeContext?.recurringMeta?.time || activeContext?.time || liveItem.meta?.time;
+    const activeContextTime = resolveEventDisplayTime(
+        activeContext ?? undefined,
+        typeof liveItem.meta?.time === 'string' ? liveItem.meta.time : undefined,
+    );
     const activeContextStart = useMemo(
         () => parseEventStart(activeContext?.date || liveItem.expiryDate, activeContextTime),
         [activeContext?.date, activeContextTime, liveItem.expiryDate],
@@ -274,7 +278,10 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
         isAttended,
         item: liveItem,
         displayDate: activeContext?.date || liveItem.expiryDate,
-        displayTime: activeContext?.recurringMeta?.time || liveItem.meta?.time,
+        displayTime: resolveEventDisplayTime(
+            activeContext ?? undefined,
+            typeof liveItem.meta?.time === 'string' ? liveItem.meta.time : undefined,
+        ),
         displayLocation: activeContext?.location || liveItem.meta?.location,
         displayTitle: activeContext?.name || liveItem.title,
         locationMapLink: activeContext?.locationMapLink || liveItem.meta?.locationMapLink
