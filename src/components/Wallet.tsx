@@ -867,21 +867,6 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                     ),
                                 )}
 
-                            {ticketBuckets.SHARING_SENT.length > 0 &&
-                                renderTicketSection(
-                                    <Share2 size={18} />,
-                                    'Sent to Guests',
-                                    'Tickets already assigned — waiting for recipients to accept.',
-                                    groupTicketsByEvent(ticketBuckets.SHARING_SENT).map((group) => (
-                                        <div key={group.eventKey} className="space-y-3">
-                                            {renderEventGroupHeader(group.label)}
-                                            <div className="space-y-4">
-                                                {renderSentToGuestsStack(group.tickets)}
-                                            </div>
-                                        </div>
-                                    )),
-                                )}
-
                             {ticketBuckets.SHARING_POOL.length > 0 &&
                                 renderTicketSection(
                                     <Share2 size={18} />,
@@ -894,6 +879,21 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                                 {groupTicketsByBundleKey(group.tickets).map((pool) =>
                                                     renderSharingPoolCard(pool),
                                                 )}
+                                            </div>
+                                        </div>
+                                    )),
+                                )}
+
+                            {ticketBuckets.SHARING_SENT.length > 0 &&
+                                renderTicketSection(
+                                    <Share2 size={18} />,
+                                    'Sent to Guests',
+                                    'Tickets already assigned — waiting for recipients to accept.',
+                                    groupTicketsByEvent(ticketBuckets.SHARING_SENT).map((group) => (
+                                        <div key={group.eventKey} className="space-y-3">
+                                            {renderEventGroupHeader(group.label)}
+                                            <div className="space-y-4">
+                                                {renderSentToGuestsStack(group.tickets)}
                                             </div>
                                         </div>
                                     )),
