@@ -396,6 +396,70 @@ export const EntitlementService = {
       return await RepositoryFactory.getEntitlementRepository().claimGift(token);
   },
 
+  createTicketGiftLink: async (input: {
+      walletItemId: string;
+      recipientName: string;
+      recipientPhone: string;
+      recipientEmail?: string;
+      giftMessage?: string;
+  }): Promise<GiftAllocation> => {
+      const repo = RepositoryFactory.getEntitlementRepository();
+      return repo.createGift({
+          walletItemId: input.walletItemId,
+          transferAmount: 1,
+          recipientName: input.recipientName.trim(),
+          recipientPhone: input.recipientPhone.trim(),
+          recipientEmail: input.recipientEmail?.trim() || undefined,
+          deliveryMethod: 'LINK',
+          giftMessage: input.giftMessage,
+      });
+  },
+
+  previewGiftByToken: async (
+      token: string,
+  ): Promise<{
+      status: 'PENDING' | 'CLAIMED' | 'REVOKED' | 'EXPIRED';
+      sourceUserName: string;
+      itemName: string;
+      recipientName?: string | null;
+      expiresAt?: string | null;
+  }> => {
+      const normalized = token.trim();
+      if (!normalized) {
+          throw new Error('Gift token is required');
+      }
+      if (APP_CONFIG.USE_MOCK_GLOBAL) {
+          const gifts = await RepositoryFactory.getEntitlementRepository().getGiftAllocations();
+          const gift = gifts.find((row) => row.claimToken === normalized);
+          if (!gift) {
+              throw new Error('Invalid gift link');
+          }
+          if (gift.tokenExpiresAt && new Date(gift.tokenExpiresAt) <= new Date()) {
+              return {
+                  status: 'EXPIRED',
+                  sourceUserName: gift.sourceUserName,
+                  itemName: gift.itemName,
+                  recipientName: gift.targetEmail ? undefined : undefined,
+                  expiresAt: gift.tokenExpiresAt,
+              };
+          }
+          return {
+              status:
+                  gift.status === 'PENDING' ||
+                  gift.status === 'CLAIMED' ||
+                  gift.status === 'REVOKED'
+                      ? gift.status
+                      : 'PENDING',
+              sourceUserName: gift.sourceUserName,
+              itemName: gift.itemName,
+              expiresAt: gift.tokenExpiresAt ?? null,
+          };
+      }
+      return apiRequest(
+          `/wallet/gifts/preview?token=${encodeURIComponent(normalized)}`,
+      );
+  },
+
   /**
    * Legacy client-side wallet expansion (optional mock/Supabase flows).
    * Production store purchases: entitlements are granted by Nest `CheckoutEntitlementsService` from

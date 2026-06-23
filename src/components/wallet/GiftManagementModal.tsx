@@ -43,7 +43,11 @@ const GiftManagementModal: React.FC<GiftManagementModalProps> = ({ userId, userN
     };
 
     const handleRevoke = async (gift: GiftAllocation) => {
-        if (!confirm(`Are you sure you want to revoke this ticket from ${gift.targetEmail}? It will return to your wallet as ACTIVE.`)) return;
+        const recipientLabel =
+            (typeof gift.targetEmail === 'string' && gift.targetEmail.trim()) ||
+            gift.recipientPhone?.trim() ||
+            'this recipient';
+        if (!confirm(`Are you sure you want to revoke this ticket from ${recipientLabel}? It will return to your wallet as ACTIVE.`)) return;
         
         try {
             await EntitlementService.revokeTicketGift(userId, gift.id);
@@ -55,14 +59,30 @@ const GiftManagementModal: React.FC<GiftManagementModalProps> = ({ userId, userN
     };
 
     const generateWALink = (gift: GiftAllocation) => {
-        const ticket = tickets[gift.entitlementId];
-        const message = `Hi! 👋 ${userName} is reminding you that ticket *${gift.itemName}* is waiting in your wallet.\n\nSign in to the Maxwell portal (${window.location.origin}) with email: ${gift.targetEmail}\nOTP: 12345`;
-        return WhatsAppService.generateLink("", message);
+        const recipientName =
+            (typeof tickets[gift.entitlementId]?.meta?.recipientName === 'string'
+                ? tickets[gift.entitlementId]?.meta?.recipientName
+                : '') || 'there';
+        if (gift.deliveryMethod === 'LINK' && gift.claimToken) {
+            const url = `${window.location.origin}/claim?token=${encodeURIComponent(gift.claimToken)}`;
+            const message = `Hi ${recipientName}! 👋\n\nI have a special ticket for you: *${gift.itemName}* from ${userName}.\n\nPlease claim your ticket using this link:\n${url}`;
+            const phone = gift.recipientPhone?.replace(/\D/g, '') ?? '';
+            return WhatsAppService.generateLink(phone, message);
+        }
+        const message = `Hi! 👋 ${userName} is reminding you that ticket *${gift.itemName}* is waiting in your wallet.\n\nSign in to the Maxwell portal (${window.location.origin})${gift.targetEmail ? ` with email: ${gift.targetEmail}` : ''}.`;
+        return WhatsAppService.generateLink(gift.recipientPhone ?? '', message);
     };
 
-    const filteredGifts = gifts.filter(g => 
-        g.targetEmail?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        g.itemName.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredGifts = gifts.filter(g =>
+        g.targetEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        g.recipientPhone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        g.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (typeof tickets[g.entitlementId]?.meta?.recipientName === 'string'
+            ? tickets[g.entitlementId]?.meta?.recipientName
+            : ''
+        )
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()),
     );
 
     return (
@@ -143,8 +163,14 @@ const GiftManagementModal: React.FC<GiftManagementModalProps> = ({ userId, userN
                                                             <User size={18}/>
                                                         </div>
                                                         <div>
-                                                            <div className="font-bold text-slate-900">{ticket?.meta?.recipientName || 'Member'}</div>
-                                                            <div className="text-xs text-slate-500 font-mono">{gift.targetEmail}</div>
+                                                            <div className="font-bold text-slate-900">
+                                                                {typeof ticket?.meta?.recipientName === 'string' && ticket.meta.recipientName.trim()
+                                                                    ? ticket.meta.recipientName
+                                                                    : gift.targetEmail || gift.recipientPhone || 'Guest'}
+                                                            </div>
+                                                            <div className="text-xs text-slate-500 font-mono">
+                                                                {gift.targetEmail || gift.recipientPhone || 'Link gift'}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>

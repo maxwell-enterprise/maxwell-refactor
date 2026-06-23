@@ -19,6 +19,7 @@ import WalletHistory from './wallet/WalletHistory';
 import TicketDistributionModal from './wallet/TicketDistributionModal';
 import TicketDetailModal from './wallet/TicketDetailModal'; // Use the full detail modal
 import GiftClaimModal from './wallet/GiftClaimModal';
+import CreateGiftLinkModal from './wallet/CreateGiftLinkModal';
 import { Badge } from './ui/badge';
 
 interface WalletProps {
@@ -99,6 +100,12 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   
   // Distribution State
   const [distributionContext, setDistributionContext] = useState<WalletItem[] | null>(null);
+  const [giftLinkContext, setGiftLinkContext] = useState<WalletItem | null>(null);
+
+  const canOfferGiftLink = (ticket: WalletItem) =>
+      ticket.type === 'TICKET' &&
+      ticket.status === 'ACTIVE' &&
+      ticket.isTransferable === true;
 
   /**
    * `full` = blocking load (spinner) for cold open or after payment.
@@ -298,7 +305,17 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                               {pool.length === 1 ? 'ticket ready to share' : 'tickets ready to share'}
                           </p>
                       </div>
-                      <div className="flex items-center pl-2">
+                      <div className="flex items-center gap-2 pl-2">
+                          {pool.length === 1 && canOfferGiftLink(anchor) ? (
+                              <button
+                                  type="button"
+                                  onClick={() => setGiftLinkContext(anchor)}
+                                  className="rounded-xl border border-indigo-200 bg-white p-4 text-indigo-600 shadow-sm transition-all hover:bg-indigo-50 active:scale-95"
+                                  aria-label="Create gift link"
+                              >
+                                  <Gift size={20} />
+                              </button>
+                          ) : null}
                           <button
                               type="button"
                               onClick={() => openDistribution(pool)}
@@ -711,9 +728,14 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
 
         {/* REPLACED: Full Feature Detail Modal instead of simple QR */}
         {viewingTicket && (
-            <TicketDetailModal 
-                item={viewingTicket} 
-                onClose={() => setViewingTicket(null)} 
+            <TicketDetailModal
+                item={viewingTicket}
+                onClose={() => setViewingTicket(null)}
+                showGiftLinkAction={canOfferGiftLink(viewingTicket)}
+                onCreateGiftLink={() => {
+                    setGiftLinkContext(viewingTicket);
+                    setViewingTicket(null);
+                }}
             />
         )}
 
@@ -732,6 +754,17 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                 selectedTickets={distributionContext}
                 onClose={() => setDistributionContext(null)}
                 onSuccess={() => { setDistributionContext(null); loadWallet(); }}
+            />
+        )}
+
+        {giftLinkContext && user && (
+            <CreateGiftLinkModal
+                donorName={user.fullName}
+                selectedTicket={giftLinkContext}
+                onClose={() => setGiftLinkContext(null)}
+                onSuccess={() => {
+                    void loadWallet('background');
+                }}
             />
         )}
       </div>

@@ -1,16 +1,23 @@
 
 import React from 'react';
 import { WalletItem } from '../../types/access';
-import { X, Calendar, Clock, MapPin, Video, CheckCircle, ShieldCheck, Map, Ticket, ChevronRight, Layers, ArrowLeft, PlayCircle, Globe } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, Video, CheckCircle, ShieldCheck, Map, Ticket, ChevronRight, Layers, ArrowLeft, PlayCircle, Globe, Gift } from 'lucide-react';
 import QRCodeDisplay from '../common/QRCodeDisplay';
 import { useTicketLogic } from '../../hooks/useTicketLogic';
 
 interface TicketDetailModalProps {
     item: WalletItem;
     onClose: () => void;
+    showGiftLinkAction?: boolean;
+    onCreateGiftLink?: () => void;
 }
 
-const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) => {
+const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
+    item,
+    onClose,
+    showGiftLinkAction = false,
+    onCreateGiftLink,
+}) => {
     const { 
         item: liveItem,
         eventData, 
@@ -303,8 +310,18 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ item, onClose }) 
                 </div>
                 
                 {/* Footer Branding */}
-                <div className="p-4 border-t border-slate-100 bg-white z-10 text-center">
-                     <p className="text-[9px] text-slate-300 font-bold uppercase tracking-[0.25em]">Maxwell Leadership Enterprise</p>
+                <div className="z-10 border-t border-slate-100 bg-white p-4 text-center">
+                    {showGiftLinkAction && onCreateGiftLink ? (
+                        <button
+                            type="button"
+                            onClick={onCreateGiftLink}
+                            className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700"
+                        >
+                            <Gift size={16} />
+                            Create gift link
+                        </button>
+                    ) : null}
+                     <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-slate-300">Maxwell Leadership Enterprise</p>
                 </div>
             </div>
         </div>

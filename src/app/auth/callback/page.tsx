@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { setWorkspaceToken } from '../../../lib/workspaceAuthToken';
-import { consumeOAuthReturnSearch } from '../../../lib/postAuthNavigation';
+import { consumeOAuthReturnSearch, consumeOAuthReturnPath } from '../../../lib/postAuthNavigation';
 import { workspaceApiUrl } from '../../../lib/workspaceApi';
 
 export default function AuthCallbackPage() {
@@ -40,8 +40,17 @@ export default function AuthCallbackPage() {
     const finalize = (workspaceToken: string) => {
       setWorkspaceToken(workspaceToken);
       window.clearTimeout(watchdog);
-      const resume =
-        queryParams.get('returnTo') || consumeOAuthReturnSearch();
+      const returnTo = queryParams.get('returnTo')?.trim();
+      const oauthPath = consumeOAuthReturnPath();
+      if (returnTo?.startsWith('/')) {
+        window.location.replace(returnTo);
+        return;
+      }
+      if (oauthPath.startsWith('/')) {
+        window.location.replace(oauthPath);
+        return;
+      }
+      const resume = consumeOAuthReturnSearch();
       const qs = resume.startsWith('?')
         ? resume.slice(1)
         : resume.startsWith('&')
