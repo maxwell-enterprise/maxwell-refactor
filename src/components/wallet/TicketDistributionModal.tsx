@@ -33,6 +33,7 @@ interface TicketDistributionModalProps {
     donorId: string;
     donorName: string;
     selectedTickets: WalletItem[];
+    initialTab?: 'ASSIGN' | 'GIFT_LINK' | 'HISTORY';
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -99,7 +100,7 @@ const resolveGiftRecipientName = (
 };
 
 const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({ 
-    donorId, donorName, selectedTickets, onClose, onSuccess 
+    donorId, donorName, selectedTickets, initialTab = 'ASSIGN', onClose, onSuccess 
 }) => {
     const { showToast } = useToast();
     const { confirm } = useDialog();
@@ -108,8 +109,12 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
-    const [activeTab, setActiveTab] = useState<'ASSIGN' | 'GIFT_LINK' | 'HISTORY'>('ASSIGN');
+    const [activeTab, setActiveTab] = useState<'ASSIGN' | 'GIFT_LINK' | 'HISTORY'>(initialTab);
     const [isGiftLinkSubmitting, setIsGiftLinkSubmitting] = useState(false);
+
+    useEffect(() => {
+        setActiveTab(initialTab);
+    }, [initialTab, selectedTickets]);
     
     // Unified Row Data Structure
     type RowData = {

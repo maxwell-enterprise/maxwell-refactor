@@ -33,13 +33,39 @@ function classifyWalletTicket(t: WalletItem): TicketBucket {
   if (t.sponsoredBy) return 'RECEIVED_GIFT';
   if (t.isTransferable === true) {
     const hasRecipient =
-      typeof t.meta?.recipientEmail === 'string' && t.meta.recipientEmail.trim().length > 0;
+      (typeof t.meta?.recipientName === 'string' && t.meta.recipientName.trim().length > 0) ||
+      (typeof t.meta?.recipientEmail === 'string' && t.meta.recipientEmail.trim().length > 0) ||
+      (typeof t.meta?.recipientPhone === 'string' && t.meta.recipientPhone.trim().length > 0);
     if (t.status === 'PENDING_CLAIM' || t.status === 'GIFT_PENDING' || hasRecipient) {
       return 'SHARING_SENT';
     }
     if (t.status === 'ACTIVE') return 'SHARING_POOL';
   }
   return 'SELF';
+}
+
+function readTicketRecipientName(ticket: WalletItem, gift?: GiftAllocation): string {
+  const fromGift = gift?.recipientName?.trim();
+  if (fromGift) return fromGift;
+  const fromMeta =
+    typeof ticket.meta?.recipientName === 'string' ? ticket.meta.recipientName.trim() : '';
+  if (fromMeta) return fromMeta;
+  const fromEmail = gift?.targetEmail?.split('@')[0]?.trim();
+  if (fromEmail) return fromEmail;
+  return 'Guest';
+}
+
+function formatSentGuestRecipientLine(ticket: WalletItem, gift?: GiftAllocation): string {
+  const name = readTicketRecipientName(ticket, gift);
+  const email =
+    gift?.targetEmail?.trim() ||
+    (typeof ticket.meta?.recipientEmail === 'string' ? ticket.meta.recipientEmail.trim() : '');
+  const phone =
+    gift?.recipientPhone?.trim() ||
+    (typeof ticket.meta?.recipientPhone === 'string' ? ticket.meta.recipientPhone.trim() : '');
+  if (email) return `To: ${name} (${email})`;
+  if (phone) return `To: ${name} (${phone})`;
+  return `To: ${name}`;
 }
 
 function groupTicketsByBundleKey(tickets: WalletItem[]): WalletItem[][] {
@@ -90,6 +116,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   const { showToast } = useToast();
   const [items, setItems] = useState<WalletItem[]>([]);
   const [pendingGifts, setPendingGifts] = useState<GiftAllocation[]>([]);
+  const [sentGifts, setSentGifts] = useState<GiftAllocation[]>([]);
   const [memberHub, setMemberHub] = useState<WalletMemberHub | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'ASSETS' | 'TICKETS' | 'PHYSICAL' | 'HISTORY'>('TICKETS');
@@ -100,6 +127,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   
   // Distribution State
   const [distributionContext, setDistributionContext] = useState<WalletItem[] | null>(null);
+  const [distributionInitialTab, setDistributionInitialTab] = useState<'ASSIGN' | 'GIFT_LINK' | 'HISTORY'>('ASSIGN');
   const [giftLinkContext, setGiftLinkContext] = useState<WalletItem | null>(null);
 
   const canOfferGiftLink = (ticket: WalletItem) =>
@@ -144,6 +172,15 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
     setPendingGifts(gifts.filter((gift) => gift.status === 'PENDING'));
   }, [user?.email]);
 
+  const loadSentGifts = useCallback(async () => {
+    try {
+      const gifts = await EntitlementService.getSentGifts();
+      setSentGifts(gifts.filter((gift) => gift.status === 'PENDING'));
+    } catch {
+      setSentGifts([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     const snap = readWalletSessionCache(user.id);
@@ -153,21 +190,24 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
       setLoading(false);
       void loadWallet('background');
       void loadPendingGifts();
+      void loadSentGifts();
     } else {
       void loadWallet('full');
       void loadPendingGifts();
+      void loadSentGifts();
     }
-  }, [user, loadWallet, loadPendingGifts]);
+  }, [user, loadWallet, loadPendingGifts, loadSentGifts]);
 
   useEffect(() => {
     if (!user) return;
     const onRefresh = () => {
       void loadWallet('full');
       void loadPendingGifts();
+      void loadSentGifts();
     };
     window.addEventListener(WALLET_REFRESH_EVENT, onRefresh);
     return () => window.removeEventListener(WALLET_REFRESH_EVENT, onRefresh);
-  }, [user, loadWallet, loadPendingGifts]);
+  }, [user, loadWallet, loadPendingGifts, loadSentGifts]);
 
   const ticketBuckets = useMemo(() => {
       const tickets = items.filter(
@@ -185,9 +225,20 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
       return buckets;
   }, [items]);
 
+  const sentGiftByTicketId = useMemo(() => {
+    const map = new Map<string, GiftAllocation>();
+    for (const gift of sentGifts) {
+      if (!map.has(gift.entitlementId)) {
+        map.set(gift.entitlementId, gift);
+      }
+    }
+    return map;
+  }, [sentGifts]);
+
   const hasOwnedTickets =
       ticketBuckets.SELF.length > 0 ||
       ticketBuckets.SHARING_POOL.length > 0 ||
+      ticketBuckets.SHARING_SENT.length > 0 ||
       ticketBuckets.RECEIVED_GIFT.length > 0;
   
   const creditPasses = useMemo(() => {
@@ -216,9 +267,24 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
       };
   };
 
-  const openDistribution = (tickets: WalletItem[]) => {
+  const openDistribution = (
+      tickets: WalletItem[],
+      initialTab: 'ASSIGN' | 'GIFT_LINK' | 'HISTORY' = 'ASSIGN',
+  ) => {
+      setDistributionInitialTab(initialTab);
       setDistributionContext(tickets);
   };
+
+  const getEventDistributionTickets = (eventKey: string): WalletItem[] =>
+      items.filter((item) => {
+          if (item.type !== 'TICKET' || item.status === 'EXPIRED' || item.sponsoredBy) return false;
+          if (item.isTransferable !== true) return false;
+          const bucket = classifyWalletTicket(item);
+          return (
+              resolveEventGroupKey(item) === eventKey &&
+              (bucket === 'SHARING_POOL' || bucket === 'SHARING_SENT')
+          );
+      });
 
   const renderPersonalTicketCard = (ticket: WalletItem, footerLabel = 'Self ticket') => {
       const ticketDate = formatEventDate(ticket.expiryDate);
@@ -335,6 +401,102 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
       );
   };
 
+  const renderSentToGuestsStack = (sentTickets: WalletItem[]) => {
+      const anchor = sentTickets[0];
+      if (!anchor) return null;
+      const ticketDate = formatEventDate(anchor.expiryDate);
+      const isStacked = sentTickets.length > 1;
+      const gift = sentGiftByTicketId.get(anchor.id);
+      const recipientLine = formatSentGuestRecipientLine(anchor, gift);
+      const eventKey = resolveEventGroupKey(anchor);
+
+      const openInvitedHistory = (event: React.MouseEvent) => {
+          event.stopPropagation();
+          openDistribution(getEventDistributionTickets(eventKey), 'HISTORY');
+      };
+
+      const cardBody = (
+          <div className="relative z-10 overflow-hidden rounded-[2.5rem] border border-violet-200 bg-white p-1 shadow-md">
+              <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-violet-50/70 p-5">
+                  <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-violet-200 pr-5">
+                      <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-violet-400">{ticketDate.weekday}</span>
+                      <span className="text-4xl font-black leading-none text-violet-900">{ticketDate.day}</span>
+                      <span className="mt-1 text-sm font-bold uppercase tracking-wider text-violet-400">{ticketDate.month}</span>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col justify-center">
+                      <span className="mb-2 inline-flex w-fit items-center rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                          Awaiting acceptance
+                      </span>
+                      <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{anchor.title}</h3>
+                      <p className="mb-1 truncate text-xs text-violet-700">{anchor.subtitle}</p>
+                      {isStacked ? (
+                          <p className="truncate text-xs text-violet-700">
+                              <span className="rounded bg-white px-1.5 font-black">{sentTickets.length}</span>{' '}
+                              {sentTickets.length === 1 ? 'ticket awaiting acceptance' : 'tickets awaiting acceptance'}
+                          </p>
+                      ) : (
+                          <p className="truncate text-xs font-medium text-slate-600">{recipientLine}</p>
+                      )}
+                  </div>
+                  <div className="flex items-center pl-2">
+                      <button
+                          type="button"
+                          onClick={openInvitedHistory}
+                          className="rounded-xl bg-violet-600 p-4 text-white shadow-lg transition-all hover:bg-violet-700 active:scale-95 group-hover/sent:scale-105"
+                          aria-label="Open invited history"
+                      >
+                          <Share2 size={20} />
+                      </button>
+                  </div>
+              </div>
+              <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-violet-600">
+                  <span>Sharing ticket</span>
+                  <span>{isStacked ? 'View history' : 'Pending'}</span>
+              </div>
+          </div>
+      );
+
+      if (!isStacked) {
+          return (
+              <div
+                  key={`sent-${anchor.id}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewingTicket(anchor)}
+                  onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setViewingTicket(anchor);
+                      }
+                  }}
+                  className="group/sent cursor-pointer transition-all hover:shadow-xl"
+              >
+                  {cardBody}
+              </div>
+          );
+      }
+
+      return (
+          <div
+              key={`sent-stack-${eventKey}`}
+              role="button"
+              tabIndex={0}
+              onClick={openInvitedHistory}
+              onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openDistribution(getEventDistributionTickets(eventKey), 'HISTORY');
+                  }
+              }}
+              className="group/sent relative cursor-pointer"
+          >
+              <div className="absolute bottom-0 left-2 right-2 top-2 z-0 scale-[0.95] translate-y-2 transform rounded-[2.5rem] border border-violet-200 bg-white shadow-sm" />
+              <div className="absolute bottom-0 left-4 right-4 top-4 z-0 scale-[0.9] translate-y-4 transform rounded-[2.5rem] border border-violet-200 bg-white shadow-sm" />
+              {cardBody}
+          </div>
+      );
+  };
+
   const renderEventGroupHeader = (label: string) => (
       <h4 className="ml-1 border-l-4 border-indigo-500 pl-2 text-sm font-bold uppercase tracking-widest text-slate-400">
           {label}
@@ -382,6 +544,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
     window.dispatchEvent(new CustomEvent(WALLET_REFRESH_EVENT));
     void loadWallet('full');
     void loadPendingGifts();
+    void loadSentGifts();
   };
 
   return (
@@ -704,6 +867,21 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                     ),
                                 )}
 
+                            {ticketBuckets.SHARING_SENT.length > 0 &&
+                                renderTicketSection(
+                                    <Share2 size={18} />,
+                                    'Sent to Guests',
+                                    'Tickets already assigned — waiting for recipients to accept.',
+                                    groupTicketsByEvent(ticketBuckets.SHARING_SENT).map((group) => (
+                                        <div key={group.eventKey} className="space-y-3">
+                                            {renderEventGroupHeader(group.label)}
+                                            <div className="space-y-4">
+                                                {renderSentToGuestsStack(group.tickets)}
+                                            </div>
+                                        </div>
+                                    )),
+                                )}
+
                             {ticketBuckets.SHARING_POOL.length > 0 &&
                                 renderTicketSection(
                                     <Share2 size={18} />,
@@ -752,8 +930,17 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
             <TicketDistributionModal 
                 donorId={user.id} donorName={user.fullName}
                 selectedTickets={distributionContext}
-                onClose={() => setDistributionContext(null)}
-                onSuccess={() => { setDistributionContext(null); loadWallet(); }}
+                initialTab={distributionInitialTab}
+                onClose={() => {
+                    setDistributionContext(null);
+                    setDistributionInitialTab('ASSIGN');
+                }}
+                onSuccess={() => {
+                    setDistributionContext(null);
+                    setDistributionInitialTab('ASSIGN');
+                    void loadWallet('background');
+                    void loadSentGifts();
+                }}
             />
         )}
 
@@ -764,6 +951,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                 onClose={() => setGiftLinkContext(null)}
                 onSuccess={() => {
                     void loadWallet('background');
+                    void loadSentGifts();
                 }}
             />
         )}
