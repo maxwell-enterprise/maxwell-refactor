@@ -60,9 +60,12 @@ const GiftManagementModal: React.FC<GiftManagementModalProps> = ({ userId, userN
 
     const generateWALink = (gift: GiftAllocation) => {
         const recipientName =
+            gift.recipientName?.trim() ||
             (typeof tickets[gift.entitlementId]?.meta?.recipientName === 'string'
-                ? tickets[gift.entitlementId]?.meta?.recipientName
-                : '') || 'there';
+                ? tickets[gift.entitlementId]?.meta?.recipientName?.trim()
+                : '') ||
+            gift.targetEmail?.split('@')[0] ||
+            'there';
         if (gift.deliveryMethod === 'LINK' && gift.claimToken) {
             const url = `${window.location.origin}/claim?token=${encodeURIComponent(gift.claimToken)}`;
             const message = `Hi ${recipientName}! 👋\n\nI have a special ticket for you: *${gift.itemName}* from ${userName}.\n\nPlease claim your ticket using this link:\n${url}`;
@@ -77,6 +80,7 @@ const GiftManagementModal: React.FC<GiftManagementModalProps> = ({ userId, userN
         g.targetEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         g.recipientPhone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         g.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (g.recipientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (typeof tickets[g.entitlementId]?.meta?.recipientName === 'string'
             ? tickets[g.entitlementId]?.meta?.recipientName
             : ''
@@ -164,9 +168,10 @@ const GiftManagementModal: React.FC<GiftManagementModalProps> = ({ userId, userN
                                                         </div>
                                                         <div>
                                                             <div className="font-bold text-slate-900">
-                                                                {typeof ticket?.meta?.recipientName === 'string' && ticket.meta.recipientName.trim()
-                                                                    ? ticket.meta.recipientName
-                                                                    : gift.targetEmail || gift.recipientPhone || 'Guest'}
+                                                                {gift.recipientName?.trim() ||
+                                                                    (typeof ticket?.meta?.recipientName === 'string' && ticket.meta.recipientName.trim()
+                                                                        ? ticket.meta.recipientName
+                                                                        : gift.targetEmail?.split('@')[0] || gift.recipientPhone || 'Guest')}
                                                             </div>
                                                             <div className="text-xs text-slate-500 font-mono">
                                                                 {gift.targetEmail || gift.recipientPhone || 'Link gift'}
