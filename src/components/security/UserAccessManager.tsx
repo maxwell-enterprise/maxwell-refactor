@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserRole, UserProfile, Member } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -83,6 +83,19 @@ type PendingDeletionRequest = {
   user: { id: string; email: string; fullName: string; role: string };
 };
 
+function deletionRequestsUnchanged(
+  prev: PendingDeletionRequest[],
+  next: PendingDeletionRequest[],
+): boolean {
+  if (prev.length !== next.length) return false;
+  return prev.every(
+    (item, index) =>
+      item.id === next[index]?.id &&
+      item.createdAt === next[index]?.createdAt &&
+      item.reason === next[index]?.reason,
+  );
+}
+
 function getAvatarInitials(fullName: string, email: string): string {
   const source = fullName.trim() || email.trim() || 'U';
   const parts = source.split(/\s+/).filter(Boolean);
@@ -149,6 +162,8 @@ const UserAccessManager: React.FC = () => {
     roleName: string;
     allowedFeatures: string[];
   } | null>(null);
+  const deletionListRef = useRef<HTMLUListElement>(null);
+  const deletionListScrollTopRef = useRef(0);
 
   // Load from Service
   useEffect(() => {
@@ -173,6 +188,8 @@ const UserAccessManager: React.FC = () => {
 
   const loadDeletionRequests = useCallback(async () => {
     if (authUser?.role !== UserRole.SUPER_ADMIN) return;
+    const preservedScrollTop =
+      deletionListRef.current?.scrollTop ?? deletionListScrollTopRef.current;
     try {
       const res = await workspaceFetch('/admin/account-deletion-requests');
       if (!res.ok) {
@@ -180,7 +197,13 @@ const UserAccessManager: React.FC = () => {
         return;
       }
       const data = (await res.json()) as PendingDeletionRequest[];
-      setDeletionRequests(Array.isArray(data) ? data : []);
+      const next = Array.isArray(data) ? data : [];
+      setDeletionRequests((prev) => (deletionRequestsUnchanged(prev, next) ? prev : next));
+      requestAnimationFrame(() => {
+        if (deletionListRef.current) {
+          deletionListRef.current.scrollTop = preservedScrollTop;
+        }
+      });
     } catch {
       setDeletionRequests([]);
     }
@@ -880,11 +903,17 @@ const UserAccessManager: React.FC = () => {
             {deletionRequests.length === 0 ? (
               <p className="text-xs text-slate-600">No pending requests.</p>
             ) : (
-              <ul className="h-[10.5rem] space-y-3 overflow-y-auto pr-1 snap-y snap-mandatory">
+              <ul
+                ref={deletionListRef}
+                onScroll={(event) => {
+                  deletionListScrollTopRef.current = event.currentTarget.scrollTop;
+                }}
+                className="max-h-64 space-y-3 overflow-y-auto overscroll-y-contain pr-1"
+              >
                 {deletionRequests.map((r) => (
                   <li
                     key={r.id}
-                    className="h-[10.5rem] snap-start rounded-lg border border-amber-200 bg-white p-3 text-xs shadow-sm"
+                    className="rounded-lg border border-amber-200 bg-white p-3 text-xs shadow-sm"
                   >
                     <div className="flex flex-wrap justify-between gap-2 font-semibold text-slate-900">
                       <span>{r.user.fullName}</span>

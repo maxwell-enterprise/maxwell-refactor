@@ -7,7 +7,7 @@ import { DataService } from '../../services/dataService';
 import { useToast } from '../../context/ToastContext';
 import { workspaceApiUrl } from '../../lib/workspaceApi';
 import { setWorkspaceToken } from '../../lib/workspaceAuthToken';
-import { stashOAuthReturnSearch } from '../../lib/postAuthNavigation';
+import { stashOAuthReturnSearch, stashOAuthReturnPath, consumeOAuthReturnPath } from '../../lib/postAuthNavigation';
 
 /** Nest `/fe/auth/*` — identity di backend, bukan Next/Prisma. */
 const USE_WORKSPACE =
@@ -15,6 +15,21 @@ const USE_WORKSPACE =
   process.env.NEXT_PUBLIC_USE_WORKSPACE_AUTH !== 'false';
 const RECENT_EMAILS_KEY = 'maxwell_recent_login_emails';
 const RECENT_EMAILS_LIMIT = 6;
+
+function navigateAfterAuth(returnSearch?: string) {
+  if (typeof window === 'undefined') return;
+  const returnTo = new URLSearchParams(window.location.search).get('returnTo')?.trim();
+  const oauthPath = consumeOAuthReturnPath();
+  if (returnTo?.startsWith('/')) {
+    window.location.replace(returnTo);
+    return;
+  }
+  if (oauthPath.startsWith('/')) {
+    window.location.replace(oauthPath);
+    return;
+  }
+  navigateToDashboard(returnSearch);
+}
 
 function navigateToDashboard(returnSearch?: string) {
   if (typeof window === 'undefined') return;
@@ -153,7 +168,7 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
           }
           setWorkspaceToken(payload.token.trim());
           showToast('Bypass auth login successful.', 'success');
-          navigateToDashboard(
+          navigateAfterAuth(
             typeof window !== 'undefined' ? window.location.search || '' : '',
           );
           return;
@@ -226,6 +241,10 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
         return;
       }
       stashOAuthReturnSearch(window.location.search || '');
+      const returnTo = new URLSearchParams(window.location.search).get('returnTo')?.trim();
+      if (returnTo?.startsWith('/')) {
+        stashOAuthReturnPath(returnTo);
+      }
       window.location.href = workspaceApiUrl('/auth/google');
     } catch {
       showToast(

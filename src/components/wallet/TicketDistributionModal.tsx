@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { WalletItem } from '../../types/access';
+import { GiftAllocation, WalletItem } from '../../types/access';
 import { EntitlementService } from '../../services/entitlementService';
 import { WhatsAppService } from '../../services/whatsappService';
 import {
@@ -16,9 +16,13 @@ import {
     UserPlus,
     Upload,
     FileSpreadsheet,
+    Gift,
+    Link as LinkIcon,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useDialog } from '../../context/DialogContext';
+import { useAuth } from '../../context/AuthContext';
+import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
 import {
     downloadInvitationImportTemplate,
     parseInvitationExcelFile,
@@ -67,16 +71,45 @@ const isValidEmail = (email: string): boolean => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 };
 
+const buildClaimUrl = (claimToken: string) => {
+    if (typeof window === 'undefined') return `/claim?token=${claimToken}`;
+    return `${window.location.origin}/claim?token=${encodeURIComponent(claimToken)}`;
+};
+
+const buildGiftLinkWaMessage = (
+    recipientName: string,
+    ticketTitle: string,
+    donorName: string,
+    claimUrl: string,
+) =>
+    `Hi ${recipientName}! 👋\n\nI have a special ticket for you: *${ticketTitle}* from ${donorName}.\n\nPlease claim your ticket using this link:\n${claimUrl}\n\nCan't wait to see you there!`;
+
+const resolveGiftRecipientName = (
+    gift: GiftAllocation,
+    wallet?: WalletItem | null,
+): string => {
+    const fromGift = gift.recipientName?.trim();
+    if (fromGift) return fromGift;
+    const fromWallet =
+        typeof wallet?.meta?.recipientName === 'string' ? wallet.meta.recipientName.trim() : '';
+    if (fromWallet) return fromWallet;
+    const fromEmail = gift.targetEmail?.split('@')[0]?.trim();
+    if (fromEmail) return fromEmail;
+    return 'Guest';
+};
+
 const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({ 
     donorId, donorName, selectedTickets, onClose, onSuccess 
 }) => {
     const { showToast } = useToast();
     const { confirm } = useDialog();
+    const { refreshSession } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
-    const [activeTab, setActiveTab] = useState<'ASSIGN' | 'HISTORY'>('ASSIGN');
+    const [activeTab, setActiveTab] = useState<'ASSIGN' | 'GIFT_LINK' | 'HISTORY'>('ASSIGN');
+    const [isGiftLinkSubmitting, setIsGiftLinkSubmitting] = useState(false);
     
     // Unified Row Data Structure
     type RowData = {
@@ -88,9 +121,18 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
         recipientPhone: string;
         originalTicket: WalletItem;
         sentAt?: string;
+        deliveryMethod?: GiftAllocation['deliveryMethod'];
+        claimToken?: string;
     };
 
     const [rows, setRows] = useState<RowData[]>([]);
+
+    const ensureSessionForTicketSend = async (): Promise<boolean> => {
+        await refreshSession({ silent: true });
+        if (getWorkspaceToken()) return true;
+        showToast('Sesi login habis atau belum siap. Silakan refresh halaman lalu login ulang.', 'error');
+        return false;
+    };
 
     useEffect(() => {
         loadAllocations();
@@ -125,10 +167,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                 .map((gift) => {
                     const wallet = walletMap.get(gift.entitlementId) || selectedMap.get(gift.entitlementId);
-                    const recipientName =
-                        typeof wallet?.meta?.recipientName === 'string' && wallet.meta.recipientName.trim()
-                            ? wallet.meta.recipientName.trim()
-                            : gift.targetEmail?.split('@')[0] || 'Guest';
+                    const recipientName = resolveGiftRecipientName(gift, wallet);
 
                     const fallbackTicket: WalletItem = wallet || {
                         id: gift.entitlementId,
@@ -150,6 +189,8 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                         recipientPhone: gift.recipientPhone || '',
                         originalTicket: fallbackTicket,
                         sentAt: gift.createdAt,
+                        deliveryMethod: gift.deliveryMethod,
+                        claimToken: gift.claimToken,
                     };
                 });
 
@@ -285,6 +326,8 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     const handleSaveDistribution = async () => {
         setIsSubmitting(true);
         try {
+            if (!(await ensureSessionForTicketSend())) return;
+
             const rowsToDistribute = assignableRows.filter((row) =>
                 hasAnyInvitationInput(row),
             );
@@ -351,9 +394,14 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     };
 
     const handleRemindWA = (row: RowData) => {
-        const message = `Hi ${row.recipientName}! 👋 ${donorName} sent you ticket *${row.originalTicket.title}* to ${row.recipientEmail}. Please check your email and claim it.`;
-        // Ensure phone is normalized (in case it wasn't during save or legacy data)
         const phone = normalizePhone(row.recipientPhone);
+        let message: string;
+        if (row.deliveryMethod === 'LINK' && row.claimToken) {
+            const url = buildClaimUrl(row.claimToken);
+            message = `Hi ${row.recipientName}! 👋\n\n${donorName} sent you ticket *${row.originalTicket.title}*.\n\nPlease claim your ticket using this link:\n${url}`;
+        } else {
+            message = `Hi ${row.recipientName}! 👋 ${donorName} sent you ticket *${row.originalTicket.title}*${row.recipientEmail ? ` to ${row.recipientEmail}` : ''}. Please check your email and claim it.`;
+        }
         const url = WhatsAppService.generateLink(phone, message);
         window.open(url, '_blank');
     };
@@ -367,6 +415,124 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     // Derived Lists for Tabs
     const assignableRows = useMemo(() => rows.filter(r => r.status === 'AVAILABLE'), [rows]);
     const historyRows = useMemo(() => rows.filter(r => r.status !== 'AVAILABLE'), [rows]);
+
+    const handleSaveGiftLinks = async () => {
+        const rowsToGift = assignableRows.filter((row) => hasAnyInvitationInput(row));
+
+        if (rowsToGift.length === 0) {
+            showToast('Isi minimal 1 baris sebelum Send & Generate.', 'error');
+            return;
+        }
+
+        const incompleteRow = rowsToGift.find((row) => {
+            if (!row.recipientName.trim()) return true;
+            if (row.recipientEmail.trim() && !isValidEmail(row.recipientEmail)) return true;
+            if (!hasMeaningfulPhoneNumber(row.recipientPhone)) return true;
+            return false;
+        });
+
+        if (incompleteRow) {
+            showToast(
+                'Nama dan WhatsApp wajib lengkap untuk setiap baris yang diisi. Email opsional.',
+                'error',
+            );
+            return;
+        }
+
+        const isSingleRecipient = rowsToGift.length === 1;
+        const preOpenedWaWindow = isSingleRecipient
+            ? window.open('about:blank', '_blank', 'noopener,noreferrer')
+            : null;
+
+        setIsGiftLinkSubmitting(true);
+        try {
+            if (!(await ensureSessionForTicketSend())) {
+                preOpenedWaWindow?.close();
+                return;
+            }
+
+            const giftsToSend: Array<{ phone: string; message: string; name: string }> = [];
+            const claimTokens = new Set<string>();
+
+            for (const row of rowsToGift) {
+                const gift = await EntitlementService.createTicketGiftLink({
+                    walletItemId: row.ticketId,
+                    recipientName: row.recipientName.trim(),
+                    recipientPhone: normalizePhone(row.recipientPhone),
+                    recipientEmail: row.recipientEmail.trim() || undefined,
+                    giftMessage: `Ticket shared by ${donorName}`,
+                });
+
+                if (claimTokens.has(gift.claimToken)) {
+                    throw new Error('Duplicate gift link detected. Please try again.');
+                }
+                claimTokens.add(gift.claimToken);
+
+                const claimUrl = buildClaimUrl(gift.claimToken);
+                giftsToSend.push({
+                    phone: normalizePhone(row.recipientPhone),
+                    name: row.recipientName.trim(),
+                    message: buildGiftLinkWaMessage(
+                        row.recipientName.trim(),
+                        row.originalTicket.title,
+                        donorName,
+                        claimUrl,
+                    ),
+                });
+            }
+
+            const openWhatsAppLink = (phone: string, message: string) => {
+                window.open(
+                    WhatsAppService.generateLink(phone, message),
+                    '_blank',
+                    'noopener,noreferrer',
+                );
+            };
+
+            if (isSingleRecipient && giftsToSend[0]) {
+                const waUrl = WhatsAppService.generateLink(
+                    giftsToSend[0].phone,
+                    giftsToSend[0].message,
+                );
+                if (preOpenedWaWindow && !preOpenedWaWindow.closed) {
+                    preOpenedWaWindow.location.href = waUrl;
+                } else {
+                    openWhatsAppLink(giftsToSend[0].phone, giftsToSend[0].message);
+                }
+            } else if (giftsToSend.length > 1) {
+                const approved = await confirm({
+                    title: 'Kirim lewat WhatsApp?',
+                    message: `Buka WhatsApp untuk ${giftsToSend.length} penerima? Setiap penerima mendapat link unik.`,
+                    variant: 'info',
+                    confirmLabel: 'Ya, Kirim',
+                    cancelLabel: 'Nanti',
+                    icon: <MessageSquare size={24} />,
+                });
+                if (approved) {
+                    for (const item of giftsToSend) {
+                        openWhatsAppLink(item.phone, item.message);
+                    }
+                }
+            }
+
+            await loadAllocations();
+            onSuccess();
+            setActiveTab('HISTORY');
+
+            showToast(
+                `${giftsToSend.length} WA gift link dibuat${giftsToSend.length > 1 ? ' (link unik per tiket)' : ''}.`,
+                'success',
+            );
+        } catch (error) {
+            preOpenedWaWindow?.close();
+            showToast(
+                error instanceof Error ? error.message : 'Gagal membuat WA gift link.',
+                'error',
+            );
+        } finally {
+            setIsGiftLinkSubmitting(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-[110] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -391,6 +557,13 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                             className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'ASSIGN' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             <UserPlus size={16} className="mr-2"/> Assign New
+                            <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{assignableRows.length}</span>
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('GIFT_LINK')}
+                            className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'GIFT_LINK' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <Gift size={16} className="mr-2"/> WA Gift link
                             <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{assignableRows.length}</span>
                         </button>
                         <button 
@@ -451,20 +624,26 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                     <tr>
                                         <th className="px-6 py-4 w-12 text-center">#</th>
                                         <th className="px-6 py-4 w-1/4">Recipient Name</th>
-                                        <th className="px-6 py-4 w-1/4">Email</th>
+                                        <th className="px-6 py-4 w-1/4">
+                                            {activeTab === 'GIFT_LINK' ? 'Email (optional)' : 'Email'}
+                                        </th>
                                         <th className="px-6 py-4 w-1/5">WhatsApp (Ex: +62812...)</th>
                                         {activeTab === 'HISTORY' && <th className="px-6 py-4 w-32 text-center">Status</th>}
                                         {activeTab === 'HISTORY' && <th className="px-6 py-4 text-right">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {(activeTab === 'ASSIGN' ? assignableRows : historyRows).map((row, idx) => {
+                                    {(activeTab === 'HISTORY' ? historyRows : assignableRows).map((row, idx) => {
                                         const isLocked = activeTab === 'HISTORY';
+                                        const isGiftLinkTab = activeTab === 'GIFT_LINK';
                                         const rowHasInput = hasAnyInvitationInput(row);
                                         const nameInvalid = rowHasInput && !row.recipientName.trim();
-                                        const emailInvalid =
-                                            rowHasInput &&
-                                            (!row.recipientEmail.trim() || !isValidEmail(row.recipientEmail));
+                                        const emailInvalid = isGiftLinkTab
+                                            ? rowHasInput &&
+                                              !!row.recipientEmail.trim() &&
+                                              !isValidEmail(row.recipientEmail)
+                                            : rowHasInput &&
+                                              (!row.recipientEmail.trim() || !isValidEmail(row.recipientEmail));
                                         const phoneInvalid =
                                             rowHasInput && !hasMeaningfulPhoneNumber(row.recipientPhone);
                                          
@@ -486,10 +665,10 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     {isLocked ? (
-                                                        <span className="text-slate-500 font-mono text-xs">{row.recipientEmail}</span>
+                                                        <span className="text-slate-500 font-mono text-xs">{row.recipientEmail || '-'}</span>
                                                     ) : (
                                                         <input 
-                                                            type="email" placeholder="Email *" className={`w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${emailInvalid ? 'border-red-300 bg-red-50/40' : 'border-slate-200'}`}
+                                                            type="email" placeholder={isGiftLinkTab ? 'Email (optional)' : 'Email *'} className={`w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${emailInvalid ? 'border-red-300 bg-red-50/40' : 'border-slate-200'}`}
                                                             value={row.recipientEmail}
                                                             onChange={(e) => updateRow(idx, 'recipientEmail', e.target.value)}
                                                         />
@@ -524,9 +703,11 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                                                         <button onClick={() => handleRemindWA(row)} className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100" title="Remind via WA">
                                                                             <MessageSquare size={16}/>
                                                                         </button>
-                                                                        <button onClick={() => handleRemindEmail(row)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100" title="Remind via Email">
-                                                                            <Mail size={16}/>
-                                                                        </button>
+                                                                        {row.recipientEmail && (
+                                                                            <button onClick={() => handleRemindEmail(row)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100" title="Remind via Email">
+                                                                                <Mail size={16}/>
+                                                                            </button>
+                                                                        )}
                                                                         <button onClick={() => handleRevoke(row.allocationId!)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100" title="Revoke Ticket">
                                                                             <RotateCcw size={16}/>
                                                                         </button>
@@ -544,10 +725,14 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                             </tr>
                                         );
                                     })}
-                                    {(activeTab === 'ASSIGN' ? assignableRows : historyRows).length === 0 && (
+                                    {(activeTab === 'HISTORY' ? historyRows : assignableRows).length === 0 && (
                                         <tr>
-                                            <td colSpan={activeTab === 'ASSIGN' ? 4 : 6} className="p-8 text-center text-slate-400 text-sm">
-                                                {activeTab === 'ASSIGN' ? 'No tickets available to assign.' : 'No invitation history found.'}
+                                            <td colSpan={activeTab === 'HISTORY' ? 6 : 4} className="p-8 text-center text-slate-400 text-sm">
+                                                {activeTab === 'HISTORY'
+                                                    ? 'No invitation history found.'
+                                                    : activeTab === 'GIFT_LINK'
+                                                      ? 'No tickets available for WA gift link.'
+                                                      : 'No tickets available to assign.'}
                                             </td>
                                         </tr>
                                     )}
@@ -556,6 +741,33 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                         </div>
                     )}
                 </div>
+
+                {activeTab === 'GIFT_LINK' && (
+                    <div className="px-8 py-6 border-t border-slate-100 bg-white flex justify-between items-center">
+                        <div className="text-xs text-slate-500 flex items-center max-w-md">
+                            <Info size={14} className="mr-2 shrink-0 text-indigo-500"/>
+                            One unique claim link per row. After generation, WhatsApp will open automatically. Email is optional.
+                        </div>
+                        <div className="flex gap-4">
+                            <button onClick={onClose} className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors">
+                                Close
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void handleSaveGiftLinks()}
+                                disabled={isGiftLinkSubmitting || assignableRows.length === 0}
+                                className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center"
+                            >
+                                {isGiftLinkSubmitting ? (
+                                    <Loader2 className="animate-spin mr-2" />
+                                ) : (
+                                    <LinkIcon size={16} className="mr-2" />
+                                )}
+                                Send & Generate
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {activeTab === 'ASSIGN' && (
                     <div className="px-8 py-6 border-t border-slate-100 bg-white flex justify-between items-center">

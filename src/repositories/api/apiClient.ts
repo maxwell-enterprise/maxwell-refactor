@@ -81,18 +81,33 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const { skipBackendFailureTracking, ...fetchInit } = init;
   const url = buildUrl(path);
-  let response: Response;
-  try {
-    const token = getWorkspaceToken();
-    response = await fetch(url, {
+
+  const buildHeaders = (token: string | null): HeadersInit => ({
+    'Content-Type': 'application/json',
+    ...(fetchInit.headers ?? {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  });
+
+  const doFetch = (token: string | null) =>
+    fetch(url, {
       ...fetchInit,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(fetchInit.headers ?? {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      credentials: 'include',
+      headers: buildHeaders(token),
       cache: 'no-store',
     });
+
+  let token = getWorkspaceToken();
+  let response: Response;
+  try {
+    response = await doFetch(token);
+    if (response.status === 401 && token) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const retryToken = getWorkspaceToken();
+      if (retryToken) {
+        token = retryToken;
+        response = await doFetch(retryToken);
+      }
+    }
     // 503 is often temporary (overload, upstream); do not clear JWT on a few 503s.
     if (
       !skipBackendFailureTracking &&
@@ -123,12 +138,18 @@ export async function apiRequest<T>(
   if (!response.ok) {
     const detail = await parseHttpErrorBody(response);
     const label =
-      response.status === 502 || response.status === 503 || response.status === 504
-        ? 'Service unavailable'
-        : response.status === 500
-          ? 'Server error'
-          : `Request failed (${response.status})`;
-    throw new ApiRequestError(response.status, `${label}: ${detail}`);
+      response.status === 401
+        ? 'Unauthorized'
+        : response.status === 502 || response.status === 503 || response.status === 504
+          ? 'Service unavailable'
+          : response.status === 500
+            ? 'Server error'
+            : `Request failed (${response.status})`;
+    const suffix =
+      response.status === 401
+        ? `${detail}. Try refreshing the page or signing in again.`
+        : detail;
+    throw new ApiRequestError(response.status, `${label}: ${suffix}`);
   }
 
   // DELETE often returns 204; Nest can also return 200 with an empty body for void handlers.

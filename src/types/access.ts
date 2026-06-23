@@ -116,6 +116,7 @@ export interface GiftAllocation {
     itemName: string;
     
     targetEmail?: string; // Optional: If sent specifically to an email
+    recipientName?: string;
     recipientPhone?: string;
     claimToken: string; // The magic code
     tokenExpiresAt?: string;
