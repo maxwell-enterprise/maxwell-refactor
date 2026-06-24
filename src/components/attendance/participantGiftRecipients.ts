@@ -191,14 +191,24 @@ export function buildGiftRecipientRows(params: {
     });
   }
 
-  return rows.sort(
-    (a, b) => new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime(),
-  );
+  return rows
+    .filter(isActiveGiftRecipient)
+    .sort(
+      (a, b) => new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime(),
+    );
+}
+
+export function isActiveGiftRecipient(row: GiftRecipientRow): boolean {
+  return row.status === 'CLAIMED' || row.status === 'PENDING_CLAIM';
+}
+
+export function filterActiveGiftRecipients(rows: GiftRecipientRow[]): GiftRecipientRow[] {
+  return rows.filter(isActiveGiftRecipient);
 }
 
 export function countUniqueGiftRecipients(rows: GiftRecipientRow[]): number {
   const keys = new Set<string>();
-  for (const row of rows) {
+  for (const row of filterActiveGiftRecipients(rows)) {
     const key =
       normalizeEmail(row.recipientEmail) ||
       row.recipientPhone.trim() ||
