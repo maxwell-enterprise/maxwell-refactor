@@ -14,10 +14,14 @@ interface GiftClaimModalProps {
 }
 
 const formatExpiresAt = (value?: string) => {
-  if (!value) return 'No expiration set';
+  if (!value) return 'No expiration';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 };
 
 const GiftClaimModal: React.FC<GiftClaimModalProps> = ({ gift, onClose, onClaimed }) => {
@@ -52,95 +56,98 @@ const GiftClaimModal: React.FC<GiftClaimModalProps> = ({ gift, onClose, onClaime
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
-        <div className="flex items-start justify-between border-b border-slate-100 bg-slate-50 px-6 py-5">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-emerald-600 p-3 text-white shadow-lg">
-              <Gift size={22} />
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gift-claim-title"
+    >
+      <div className="flex w-full max-w-sm max-h-[min(90dvh,32rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-100 bg-emerald-50/80 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md">
+              <Gift size={18} />
             </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-600">Gifted Ticket</p>
-              <h3 className="mt-1 text-2xl font-black text-slate-900">Accept invitation</h3>
-              <p className="mt-1 text-sm text-slate-500">This ticket was shared with your account email.</p>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-600">Gifted Ticket</p>
+              <h3 id="gift-claim-title" className="truncate text-sm font-bold text-slate-900">
+                Accept invitation
+              </h3>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-900"
+            className="shrink-0 rounded-full p-1.5 text-slate-400 transition hover:bg-white hover:text-slate-700"
+            aria-label="Close"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        <div className="space-y-5 px-6 py-6">
-          <div className="rounded-3xl border border-emerald-100 bg-emerald-50/70 p-5">
-            <div className="flex items-start gap-4">
-              <div className="rounded-2xl bg-white p-3 text-emerald-600 shadow-sm">
-                <CheckCircle size={20} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-emerald-700">You have a ticket waiting</p>
-                <p className="mt-1 text-lg font-black text-slate-900">{gift.itemName}</p>
-                <p className="mt-1 text-sm text-slate-600">
-                  Sent by <span className="font-semibold">{gift.sourceUserName}</span>
-                </p>
-              </div>
+        {/* Body */}
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Ticket waiting</p>
+            <p className="mt-0.5 truncate text-sm font-bold text-slate-900">{gift.itemName}</p>
+            <p className="mt-0.5 truncate text-xs text-slate-600">
+              From <span className="font-semibold">{gift.sourceUserName}</span>
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+              <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Status</p>
+              <p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-amber-700">
+                <Clock size={12} />
+                Pending
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+              <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Expires</p>
+              <p className="mt-1 text-[11px] font-semibold text-slate-700">{formatExpiresAt(gift.tokenExpiresAt)}</p>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">Claim status</p>
-              <div className="mt-2 flex items-center gap-2 text-sm font-bold text-amber-700">
-                <Clock size={16} />
-                Pending acceptance
-              </div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">Expires</p>
-              <p className="mt-2 text-sm font-semibold text-slate-700">{formatExpiresAt(gift.tokenExpiresAt)}</p>
-            </div>
-          </div>
-
-          <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-5">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-              <Mail size={16} className="text-slate-400" />
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <Mail size={12} />
               Recipient
-            </div>
-            <p className="text-sm text-slate-600">{gift.targetEmail || 'Your account email'}</p>
+            </p>
+            <p className="mt-1 truncate text-xs text-slate-600">{gift.targetEmail || 'Your account email'}</p>
             {gift.recipientPhone && (
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <Phone size={16} className="text-slate-400" />
+              <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-slate-600">
+                <Phone size={12} className="shrink-0 text-slate-400" />
                 {gift.recipientPhone}
-              </div>
+              </p>
             )}
             {gift.giftMessage && (
-              <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+              <p className="mt-2 line-clamp-2 rounded-lg bg-white px-2.5 py-2 text-xs text-slate-600">
                 {gift.giftMessage}
-              </div>
+              </p>
             )}
           </div>
+        </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleAccept}
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-              Accept Ticket
-            </button>
-          </div>
+        {/* Footer */}
+        <div className="flex shrink-0 gap-2 border-t border-slate-100 bg-white px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleAccept}
+            disabled={loading}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-900 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+            Accept
+          </button>
         </div>
       </div>
     </div>

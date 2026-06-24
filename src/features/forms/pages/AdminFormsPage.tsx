@@ -242,7 +242,7 @@ const AdminFormsPage: React.FC = () => {
                         </button>
                     </div>
                 ) : (
-                    <div className="overflow-x-scroll-touch">
+                    <div className="responsive-table-wrap">
                         <table className="w-full min-w-[720px] text-left text-sm">
                             <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
                                 <tr>

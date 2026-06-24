@@ -80,7 +80,7 @@ const SystemMaintenance: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-5xl mx-auto h-[calc(100vh-64px)] flex flex-col animate-fade-in">
+        <div className="page-container max-w-5xl space-y-6 animate-fade-in">
             <div className="mb-8">
                 <h1 className="text-2xl font-bold text-slate-900 flex items-center">
                     <DatabaseBackup className="mr-3 text-indigo-600" /> System Maintenance

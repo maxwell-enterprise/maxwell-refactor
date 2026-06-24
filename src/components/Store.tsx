@@ -16,7 +16,7 @@ const Store: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'catalog' | 'inventory' | 'discounts' | 'rules' | 'analytics' | 'history'>('catalog');
 
   return (
-    <div className="page-container flex min-h-0 flex-1 flex-col animate-fade-in relative min-w-0">
+    <div className="page-container relative w-full min-w-0 animate-fade-in">
       <div className="mb-4 flex shrink-0 flex-col gap-4 sm:mb-6 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Marketplace & Resources</h1>

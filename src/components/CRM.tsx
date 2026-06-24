@@ -247,7 +247,7 @@ const CRM: React.FC = () => {
 
             {/* Desktop: table */}
             <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-w-0">
-                <div className="overflow-x-scroll-touch">
+                <div className="responsive-table-wrap">
                     <table className="w-full min-w-[720px] text-left text-sm">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                             <tr>

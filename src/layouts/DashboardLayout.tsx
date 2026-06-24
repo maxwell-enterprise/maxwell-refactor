@@ -80,6 +80,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   );
 
   const openCommandPalette = useCallback(() => {
+    if (isPersonalZone) return;
     if (profileGateActive) {
       showToast(
         'Lengkapi Personal Information di Account Settings terlebih dahulu.',
@@ -88,7 +89,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       return;
     }
     setIsCmdOpen(true);
-  }, [profileGateActive, showToast]);
+  }, [isPersonalZone, profileGateActive, showToast]);
+
+  useEffect(() => {
+    if (isPersonalZone) setIsCmdOpen(false);
+  }, [isPersonalZone]);
 
   const markNotificationsAsSeen = useCallback(() => {
     setNotificationsSeenDigest(notificationsDigest);
@@ -112,8 +117,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     }
   }, [user?.email, userRole]);
 
-  // Hotkey Listener for Cmd+K / Ctrl+K
+  // Hotkey Listener for Cmd+K / Ctrl+K (Workspace only)
   useEffect(() => {
+      if (isPersonalZone) return;
       const handleKeyDown = (e: KeyboardEvent) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
               e.preventDefault();
@@ -122,7 +128,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openCommandPalette]);
+  }, [isPersonalZone, openCommandPalette]);
 
   // Tasks for header bell: role changes matter; view switches should not re-hit all backends.
   useEffect(() => {
@@ -247,6 +253,29 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [user?.avatarUrl]);
 
   useEffect(() => {
+    if (!showNotifications) return;
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('[data-notification-root]')) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('touchstart', onPointerDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('touchstart', onPointerDown);
+    };
+  }, [showNotifications]);
+
+  const headerViewTitle =
+    currentView === ViewState.DASHBOARD
+      ? isPersonalZone
+        ? 'Member Dashboard'
+        : 'Executive Dashboard'
+      : currentView.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+
+  useEffect(() => {
     const applyBodyScrollLock = () => {
       const narrow = window.matchMedia('(max-width: 1023px)').matches;
       if (isSidebarOpen && narrow) {
@@ -280,9 +309,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <div className="relative flex h-full min-h-0 min-w-0 max-w-full flex-1 flex-col">
         
         {/* --- MODERN HEADER START --- */}
-        <header className="h-[72px] z-40 sticky top-0 flex items-center justify-between px-3 transition-all duration-300 sm:px-6
+        <header className="safe-area-top z-40 sticky top-0 flex min-h-[56px] shrink-0 items-center justify-between px-2 py-2 transition-all duration-300 sm:min-h-[72px] sm:px-6 sm:py-0
             bg-white/85 backdrop-blur-xl border-b border-slate-200/80 
-            shadow-[0_8px_30px_rgb(0,0,0,0.04)] shrink-0"
+            shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
         >
           {/* Decorative Pattern Layer */}
           <div 
@@ -296,40 +325,52 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {/* Content Wrapper */}
           <div className="relative z-10 flex items-center justify-between w-full">
               {/* Left: Mobile Toggle & Context Title */}
-              <div className="flex items-center gap-4">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
                 <button 
                   onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                  className="touch-target lg:hidden -ml-1 flex shrink-0 items-center justify-center rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100"
+                  aria-label="Open menu"
                 >
-                  <Menu size={24} />
+                  <Menu size={22} />
                 </button>
                 
-                {/* Mobile Search Trigger */}
+                {!isPersonalZone && (
                 <button 
                   onClick={openCommandPalette}
-                  className="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                  className="touch-target lg:hidden flex shrink-0 items-center justify-center rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100"
+                  aria-label="Search"
                 >
-                  <Search size={24} />
+                  <Search size={22} />
                 </button>
+                )}
                 
-                {/* Breadcrumb / Title area */}
-                <div className="hidden md:flex flex-col">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 flex items-center">
-                        <span className={`w-1.5 h-1.5 rounded-full mr-1.5 animate-pulse ${isPersonalZone ? 'bg-indigo-500' : 'bg-blue-500'}`}></span>
+                {/* Mobile title — visible below md */}
+                <div className="flex min-w-0 flex-col md:hidden">
+                    <span className="mb-0.5 flex items-center truncate text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <span className={`mr-1.5 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full ${isPersonalZone ? 'bg-indigo-500' : 'bg-blue-500'}`}></span>
+                        <span className="truncate">{isPersonalZone ? 'Personal Zone' : 'Workspace'}</span>
+                    </span>
+                    <h2 className="truncate text-sm font-bold tracking-tight text-slate-800">
+                        {headerViewTitle}
+                    </h2>
+                </div>
+
+                {/* Breadcrumb / Title area — desktop */}
+                <div className="hidden min-w-0 flex-col md:flex">
+                    <span className="mb-0.5 flex items-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <span className={`mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full ${isPersonalZone ? 'bg-indigo-500' : 'bg-blue-500'}`}></span>
                         {isPersonalZone ? 'Personal Zone' : 'Workspace'}
                     </span>
-                    <h2 className="text-sm font-bold text-slate-800 tracking-tight">
-                        {currentView === ViewState.DASHBOARD 
-                            ? (isPersonalZone ? 'Member Dashboard' : 'Executive Dashboard') 
-                            : currentView.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    <h2 className="truncate text-sm font-bold tracking-tight text-slate-800">
+                        {headerViewTitle}
                     </h2>
                 </div>
               </div>
 
               {/* Center/Right: Actions Area */}
-              <div className="flex items-center gap-4 md:gap-6">
+              <div className="flex shrink-0 items-center gap-2 sm:gap-4 md:gap-6">
                 
-                {/* Global Command Trigger (Desktop) */}
+                {!isPersonalZone && (
                 <div 
                     onClick={openCommandPalette}
                     className={`hidden lg:flex relative group w-72 ${profileGateActive ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
@@ -348,6 +389,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       </kbd>
                    </div>
                 </div>
+                )}
 
                 {/* --- NEW PERSONA SWITCHER --- */}
                 {canOpenPersonaSwitcher && !profileGateActive && (
@@ -376,17 +418,18 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 )}
 
                 {/* Notification & Profile Group */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 sm:gap-3">
                     {/* Notification Bell */}
-                    <div className="relative">
+                    <div className="relative" data-notification-root>
                         <button 
                             type="button"
                             aria-label={hasUnreadNotifications ? 'Notifications, unread' : 'Notifications'}
+                            aria-expanded={showNotifications}
                             onClick={() => {
                               setShowNotifications((open) => !open);
                               markNotificationsAsSeen();
                             }}
-                            className={`relative p-2.5 rounded-full transition-all duration-200 ${
+                            className={`touch-target relative flex items-center justify-center rounded-full p-2 transition-all duration-200 sm:p-2.5 ${
                               showNotifications
                                 ? 'bg-blue-50 text-blue-600'
                                 : hasUnreadNotifications
@@ -410,7 +453,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         </button>
 
                         {showNotifications && (
-                            <div className="absolute top-full right-0 mt-4 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-fade-in-up origin-top-right">
+                            <div className="fixed right-2 top-[calc(3.75rem+env(safe-area-inset-top,0px))] z-50 w-[min(20rem,calc(100vw-1rem))] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl animate-fade-in-up origin-top-right sm:absolute sm:right-0 sm:top-full sm:mt-4 sm:w-80">
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 backdrop-blur-sm">
                                     <h4 className="font-bold text-sm text-slate-800">Notifications</h4>
                                     <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
@@ -523,7 +566,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </header>
         {/* --- MODERN HEADER END --- */}
 
-        <main className="relative flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col overflow-y-auto bg-slate-50 p-0">
+        <main className="relative flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col overflow-x-clip overflow-y-auto bg-slate-50 overscroll-y-contain">
           {profileGateActive && currentView !== ViewState.SETTINGS && (
             <ProfileCompletionBanner
               missingLabels={missingProfileLabels}
@@ -533,12 +576,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {children}
         </main>
 
-        {/* Global Command Palette */}
+        {!isPersonalZone && (
         <CommandPalette 
             isOpen={isCmdOpen} 
             onClose={() => setIsCmdOpen(false)} 
             onNavigate={handleNavigate} 
         />
+        )}
         
         {/* New Persona Switcher Modal */}
         {showPersonaModal && (

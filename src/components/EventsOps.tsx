@@ -378,13 +378,13 @@ const EventsAdmin: React.FC = () => {
                        Flat List
                    </button>
               </div>
-              <div className="flex gap-2">
-                  <select className="bg-slate-50 border border-slate-200 text-xs rounded px-3 py-2 outline-none" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
+              <div className="flex min-w-0 w-full flex-wrap gap-2 sm:w-auto">
+                  <select className="mobile-safe-select max-w-full rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
                       <option value="All">All Years</option>
                       <option value="2025">2025</option>
                       <option value="2026">2026</option>
                   </select>
-                  <select className="bg-slate-50 border border-slate-200 text-xs rounded px-3 py-2 outline-none" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+                  <select className="mobile-safe-select max-w-full rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
                       <option value="All">All Types</option>
                       <option value="CONTAINER">Series (Container)</option>
                       <option value="SOLO">Single Event</option>

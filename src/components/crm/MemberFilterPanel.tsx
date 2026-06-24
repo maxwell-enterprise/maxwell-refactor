@@ -4,6 +4,7 @@ import { Filter, X, Calendar, CheckCircle, RotateCcw } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { Event } from '../../types/index';
 import type { FilterCriteria } from '../../features/crm/types';
+import { truncateSelectLabel } from '../../utils/selectLabels';
 
 export type { FilterCriteria } from '../../features/crm/types';
 
@@ -56,13 +57,15 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({ isOpen, onClose, 
                 <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Participation</label>
                     <select 
-                        className="w-full p-2.5 text-xs border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-all"
+                        className="mobile-safe-select rounded-lg border border-slate-300 p-2.5 text-xs outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                         value={localCriteria.attendedEventId || ''}
                         onChange={(e) => setLocalCriteria({...localCriteria, attendedEventId: e.target.value})}
                     >
                         <option value="">-- All / No Specific Event --</option>
-                        {events.map(e => (
-                            <option key={e.id} value={e.id}>{e.name}</option>
+                        {events.map((e) => (
+                            <option key={e.id} value={e.id} title={e.name}>
+                                {truncateSelectLabel(e.name, 40)}
+                            </option>
                         ))}
                     </select>
                 </div>

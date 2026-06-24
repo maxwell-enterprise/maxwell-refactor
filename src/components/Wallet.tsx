@@ -305,15 +305,15 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                       setViewingTicket(ticket);
                   }
               }}
-              className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
+              className="group cursor-pointer overflow-visible rounded-[2.5rem] border border-slate-200 bg-white p-1 pb-2 shadow-sm transition-all hover:shadow-xl"
           >
-              <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-slate-50 p-5">
-                  <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-slate-200 pr-5">
-                      <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{ticketDate.weekday}</span>
-                      <span className="text-4xl font-black leading-none text-slate-800">{ticketDate.day}</span>
-                      <span className="mt-1 text-sm font-bold uppercase tracking-wider text-slate-400">{ticketDate.month}</span>
+              <div className="relative flex wallet-ticket-layout overflow-hidden rounded-[2rem] bg-slate-50 p-4 sm:p-5">
+                  <div className="wallet-ticket-date border-slate-200">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{ticketDate.weekday}</span>
+                      <span className="text-3xl font-black leading-none text-slate-800 sm:text-4xl">{ticketDate.day}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400 sm:text-sm">{ticketDate.month}</span>
                   </div>
-                  <div className="flex min-w-0 flex-1 flex-col justify-center">
+                  <div className="flex min-w-0 flex-1 flex-col justify-center pr-14 sm:pr-16">
                       <h3 className="mb-1 truncate text-lg font-bold leading-tight text-slate-900">{ticket.title}</h3>
                       <p className="mb-2 truncate text-xs text-slate-500">{ticket.subtitle}</p>
                       <p className="flex items-center text-[10px] font-medium text-slate-400">
@@ -330,11 +330,11 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                           </span>
                       )}
                   </div>
-                  <div className="absolute bottom-[-10px] right-[-10px] flex h-20 w-20 translate-y-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg transition-transform group-hover:scale-110">
-                      <QrCode size={24} className="-translate-x-1 -translate-y-1" />
+                  <div className="absolute bottom-0 right-0 flex h-14 w-14 translate-x-1 translate-y-1 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg transition-transform group-hover:scale-110 sm:bottom-[-10px] sm:right-[-10px] sm:h-20 sm:w-20 sm:translate-x-0 sm:translate-y-0">
+                      <QrCode size={20} className="sm:-translate-x-1 sm:-translate-y-1 sm:size-6" />
                   </div>
               </div>
-              <div className="flex items-center justify-between px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <div className="flex items-center justify-between px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 sm:px-6">
                   <span>{footerLabel}</span>
                   <span className={`flex items-center ${isCheckedIn ? 'text-amber-700' : 'text-green-600'}`}>
                       <ShieldCheck size={12} className="mr-1" /> {isCheckedIn ? 'Checked In' : 'Valid'}
@@ -351,12 +351,12 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
           <div key={`pool-${anchor.id}`} className="relative group/bundle">
               <div className="absolute bottom-0 left-2 right-2 top-2 z-0 scale-[0.95] translate-y-2 transform rounded-[2.5rem] border border-slate-200 bg-white shadow-sm" />
               <div className="absolute bottom-0 left-4 right-4 top-4 z-0 scale-[0.9] translate-y-4 transform rounded-[2.5rem] border border-slate-200 bg-white shadow-sm" />
-              <div className="relative z-10 overflow-hidden rounded-[2.5rem] border border-indigo-200 bg-white p-1 shadow-md">
-                  <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-indigo-50 p-5">
-                      <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-indigo-200 pr-5">
-                          <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-indigo-400">{dateInfo.weekday}</span>
-                          <span className="text-4xl font-black leading-none text-indigo-900">{dateInfo.day}</span>
-                          <span className="mt-1 text-sm font-bold uppercase tracking-wider text-indigo-400">{dateInfo.month}</span>
+              <div className="relative z-10 overflow-visible rounded-[2.5rem] border border-indigo-200 bg-white p-1 pb-2 shadow-md">
+                  <div className="relative wallet-ticket-layout overflow-hidden rounded-[2rem] bg-indigo-50 p-4 sm:p-5">
+                      <div className="wallet-ticket-date border-indigo-200">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">{dateInfo.weekday}</span>
+                          <span className="text-3xl font-black leading-none text-indigo-900 sm:text-4xl">{dateInfo.day}</span>
+                          <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 sm:text-sm">{dateInfo.month}</span>
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col justify-center">
                           <div className="mb-1 flex items-center">
@@ -371,7 +371,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                               {pool.length === 1 ? 'ticket ready to share' : 'tickets ready to share'}
                           </p>
                       </div>
-                      <div className="flex items-center gap-2 pl-2">
+                      <div className="flex items-center justify-end gap-2 pt-2 sm:items-center sm:pl-2 sm:pt-0">
                           {pool.length === 1 && canOfferGiftLink(anchor) ? (
                               <button
                                   type="button"
@@ -416,12 +416,12 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
       };
 
       const cardBody = (
-          <div className="relative z-10 overflow-hidden rounded-[2.5rem] border border-violet-200 bg-white p-1 shadow-md">
-              <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-violet-50/70 p-5">
-                  <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-violet-200 pr-5">
-                      <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-violet-400">{ticketDate.weekday}</span>
-                      <span className="text-4xl font-black leading-none text-violet-900">{ticketDate.day}</span>
-                      <span className="mt-1 text-sm font-bold uppercase tracking-wider text-violet-400">{ticketDate.month}</span>
+          <div className="relative z-10 overflow-visible rounded-[2.5rem] border border-violet-200 bg-white p-1 pb-2 shadow-md">
+              <div className="relative wallet-ticket-layout overflow-hidden rounded-[2rem] bg-violet-50/70 p-4 sm:p-5">
+                  <div className="wallet-ticket-date border-violet-200">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-violet-400">{ticketDate.weekday}</span>
+                      <span className="text-3xl font-black leading-none text-violet-900 sm:text-4xl">{ticketDate.day}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-violet-400 sm:text-sm">{ticketDate.month}</span>
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col justify-center">
                       <span className="mb-2 inline-flex w-fit items-center rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
@@ -438,7 +438,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                           <p className="truncate text-xs font-medium text-slate-600">{recipientLine}</p>
                       )}
                   </div>
-                  <div className="flex items-center pl-2">
+                  <div className="flex items-center justify-end gap-2 pt-2 sm:items-center sm:pl-2 sm:pt-0">
                       <button
                           type="button"
                           onClick={openInvitedHistory}
@@ -488,7 +488,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                       openDistribution(getEventDistributionTickets(eventKey), 'HISTORY');
                   }
               }}
-              className="group/sent relative cursor-pointer"
+              className="group/sent relative mb-3 cursor-pointer overflow-visible pb-2"
           >
               <div className="absolute bottom-0 left-2 right-2 top-2 z-0 scale-[0.95] translate-y-2 transform rounded-[2.5rem] border border-violet-200 bg-white shadow-sm" />
               <div className="absolute bottom-0 left-4 right-4 top-4 z-0 scale-[0.9] translate-y-4 transform rounded-[2.5rem] border border-violet-200 bg-white shadow-sm" />
@@ -548,9 +548,8 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
-      {/* Title lives in DashboardLayout (Personal Zone / WALLET) — no duplicate heading here */}
-      <div className="page-container flex min-h-0 flex-1 flex-col gap-5 py-4 sm:gap-6 sm:py-6">
+    <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
+      <div className="page-container flex w-full flex-col gap-5 sm:gap-6">
         {/* Mobile-only wallet chrome */}
         <div className="flex items-center justify-between rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:hidden">
             <div className="flex items-center gap-3">
@@ -645,7 +644,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1">
+        <div className="w-full">
             {activeTab === 'HISTORY' && <WalletHistory />}
 
             {activeTab === 'ASSETS' && (
@@ -783,7 +782,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                             'Gift Tickets',
                             'Tickets sent to you — accept to add them to your wallet.',
                             <>
-                                <div className="flex items-center justify-between rounded-[2rem] border border-amber-200 bg-amber-50 px-5 py-4">
+                                <div className="flex flex-col gap-3 rounded-[2rem] border border-amber-200 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                                     <div>
                                         <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Pending acceptance</p>
                                         <p className="mt-1 text-sm font-semibold text-slate-800">
@@ -808,15 +807,15 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                                                     setActivePendingGift(gift);
                                                 }
                                             }}
-                                            className="group cursor-pointer overflow-hidden rounded-[2.5rem] border border-amber-200 bg-white p-1 shadow-sm transition-all hover:shadow-xl"
+                                            className="group cursor-pointer overflow-visible rounded-[2.5rem] border border-amber-200 bg-white p-1 pb-2 shadow-sm transition-all hover:shadow-xl"
                                         >
-                                            <div className="relative flex items-stretch overflow-hidden rounded-[2rem] bg-amber-50/60 p-5">
-                                                <div className="mr-5 flex min-w-[90px] flex-col items-center justify-center border-r-2 border-dashed border-amber-200 pr-5">
-                                                    <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-amber-500">{ticketDate.weekday}</span>
-                                                    <span className="text-4xl font-black leading-none text-amber-900">{ticketDate.day}</span>
-                                                    <span className="mt-1 text-sm font-bold uppercase tracking-wider text-amber-500">{ticketDate.month}</span>
+                                            <div className="relative wallet-ticket-layout overflow-hidden rounded-[2rem] bg-amber-50/60 p-4 sm:p-5">
+                                                <div className="wallet-ticket-date border-amber-200">
+                                                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500">{ticketDate.weekday}</span>
+                                                    <span className="text-3xl font-black leading-none text-amber-900 sm:text-4xl">{ticketDate.day}</span>
+                                                    <span className="text-xs font-bold uppercase tracking-wider text-amber-500 sm:text-sm">{ticketDate.month}</span>
                                                 </div>
-                                                <div className="flex min-w-0 flex-1 flex-col justify-center">
+                                                <div className="flex min-w-0 flex-1 flex-col justify-center pr-12 sm:pr-14">
                                                     <Badge variant="warning" className="mb-2 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wide">
                                                         Pending
                                                     </Badge>

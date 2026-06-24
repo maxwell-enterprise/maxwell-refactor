@@ -132,7 +132,7 @@ const MyTasks: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 animate-fade-in pb-24">
+    <div className="page-container max-w-5xl space-y-6 animate-fade-in">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">

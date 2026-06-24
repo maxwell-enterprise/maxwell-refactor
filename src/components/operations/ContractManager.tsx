@@ -165,7 +165,7 @@ const ContractManager: React.FC = () => {
     }
 
     return (
-        <div className="page-container flex min-h-0 flex-col animate-fade-in pb-8 min-w-0">
+        <div className="page-container relative w-full min-w-0 animate-fade-in">
             <div className="mb-5 flex flex-col gap-4 lg:mb-6 lg:flex-row lg:items-end lg:justify-between min-w-0">
                 <div className="flex min-w-0 gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -191,7 +191,7 @@ const ContractManager: React.FC = () => {
                 </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
+            <div className="min-w-0 w-full flex flex-col">
                 {activeTab === 'LIBRARY' && <ClauseLibrary />}
                 
                 {activeTab === 'TEMPLATES' && (
@@ -294,7 +294,7 @@ const ContractManager: React.FC = () => {
                                 </div>
                                 <button onClick={loadInstances}><RefreshCw size={16} className={loading ? 'animate-spin' : ''}/></button>
                             </div>
-                            <div className="flex-1 overflow-y-auto">
+                            <div className="responsive-table-wrap flex-1">
                                 <table className="w-full text-left text-sm">
                                     <thead className="bg-white text-slate-500 border-b border-slate-100">
                                         <tr>

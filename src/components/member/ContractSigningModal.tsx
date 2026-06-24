@@ -74,28 +74,28 @@ const ContractSigningModal: React.FC<ContractSigningModalProps> = ({ instance, o
     if (!template) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-4xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in">
+        <div className="modal-overlay z-[100]">
+            <div className="modal-panel sm:max-w-4xl sm:h-[90vh] sm:max-h-[90vh]">
                 
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-900">Review & Sign Agreement</h2>
-                        <p className="text-xs text-slate-500">{template.name} • {instance.id}</p>
+                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-4 sm:items-center sm:px-6">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-bold text-slate-900 sm:text-lg">Review & Sign Agreement</h2>
+                        <p className="truncate text-xs text-slate-500">{template.name} • {instance.id}</p>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={24}/></button>
+                    <button onClick={onClose} className="touch-target shrink-0 text-slate-400 hover:text-slate-700" aria-label="Close"><X size={24}/></button>
                 </div>
 
-                <div className="flex flex-1 overflow-hidden">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
                     {/* Document Scroll */}
-                    <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
-                        <div className="bg-white shadow-sm border border-slate-200 p-10 min-h-[800px] mx-auto max-w-[210mm]">
-                            <div className="text-center mb-8 border-b-2 border-slate-800 pb-4">
-                                <h1 className="text-2xl font-bold uppercase tracking-widest text-slate-900">Official Agreement</h1>
-                                <p className="text-sm font-bold text-slate-500">{instance.customerData.programName}</p>
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-8">
+                        <div className="mx-auto min-h-[400px] max-w-[210mm] border border-slate-200 bg-white p-5 shadow-sm sm:min-h-[800px] sm:p-10">
+                            <div className="mb-6 border-b-2 border-slate-800 pb-4 text-center sm:mb-8">
+                                <h1 className="text-lg font-bold uppercase tracking-widest text-slate-900 sm:text-2xl">Official Agreement</h1>
+                                <p className="text-xs font-bold text-slate-500 sm:text-sm">{instance.customerData.programName}</p>
                             </div>
 
-                            <div className="mb-8 p-4 bg-slate-50 border border-slate-200 rounded text-xs grid grid-cols-2 gap-2">
+                            <div className="mb-6 grid grid-cols-1 gap-2 rounded border border-slate-200 bg-slate-50 p-3 text-xs sm:mb-8 sm:grid-cols-2 sm:p-4">
                                 <div><strong>Member:</strong> {instance.customerData.name}</div>
                                 <div><strong>Email:</strong> {instance.customerData.email}</div>
                                 <div><strong>ID:</strong> {instance.customerData.mlctNumber}</div>
@@ -107,7 +107,7 @@ const ContractSigningModal: React.FC<ContractSigningModalProps> = ({ instance, o
                     </div>
 
                     {/* Signing Sidebar */}
-                    <div className="w-80 bg-white border-l border-slate-200 flex flex-col p-6 shadow-xl z-10">
+                    <div className="safe-area-bottom flex w-full shrink-0 flex-col border-t border-slate-200 bg-white p-4 shadow-xl sm:p-6 lg:w-80 lg:border-l lg:border-t-0">
                         <div className="mb-auto">
                             <h3 className="font-bold text-slate-900 mb-4 flex items-center">
                                 <PenTool size={18} className="mr-2 text-blue-600"/> Digital Signature

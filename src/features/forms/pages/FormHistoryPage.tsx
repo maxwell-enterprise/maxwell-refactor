@@ -115,9 +115,9 @@ const FormHistoryPage: React.FC = () => {
             </div>
 
             {viewResp && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-                    <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                <div className="modal-overlay z-50">
+                    <div className="modal-panel sm:max-w-2xl sm:h-auto sm:max-h-[90dvh]">
+                        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4 sm:px-6">
                             <div>
                                 <h2 className="text-lg font-bold text-slate-900">{viewResp.formTitle}</h2>
                                 <p className="text-sm text-slate-500">
@@ -132,7 +132,7 @@ const FormHistoryPage: React.FC = () => {
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="flex-1 space-y-4 overflow-y-auto p-6">
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
                             {(viewResp.formObj?.questions || []).map((q) => (
                                 <div key={q.id} className="border-b border-slate-100 pb-3">
                                     <div className="mb-1 text-sm font-bold text-slate-800">{q.text}</div>

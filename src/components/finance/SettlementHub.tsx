@@ -201,7 +201,7 @@ const SettlementHub: React.FC = () => {
             </div>
 
             {/* Desktop table */}
-            <div className="hidden md:block overflow-x-scroll-touch">
+            <div className="hidden md:block responsive-table-wrap">
               <table className="w-full min-w-[880px] text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold">
                   <tr>
@@ -301,7 +301,7 @@ const SettlementHub: React.FC = () => {
                 ))
               )}
             </div>
-            <div className="hidden md:block overflow-x-scroll-touch">
+            <div className="hidden md:block responsive-table-wrap">
               <table className="w-full min-w-[720px] text-left text-sm">
                  <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold">
                   <tr>

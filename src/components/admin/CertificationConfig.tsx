@@ -388,7 +388,7 @@ const CertificationConfig: React.FC = () => {
     );
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
+        <div className="relative w-full min-w-0 bg-slate-50">
             <div className="border-b border-slate-200 bg-white">
                 <div className="page-container flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4 sm:py-5">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -433,8 +433,7 @@ const CertificationConfig: React.FC = () => {
                 </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto">
-                <div className="page-container py-4 sm:py-6">
+            <div className="page-container w-full space-y-4">
             {loading ? (
                 <div className="flex min-h-[min(40vh,280px)] flex-col items-center justify-center gap-2 text-sm text-slate-500">
                     <Loader2 className="h-6 w-6 animate-spin text-slate-400" aria-hidden />
@@ -446,7 +445,7 @@ const CertificationConfig: React.FC = () => {
                 <>
                 {isEditingRule && renderRuleEditor()}
                 {!isEditingRule && (
-                    <div className="space-y-4 flex-1 flex flex-col min-h-0">
+                    <div className="space-y-4">
                         <div className="flex justify-end">
                             <button onClick={handleCreateRule} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center hover:bg-blue-700 shadow-sm">
                                 <Plus size={16} className="mr-2"/> New Rule
@@ -503,7 +502,7 @@ const CertificationConfig: React.FC = () => {
                 <>
                 {isEditingTag && renderTagEditor()}
                 {!isEditingTag && (
-                    <div className="space-y-4 flex-1 flex flex-col min-h-0">
+                    <div className="space-y-4">
                         <div className="flex justify-end">
                              <button onClick={handleCreateTag} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold flex items-center hover:bg-indigo-700 shadow-sm">
                                 <Plus size={16} className="mr-2"/> New Master Tag
@@ -518,7 +517,7 @@ const CertificationConfig: React.FC = () => {
                                 </p>
                             </div>
                         ) : (
-                        <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-sm">
+                        <div className="responsive-table-wrap bg-white rounded-xl border border-slate-300 shadow-sm">
                             <table className="w-full text-left text-sm">
                                 <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                                     <tr>
@@ -553,8 +552,7 @@ const CertificationConfig: React.FC = () => {
             )}
             </>
             )}
-                </div>
-            </div>
+        </div>
         </div>
     );
 };

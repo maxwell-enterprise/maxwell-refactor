@@ -180,8 +180,8 @@ const CMSAdmin: React.FC = () => {
                     <Plus size={16} /> Create Content
                 </button>
             </div>
-            <div className="overflow-x-auto -mx-px">
-                <table className="w-full text-left text-sm min-w-[640px]">
+            <div className="responsive-table-wrap">
+                <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-slate-500 font-medium text-xs sm:text-sm">
                         <tr>
                             <th className="px-3 sm:px-5 py-3 sm:py-4">Title</th>

@@ -58,9 +58,9 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ facilitatorName, onClos
     };
 
     return (
-        <div className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-emerald-50">
+        <div className="modal-overlay z-[110]">
+            <div className="modal-panel sm:max-w-2xl sm:h-auto sm:max-h-[90dvh]">
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-emerald-50 px-4 py-4 sm:items-center sm:px-6">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-white rounded-lg text-emerald-600 shadow-sm"><UserPlus size={20} /></div>
                         <div>
@@ -73,7 +73,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ facilitatorName, onClos
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Member Name *</label>

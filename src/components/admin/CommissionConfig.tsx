@@ -185,7 +185,7 @@ const CommissionConfig: React.FC = () => {
     }
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
+        <div className="relative w-full min-w-0 bg-slate-50">
             <div className="border-b border-slate-200 bg-white">
                 <div className="page-container flex flex-col gap-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:py-5">
                     <div className="flex min-w-0 items-start gap-3">
@@ -212,8 +212,7 @@ const CommissionConfig: React.FC = () => {
                 </div>
             </div>
             
-            <div className="min-h-0 flex-1 overflow-auto">
-                <div className="page-container py-4 sm:py-6">
+            <div className="page-container w-full">
                 {!loading && rules.length === 0 ? (
                     <div className="flex min-h-[260px] flex-col items-center justify-center px-6 py-10 text-center">
                         <div
@@ -268,7 +267,6 @@ const CommissionConfig: React.FC = () => {
                     ))}
                 </div>
                 )}
-                </div>
             </div>
         </div>
     );

@@ -40,9 +40,9 @@ const RoundTableModal: React.FC<RoundTableModalProps> = ({ facilitatorId, onClos
     };
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-indigo-50">
+        <div className="modal-overlay z-[100]">
+            <div className="modal-panel sm:max-w-lg sm:h-auto sm:max-h-[90dvh]">
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-indigo-50 px-4 py-4 sm:items-center sm:px-6">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-white rounded-lg text-indigo-600 shadow-sm"><Users size={20}/></div>
                         <div>
@@ -53,7 +53,7 @@ const RoundTableModal: React.FC<RoundTableModalProps> = ({ facilitatorId, onClos
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-2 rounded-full hover:bg-white/50 transition-all"><X size={20}/></button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
                     
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center">
@@ -69,7 +69,7 @@ const RoundTableModal: React.FC<RoundTableModalProps> = ({ facilitatorId, onClos
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center">
                                 <BookOpen size={12} className="mr-1"/> Program
@@ -96,7 +96,7 @@ const RoundTableModal: React.FC<RoundTableModalProps> = ({ facilitatorId, onClos
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Participants</label>
                             <input 

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { X, FileText, CreditCard, Calendar, User, AlignLeft, DollarSign, CheckCircle, AlertCircle, MapPin } from 'lucide-react';
 import { Transaction, Event } from '../../types/index';
 import { EVENTS_DATA } from '../../constants'; // Import Events
+import { formatEventSelectLabel } from '../../utils/selectLabels';
 import TaxInvoiceForm from './TaxInvoiceForm';
 import { SpecificBusinessService } from '../../services/specificBusinessService';
 import { DataUtils } from '../../utils/dataUtils';
@@ -201,13 +202,15 @@ const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose, on
                                         <MapPin size={12} className="mr-1"/> Allocation (Event / Cost Center)
                                     </label>
                                     <select 
-                                        className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="mobile-safe-select rounded-lg border border-slate-300 p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                         value={formData.eventId}
                                         onChange={e => setFormData({...formData, eventId: e.target.value})}
                                     >
                                         <option value="">-- General Operational Expense --</option>
-                                        {EVENTS_DATA.map(evt => (
-                                            <option key={evt.id} value={evt.id}>{evt.name} ({evt.date})</option>
+                                        {EVENTS_DATA.map((evt) => (
+                                            <option key={evt.id} value={evt.id} title={`${evt.name} (${evt.date})`}>
+                                                {formatEventSelectLabel(evt)}
+                                            </option>
                                         ))}
                                     </select>
                                     <p className="text-[10px] text-slate-400 mt-1">Link this cost to an event to calculate Profit & Loss.</p>

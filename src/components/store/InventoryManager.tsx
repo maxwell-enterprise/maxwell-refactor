@@ -388,7 +388,7 @@ const InventoryManager: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="hidden md:block overflow-x-scroll-touch rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="hidden md:block responsive-table-wrap rounded-xl border border-slate-200 bg-white shadow-sm">
                         <table className="w-full min-w-[720px] text-left text-sm">
                             <thead className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
                                 <tr>

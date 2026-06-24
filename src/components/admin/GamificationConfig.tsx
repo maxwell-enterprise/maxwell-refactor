@@ -79,7 +79,7 @@ const GamificationConfig: React.FC = () => {
     };
 
     return (
-        <div className="page-container flex flex-col animate-fade-in pb-8 min-w-0 min-h-0">
+        <div className="page-container flex flex-col animate-fade-in min-w-0">
             
             <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-5 sm:mb-6 min-w-0">
                 <div className="min-w-0">

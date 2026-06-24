@@ -153,7 +153,7 @@ const AdminSecurity: React.FC = () => {
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
+    <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
        {/* Header + tabs */}
        <div className="shrink-0 border-b border-slate-200 bg-white">
         <div className="page-container pb-3 pt-4 sm:pb-4 sm:pt-5">
@@ -215,10 +215,10 @@ const AdminSecurity: React.FC = () => {
         )}
       </div>
 
-      <div className="page-container flex min-h-0 flex-1 flex-col py-4 sm:py-6">
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
+      <div className="page-container w-full">
+      <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
           {activeTab === 'USERS' && (
-              <div className="min-h-0 w-full flex-1">
+              <div className="w-full min-w-0">
                   <UserAccessManager />
               </div>
           )}
@@ -290,7 +290,7 @@ const AdminSecurity: React.FC = () => {
                           <History size={18} className="mr-2 text-slate-500"/> System Audit Trail
                       </h3>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+                  <div className="responsive-table-wrap max-h-[min(70vh,560px)] overflow-y-auto">
                     <table className="w-full min-w-[560px] text-left text-sm">
                         <thead className="bg-slate-50 font-medium text-slate-500">
                             <tr>

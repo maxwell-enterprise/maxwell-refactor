@@ -540,48 +540,50 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[110] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-5xl h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-scale-in">
+        <div className="modal-overlay z-[110]">
+            <div className="modal-panel modal-panel-lg">
                 
                 {/* Header */}
-                <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <div>
-                        <h2 className="text-2xl font-bold text-slate-900">Manage Invitations</h2>
-                        <p className="text-sm text-slate-500">You have <b>{assignableRows.length}</b> tickets available to share.</p>
+                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-4 sm:items-center sm:px-8 sm:py-6">
+                    <div className="min-w-0">
+                        <h2 className="text-lg font-bold text-slate-900 sm:text-2xl">Manage Invitations</h2>
+                        <p className="text-xs text-slate-500 sm:text-sm">You have <b>{assignableRows.length}</b> tickets available to share.</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-white text-slate-400 hover:text-slate-900 rounded-full shadow-sm hover:shadow transition-all">
+                    <button onClick={onClose} className="touch-target shrink-0 rounded-full bg-white p-2 text-slate-400 shadow-sm transition-all hover:text-slate-900 hover:shadow" aria-label="Close">
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* Tabs + Excel import (Assign New only) */}
-                <div className="mx-8 mt-4 flex items-center justify-between gap-4">
-                    <div className="flex w-fit rounded-xl border border-slate-200 bg-slate-100 p-1">
+                <div className="mx-4 mt-3 flex shrink-0 flex-col gap-3 sm:mx-8 sm:mt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="overflow-x-scroll-touch">
+                        <div className="flex w-max min-w-full rounded-xl border border-slate-200 bg-slate-100 p-1">
                         <button 
                             onClick={() => setActiveTab('ASSIGN')}
-                            className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'ASSIGN' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`flex shrink-0 items-center whitespace-nowrap px-3 py-2 text-xs font-bold rounded-lg transition-all sm:px-4 sm:text-sm ${activeTab === 'ASSIGN' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            <UserPlus size={16} className="mr-2"/> Assign New
-                            <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{assignableRows.length}</span>
+                            <UserPlus size={16} className="mr-1.5 sm:mr-2"/> Assign New
+                            <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{assignableRows.length}</span>
                         </button>
                         <button 
                             onClick={() => setActiveTab('GIFT_LINK')}
-                            className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'GIFT_LINK' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`flex shrink-0 items-center whitespace-nowrap px-3 py-2 text-xs font-bold rounded-lg transition-all sm:px-4 sm:text-sm ${activeTab === 'GIFT_LINK' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            <Gift size={16} className="mr-2"/> WA Gift link
-                            <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{assignableRows.length}</span>
+                            <Gift size={16} className="mr-1.5 sm:mr-2"/> WA Gift link
+                            <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{assignableRows.length}</span>
                         </button>
                         <button 
                             onClick={() => setActiveTab('HISTORY')}
-                            className={`flex items-center px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`flex shrink-0 items-center whitespace-nowrap px-3 py-2 text-xs font-bold rounded-lg transition-all sm:px-4 sm:text-sm ${activeTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            <List size={16} className="mr-2"/> Invited History
-                            <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px]">{historyRows.length}</span>
+                            <List size={16} className="mr-1.5 sm:mr-2"/> Invited History
+                            <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{historyRows.length}</span>
                         </button>
+                        </div>
                     </div>
 
                     {activeTab === 'ASSIGN' && (
-                        <div className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                        <div className="flex shrink-0 items-center gap-1 self-end rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:self-auto">
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -617,14 +619,15 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                     )}
                 </div>
 
-                <div className="flex-1 overflow-auto bg-slate-50/50 p-8">
+                <div className="min-h-0 flex-1 overflow-auto bg-slate-50/50 p-4 sm:p-8">
                     {loading ? (
-                        <div className="h-full flex items-center justify-center text-slate-400">
-                            <Loader2 className="animate-spin mr-2" /> Loading ticket data...
+                        <div className="flex h-full items-center justify-center text-slate-400">
+                            <Loader2 className="mr-2 animate-spin" /> Loading ticket data...
                         </div>
                     ) : (
-                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                            <table className="w-full text-left text-sm">
+                        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <div className="responsive-table-wrap">
+                            <table className="w-full min-w-[640px] text-left text-sm">
                                 <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                                     <tr>
                                         <th className="px-6 py-4 w-12 text-center">#</th>
@@ -743,25 +746,26 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                                     )}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     )}
                 </div>
 
                 {activeTab === 'GIFT_LINK' && (
-                    <div className="px-8 py-6 border-t border-slate-100 bg-white flex justify-between items-center">
-                        <div className="text-xs text-slate-500 flex items-center max-w-md">
-                            <Info size={14} className="mr-2 shrink-0 text-indigo-500"/>
+                    <div className="safe-area-bottom flex shrink-0 flex-col gap-4 border-t border-slate-100 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6">
+                        <div className="flex max-w-md items-start text-xs text-slate-500">
+                            <Info size={14} className="mr-2 mt-0.5 shrink-0 text-indigo-500"/>
                             One unique claim link per row. After generation, WhatsApp will open automatically. Email is optional.
                         </div>
-                        <div className="flex gap-4">
-                            <button onClick={onClose} className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors">
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-4">
+                            <button onClick={onClose} className="min-h-11 rounded-xl px-6 py-2.5 font-bold text-slate-600 transition-colors hover:bg-slate-100 sm:min-h-0">
                                 Close
                             </button>
                             <button
                                 type="button"
                                 onClick={() => void handleSaveGiftLinks()}
                                 disabled={isGiftLinkSubmitting || assignableRows.length === 0}
-                                className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center"
+                                className="flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-6 py-2.5 font-bold text-white shadow-lg transition-all hover:bg-indigo-700 disabled:opacity-50 sm:min-h-0 sm:px-8"
                             >
                                 {isGiftLinkSubmitting ? (
                                     <Loader2 className="animate-spin mr-2" />
@@ -775,19 +779,19 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                 )}
 
                 {activeTab === 'ASSIGN' && (
-                    <div className="px-8 py-6 border-t border-slate-100 bg-white flex justify-between items-center">
-                        <div className="text-xs text-slate-500 flex items-center">
-                            <Info size={14} className="mr-2 text-indigo-500"/>
+                    <div className="safe-area-bottom flex shrink-0 flex-col gap-4 border-t border-slate-100 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6">
+                        <div className="flex items-start text-xs text-slate-500">
+                            <Info size={14} className="mr-2 mt-0.5 shrink-0 text-indigo-500"/>
                             We will send instructions via Email & WhatsApp.
                         </div>
-                        <div className="flex gap-4">
-                            <button onClick={onClose} className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors">
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-4">
+                            <button onClick={onClose} className="min-h-11 rounded-xl px-6 py-2.5 font-bold text-slate-600 transition-colors hover:bg-slate-100 sm:min-h-0">
                                 Close
                             </button>
                             <button 
                                 onClick={handleSaveDistribution}
                                 disabled={isSubmitting || assignableRows.length === 0}
-                                className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center"
+                                className="flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-6 py-2.5 font-bold text-white shadow-lg transition-all hover:bg-indigo-700 disabled:opacity-50 sm:min-h-0 sm:px-8"
                             >
                                 {isSubmitting ? <Loader2 className="animate-spin mr-2"/> : <Send size={16} className="mr-2"/>}
                                 Send Invitations

@@ -110,15 +110,15 @@ const CreateGiftLinkModal: React.FC<CreateGiftLinkModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-xl animate-scale-in">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 p-6">
-          <div className="flex items-center gap-4">
-            <div className="rounded-2xl bg-indigo-600 p-3 text-white shadow-lg">
-              <Gift size={24} />
+    <div className="modal-overlay z-[140]">
+      <div className="modal-panel sm:max-w-md sm:h-auto sm:max-h-[90dvh]">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 p-4 sm:p-6">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="shrink-0 rounded-2xl bg-indigo-600 p-2.5 text-white shadow-lg sm:p-3">
+              <Gift size={22} />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Create Gift Link</h2>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-slate-900 sm:text-xl">Create Gift Link</h2>
               <p className="text-xs text-slate-500">One unique link for this ticket</p>
             </div>
           </div>
@@ -131,7 +131,7 @@ const CreateGiftLinkModal: React.FC<CreateGiftLinkModalProps> = ({
           </button>
         </div>
 
-        <div className="space-y-6 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
             <div className="mb-1 text-slate-500">Ticket to gift</div>
             <div className="font-bold text-slate-800">{selectedTicket.title}</div>
@@ -193,11 +193,11 @@ const CreateGiftLinkModal: React.FC<CreateGiftLinkModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="safe-area-bottom flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end sm:gap-3">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl px-5 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-100"
+                  className="min-h-11 rounded-xl px-5 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-100 sm:min-h-0"
                 >
                   Cancel
                 </button>
@@ -205,7 +205,7 @@ const CreateGiftLinkModal: React.FC<CreateGiftLinkModalProps> = ({
                   type="button"
                   onClick={() => void handleGenerateLink()}
                   disabled={isSubmitting}
-                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:min-h-0"
                 >
                   {isSubmitting ? (
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />

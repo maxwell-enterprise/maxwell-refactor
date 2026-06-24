@@ -12,6 +12,7 @@ import QRScanner from '../common/QRScanner';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../context/DialogContext';
 import { publishAttendanceUpdated } from '../../services/attendanceRealtime';
+import { formatEventSelectLabel } from '../../utils/selectLabels';
 
 const GateScannerView: React.FC = () => {
   const { user } = useAuth();
@@ -328,7 +329,7 @@ const GateScannerView: React.FC = () => {
   // --- RENDER: SETUP SCREEN ---
   if (!config) {
       return (
-        <div className="flex min-h-0 w-full flex-1 flex-col bg-slate-900 px-4 py-6 text-white sm:px-6">
+        <div className="relative flex w-full min-w-0 flex-col bg-slate-900 px-4 py-6 text-white sm:px-6">
             <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center space-y-8 py-4">
                 <div className="text-center">
                     <div className="p-4 bg-blue-600/20 rounded-full w-20 h-20 flex items-center justify-center mx-auto border-2 border-blue-500/50 mb-6">
@@ -343,9 +344,9 @@ const GateScannerView: React.FC = () => {
                 <div className="w-full space-y-6 rounded-2xl border border-slate-600 bg-slate-800/90 p-5 shadow-xl sm:p-6">
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Select Active Event</label>
-                        <div className="relative">
+                        <div className="select-field relative">
                             <select 
-                                className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-sm appearance-none outline-none focus:border-blue-500 text-white"
+                                className="mobile-safe-select rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm text-white outline-none focus:border-blue-500"
                                 value={selectedEventId}
                                 onChange={(e) => setSelectedEventId(e.target.value)}
                                 disabled={loadingEvents}
@@ -353,8 +354,10 @@ const GateScannerView: React.FC = () => {
                                 <option value="">
                                     {activeEvents.length === 0 ? '-- No Assigned Events Found --' : '-- Choose Event --'}
                                 </option>
-                                {activeEvents.map(e => (
-                                    <option key={e.id} value={e.id}>{e.name} ({new Date(e.date).toLocaleDateString()})</option>
+                                {activeEvents.map((e) => (
+                                    <option key={e.id} value={e.id} title={`${e.name} (${new Date(e.date).toLocaleDateString()})`}>
+                                        {formatEventSelectLabel(e)}
+                                    </option>
                                 ))}
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16}/>
@@ -413,7 +416,7 @@ const GateScannerView: React.FC = () => {
   if (selectedGate) activeGateName = selectedGate.name;
 
   return (
-    <div className="relative flex min-h-0 w-full flex-1 flex-col bg-black px-4 py-6 text-white sm:px-6">
+    <div className="relative flex w-full min-w-0 flex-col bg-black px-4 py-6 text-white sm:px-6">
       
       {/* Top Bar Info */}
       <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/90 to-transparent z-10">

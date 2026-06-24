@@ -16,6 +16,7 @@ import {
     toTitleFromEmail,
     WalletBuyerRow,
 } from './participantWalletBuyers';
+import { formatEventSelectLabel, truncateSelectLabel } from '../../utils/selectLabels';
 
 type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'MISSING';
 type ParticipantStatusFilter = 'NAMED_ONLY' | 'WALLET_TICKETS' | 'ALL' | ParticipantStatus;
@@ -379,25 +380,25 @@ const ParticipantManager: React.FC = () => {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50 p-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex w-full items-center gap-3 lg:w-auto">
-                        <Calendar size={20} className="text-slate-400" />
+                <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="select-field flex min-w-0 w-full items-center gap-3 lg:max-w-sm">
+                        <Calendar size={20} className="shrink-0 text-slate-400" />
                         <select
-                            className="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm font-bold outline-none lg:w-72"
+                            className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-sm font-bold outline-none"
                             value={selectedEventId}
                             onChange={(e) => setSelectedEventId(e.target.value)}
                         >
                             {events.map((event) => (
-                                <option key={event.id} value={event.id}>
-                                    {event.name}
+                                <option key={event.id} value={event.id} title={event.name}>
+                                    {formatEventSelectLabel(event, 40)}
                                 </option>
                             ))}
                         </select>
                     </div>
 
-                    <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-4">
+                    <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
                         <div className="relative">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
@@ -409,7 +410,7 @@ const ParticipantManager: React.FC = () => {
                             />
                         </div>
                         <select
-                            className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                            className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             value={filterTier}
                             onChange={(e) => setFilterTier(e.target.value)}
                             disabled={isWalletTicketsMode}
@@ -417,12 +418,12 @@ const ParticipantManager: React.FC = () => {
                             <option value="ALL">All Tiers</option>
                             {tierOptions.map((tier) => (
                                 <option key={tier} value={tier}>
-                                    {tier}
+                                    {truncateSelectLabel(tier, 32)}
                                 </option>
                             ))}
                         </select>
                         <select
-                            className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                            className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             value={filterGate}
                             onChange={(e) => setFilterGate(e.target.value)}
                             disabled={isWalletTicketsMode}
@@ -430,12 +431,12 @@ const ParticipantManager: React.FC = () => {
                             <option value="ALL">All Gates</option>
                             {gateOptions.map((gate) => (
                                 <option key={gate} value={gate}>
-                                    {gate}
+                                    {truncateSelectLabel(gate, 32)}
                                 </option>
                             ))}
                         </select>
                         <select
-                            className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold outline-none"
+                            className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none"
                             value={filterStatus}
                             onChange={(e) =>
                                 setFilterStatus(e.target.value as ParticipantStatusFilter)

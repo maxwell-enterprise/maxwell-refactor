@@ -10,7 +10,7 @@ const SchemaViewer: React.FC = () => {
 
   if (userRole !== UserRole.SUPER_ADMIN) {
       return (
-          <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-slate-400">
+          <div className="page-container flex min-h-[50vh] flex-col items-center justify-center text-slate-400">
               <Server size={64} className="mb-4 text-slate-200" />
               <h2 className="text-xl font-bold text-slate-600">Restricted Area</h2>
               <p>Database Schema is only accessible to Super Admins.</p>
@@ -20,7 +20,7 @@ const SchemaViewer: React.FC = () => {
 
   // Directly render the robust Architect suite which now includes the baseline viewer as Tab 1
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative w-full min-w-0">
         <AIBlueprintArchitect />
     </div>
   );

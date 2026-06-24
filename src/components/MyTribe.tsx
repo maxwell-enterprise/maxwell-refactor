@@ -120,7 +120,7 @@ const MyTribe: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-8 animate-fade-in relative">
+        <div className="page-container relative min-w-0 animate-fade-in space-y-6 sm:space-y-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center">
@@ -128,16 +128,16 @@ const MyTribe: React.FC = () => {
                     </h1>
                     <p className="text-slate-500 mt-1">Manage your mentees and Round Table groups.</p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <button
                         onClick={() => setShowAddMember(true)}
-                        className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-emerald-700 transition-colors"
+                        className="min-h-11 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-md transition-colors hover:bg-emerald-700 sm:w-auto sm:min-h-0"
                     >
                         Add Member
                     </button>
                     <button
                         onClick={() => setShowRoundTable(true)}
-                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 transition-colors"
+                        className="min-h-11 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-md transition-colors hover:bg-indigo-700 sm:w-auto sm:min-h-0"
                     >
                         Start Round Table
                     </button>
@@ -146,9 +146,9 @@ const MyTribe: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-4">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <h3 className="font-bold text-slate-800">Tribe Members ({members.length})</h3>
-                        <div className="relative w-48">
+                        <div className="relative w-full sm:w-48">
                             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input type="text" placeholder="Search..." className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-indigo-500" />
                         </div>
@@ -248,7 +248,7 @@ const MyTribe: React.FC = () => {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="max-w-[11rem] text-right shrink-0">
+                                                <div className="min-w-0 flex-1 sm:max-w-[11rem] sm:text-right sm:shrink-0">
                                                     <div className="text-[10px] uppercase tracking-widest text-slate-400">Facilitator Note</div>
                                                     {memberNote?.notes ? (
                                                         <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium leading-4 text-amber-900 line-clamp-3">
@@ -318,9 +318,9 @@ const MyTribe: React.FC = () => {
                 />
             )}
             {noteEditorMember && (
-                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                        <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+                <div className="modal-overlay z-[120]">
+                    <div className="modal-panel sm:max-w-lg sm:h-auto sm:max-h-[90dvh]">
+                        <div className="flex items-start justify-between border-b border-slate-100 px-4 py-4 sm:px-6 sm:py-5">
                             <div>
                                 <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Tribe Member Note</div>
                                 <h3 className="mt-1 text-lg font-bold text-slate-900">{noteEditorMember.name}</h3>
@@ -334,7 +334,7 @@ const MyTribe: React.FC = () => {
                                 <X size={18} />
                             </button>
                         </div>
-                        <div className="px-6 py-5">
+                        <div className="px-4 py-4 sm:px-6 sm:py-5">
                             <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                                 Note
                             </label>
@@ -350,16 +350,16 @@ const MyTribe: React.FC = () => {
                                 {noteDraft.trim().length}/2000
                             </div>
                         </div>
-                        <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
+                        <div className="safe-area-bottom flex flex-col gap-3 border-t border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                             <button
                                 type="button"
                                 onClick={() => void handleDeleteMemberNote()}
                                 disabled={!memberNotesById.get(noteEditorMember.memberId) || noteSaving || noteDeleting}
-                                className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="min-h-11 w-full rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 sm:w-auto"
                             >
                                 {noteDeleting ? 'Deleting...' : 'Delete Note'}
                             </button>
-                            <div className="flex gap-3">
+                            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
                                 <button
                                     type="button"
                                     onClick={closeNoteEditor}

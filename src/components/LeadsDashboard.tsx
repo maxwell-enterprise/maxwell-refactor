@@ -127,7 +127,7 @@ const LeadsDashboard: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden pb-20 min-w-0">
-                <div className="overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
+                <div className="responsive-table-wrap">
                 <table className="w-full min-w-[720px] text-left text-sm">
                     <thead className="bg-orange-50 text-orange-800 font-bold border-b border-orange-100">
                         <tr>

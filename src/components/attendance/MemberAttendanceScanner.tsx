@@ -72,12 +72,12 @@ const MemberAttendanceScanner: React.FC = () => {
   // --- ERROR SCREEN (RED) ---
   if (scanError) {
       return (
-          <div className="min-h-[calc(100vh-100px)] p-6 bg-red-600 text-white flex flex-col items-center justify-center animate-fade-in text-center">
+          <div className="page-container flex min-h-[50vh] flex-col items-center justify-center bg-red-600 py-10 text-center text-white animate-fade-in sm:min-h-[60vh] sm:py-16">
               <div className="bg-white/20 p-6 rounded-full mb-6 animate-pulse">
                   <X size={64} />
               </div>
-              <h1 className="text-3xl font-black uppercase tracking-widest mb-2">Access Denied</h1>
-              <p className="text-lg text-red-100 max-w-xs mb-8">
+              <h1 className="mb-2 text-2xl font-black uppercase tracking-widest sm:text-3xl">Access Denied</h1>
+              <p className="mb-8 max-w-xs text-base text-red-100 sm:text-lg">
                   {scanError}
               </p>
               
@@ -92,8 +92,8 @@ const MemberAttendanceScanner: React.FC = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-100px)] p-6 bg-slate-50 flex flex-col items-center justify-center animate-fade-in">
-        <div className="max-w-sm w-full text-center space-y-6">
+    <div className="page-container flex w-full flex-col items-center justify-center animate-fade-in sm:py-4">
+        <div className="w-full max-w-sm space-y-6 text-center">
             <div className="bg-indigo-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-2xl shadow-indigo-200">
                 <QrCode size={36} className="text-white" />
             </div>
@@ -120,7 +120,7 @@ const MemberAttendanceScanner: React.FC = () => {
 
             <button 
                 onClick={() => setShowScanner(true)}
-                className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 flex items-center justify-center gap-2 hover:bg-slate-800 active:scale-95 transition-all"
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-4 font-bold text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-800 active:scale-95"
             >
                 <Camera size={20} />
                 Open Scanner

@@ -75,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (!enabled) {
       return 'w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-600/40 cursor-not-allowed opacity-45';
     }
-    return `w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+    return `w-full flex items-center px-3 py-2.5 min-h-11 rounded-xl text-sm font-medium transition-all ${
       active
         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50'
         : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -264,15 +264,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                      ></div>
                      <button 
                         onClick={() => handleSwitchContext('WORKSPACE')}
-                        className={`flex-1 flex items-center justify-center py-2 rounded-lg text-xs font-bold relative z-10 transition-colors ${!isMemberMode ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                        className={`flex-1 flex items-center justify-center py-2.5 min-h-10 rounded-lg text-[10px] font-bold relative z-10 transition-colors sm:text-xs ${!isMemberMode ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
                      >
-                         <Briefcase size={14} className="mr-2"/> Workspace
+                         <Briefcase size={14} className="mr-1.5 shrink-0 sm:mr-2"/> <span className="truncate">Workspace</span>
                      </button>
                      <button 
                         onClick={() => handleSwitchContext('MY_ZONE')}
-                        className={`flex-1 flex items-center justify-center py-2 rounded-lg text-xs font-bold relative z-10 transition-colors ${isMemberMode ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                        className={`flex-1 flex items-center justify-center py-2.5 min-h-10 rounded-lg text-[10px] font-bold relative z-10 transition-colors sm:text-xs ${isMemberMode ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
                      >
-                         <UserCircle size={14} className="mr-2"/> My Zone
+                         <UserCircle size={14} className="mr-1.5 shrink-0 sm:mr-2"/> <span className="truncate">My Zone</span>
                      </button>
                  </div>
              )}
@@ -373,7 +373,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
         </div>
 
-        <div className="p-4 border-t border-slate-800 bg-slate-950/30 shrink-0">
+        <div className="safe-area-bottom p-4 border-t border-slate-800 bg-slate-950/30 shrink-0">
             <button 
                 onClick={logout}
                 className="w-full flex items-center justify-center px-4 py-2 text-xs font-bold text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors"

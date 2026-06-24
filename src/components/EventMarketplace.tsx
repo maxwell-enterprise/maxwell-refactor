@@ -260,15 +260,15 @@ const EventMarketplace: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
+            <div className="relative w-full min-w-0 bg-slate-50">
                 <div className="page-container py-16 text-center text-slate-400">Loading catalogue…</div>
             </div>
         );
     }
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
-            <div className="page-container flex min-h-0 flex-1 flex-col gap-6 py-4 sm:gap-8 sm:py-6">
+        <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
+            <div className="page-container flex w-full flex-col gap-6 sm:gap-8">
             
             {/* Header / Stats */}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
@@ -511,10 +511,10 @@ const EventMarketplace: React.FC = () => {
             
             {/* REDEMPTION / REGISTRATION MODAL */}
             {selectedEvent && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-fade-in overflow-hidden">
+                <div className="modal-overlay z-50">
+                    <div className="modal-panel sm:max-w-lg sm:h-auto sm:max-h-[90dvh]">
                         {/* Modal Header */}
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-start">
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-4 sm:p-6">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-900">{selectedEvent.name}</h3>
                                 <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
@@ -540,10 +540,10 @@ const EventMarketplace: React.FC = () => {
                         </div>
 
                         {/* Assignee Form */}
-                        <div className="p-6 space-y-4">
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Register For</label>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     {(['MYSELF', 'GUEST', 'DRAFT'] as const).map(type => (
                                         <button
                                             key={type}
@@ -554,7 +554,7 @@ const EventMarketplace: React.FC = () => {
                                                 email: type === 'MYSELF' ? (user?.email || '') : '',
                                                 phone: ''
                                             }))}
-                                            className={`flex-1 p-3 rounded-lg text-xs font-bold border-2 transition-all ${
+                                            className={`min-h-11 min-w-[calc(33.333%-0.5rem)] flex-1 rounded-lg border-2 p-3 text-xs font-bold transition-all sm:min-h-0 sm:min-w-0 ${
                                                 assignee.type === type 
                                                     ? 'border-indigo-500 bg-indigo-50 text-indigo-700' 
                                                     : 'border-slate-200 text-slate-500 hover:border-slate-300'
@@ -635,9 +635,9 @@ const EventMarketplace: React.FC = () => {
 
             {/* SERIES VIEWING MODAL */}
             {viewingSeries && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl animate-fade-in max-h-[80vh] overflow-hidden flex flex-col">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-start shrink-0">
+                <div className="modal-overlay z-50">
+                    <div className="modal-panel sm:max-w-2xl sm:h-auto sm:max-h-[85dvh]">
+                        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 p-4 sm:p-6">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-900 flex items-center">
                                     <Layers size={20} className="mr-2 text-indigo-600"/> {viewingSeries.name}
@@ -648,28 +648,28 @@ const EventMarketplace: React.FC = () => {
                                 <X size={20} className="text-slate-400"/>
                             </button>
                         </div>
-                        <div className="p-6 overflow-y-auto space-y-3">
+                        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-6">
                             {getSeriesChildren(viewingSeries.id).length === 0 ? (
                                 <p className="text-sm text-slate-400 text-center py-8">No sessions in this series yet.</p>
                             ) : (
                                 getSeriesChildren(viewingSeries.id).map(child => {
                                     const childAccess = getEventAccess(child);
                                     return (
-                                        <div key={child.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                                            childAccess.accessible ? 'bg-white border-slate-200 hover:shadow-md' : 'bg-slate-50 border-slate-200 opacity-70'
+                                        <div key={child.id} className={`flex flex-col gap-3 rounded-xl border p-4 transition-all sm:flex-row sm:items-center sm:justify-between ${
+                                            childAccess.accessible ? 'border-slate-200 bg-white hover:shadow-md' : 'border-slate-200 bg-slate-50 opacity-70'
                                         }`}>
-                                            <div className="flex-1">
+                                            <div className="min-w-0 flex-1">
                                                 <h4 className="font-bold text-sm text-slate-800">{child.name}</h4>
                                                 <div className="flex gap-3 mt-1 text-xs text-slate-500">
                                                     <span className="flex items-center"><Calendar size={10} className="mr-1"/> {new Date(child.date).toLocaleDateString()}</span>
                                                     <span className="flex items-center"><MapPin size={10} className="mr-1"/> {child.location}</span>
                                                 </div>
                                             </div>
-                                            <div className="ml-4">
+                                            <div className="shrink-0 sm:ml-4">
                                                 {childAccess.accessible ? (
                                                     <button 
                                                         onClick={() => handleOpenRedeem(child)}
-                                                        className={`text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow flex items-center ${
+                                                        className={`flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-xs font-bold text-white shadow transition-colors sm:w-auto sm:py-2 ${
                                                             childAccess.type === 'FREE' ? 'bg-emerald-600 hover:bg-emerald-700' :
                                                             childAccess.type === 'GATE' ? 'bg-amber-600 hover:bg-amber-700' :
                                                             'bg-slate-900 hover:bg-slate-800'

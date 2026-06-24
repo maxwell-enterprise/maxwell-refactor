@@ -14,6 +14,7 @@ import ParticipantManager from './ParticipantManager';
 import SentInvitationsMonitor from './SentInvitationsMonitor'; // New Import
 import { subscribeAttendanceUpdated } from '../../services/attendanceRealtime';
 import { UserService } from '../../services/userService';
+import { formatEventSelectLabel } from '../../utils/selectLabels';
 
 const getAttendanceMethodLabel = (method: AttendanceRecord['method']) => {
     switch (method) {
@@ -247,15 +248,21 @@ const AttendanceConsole: React.FC = () => {
 
             {activeTab === 'LIVE_DASHBOARD' && (
                 <>
-                    <div className="flex flex-col sm:flex-row sm:justify-end gap-3 sm:items-center mb-5 sm:mb-6 min-w-0">
+                    <div className="mb-5 flex min-w-0 w-full flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-end">
+                        <div className="select-field sm:max-w-sm lg:max-w-md">
                          <select 
-                            className="min-w-0 w-full sm:w-72 p-2.5 border border-slate-300 rounded-lg bg-white text-sm font-bold"
+                            className="mobile-safe-select rounded-lg border border-slate-300 p-2.5 text-sm font-bold"
                             value={selectedEventId || ''}
                             onChange={(e) => setSelectedEventId(e.target.value)}
                         >
-                            {events.map(e => <option key={e.id} value={e.id}>{e.date} - {e.name}</option>)}
+                            {events.map((e) => (
+                                <option key={e.id} value={e.id} title={`${e.date} - ${e.name}`}>
+                                    {formatEventSelectLabel(e)}
+                                </option>
+                            ))}
                         </select>
-                        <button type="button" onClick={() => selectedEventId && loadAttendance(selectedEventId)} className="shrink-0 p-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 touch-target sm:min-h-0 sm:min-w-0 self-start sm:self-center">
+                        </div>
+                        <button type="button" onClick={() => selectedEventId && loadAttendance(selectedEventId)} className="shrink-0 self-start rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 hover:bg-slate-50 touch-target sm:min-h-0 sm:min-w-0 sm:self-center">
                             <RefreshCw size={18} className={loading ? 'animate-spin' : ''}/>
                         </button>
                     </div>
@@ -320,8 +327,8 @@ const AttendanceConsole: React.FC = () => {
                                     <button type="button" className="shrink-0 p-2 text-slate-500 hover:text-blue-600 touch-target sm:min-h-0 sm:min-w-0"><Download size={16}/></button>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto overflow-x-auto min-w-0">
-                                <table className="w-full text-left text-sm min-w-[280px]">
+                            <div className="responsive-table-wrap flex-1 max-h-[min(70vh,560px)] overflow-y-auto min-w-0">
+                                <table className="w-full text-left text-sm">
                                     <thead className="bg-white text-slate-500 font-bold border-b border-slate-100 sticky top-0 text-xs sm:text-sm">
                                         <tr>
                                             <th className="p-2 sm:p-3 whitespace-nowrap">Time</th>

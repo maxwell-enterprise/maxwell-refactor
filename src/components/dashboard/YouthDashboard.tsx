@@ -55,8 +55,8 @@ const YouthDashboard: React.FC = () => {
                 <div className="border-b border-slate-100 bg-slate-50 p-3 font-bold text-slate-700 sm:p-4">
                     School Partnership Status
                 </div>
-                <div className="overflow-x-scroll-touch">
-                <table className="w-full min-w-[640px] text-left text-sm">
+                <div className="responsive-table-wrap">
+                <table className="w-full text-left text-sm">
                     <thead className="bg-white text-slate-500 font-bold border-b border-slate-100">
                         <tr>
                             <th className="p-4">Institution</th>

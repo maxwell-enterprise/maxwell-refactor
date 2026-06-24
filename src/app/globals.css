@@ -4,6 +4,15 @@
   box-sizing: border-box;
 }
 
+select:not([multiple]):not([size]) {
+  max-width: 100%;
+}
+
+select option {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 html {
   margin: 0;
   padding: 0;
@@ -32,7 +41,20 @@ body {
 @layer utilities {
   /** Keeps page chrome inside the viewport; pair with min-w-0 on flex children. */
   .page-container {
-    @apply box-border w-full max-w-7xl mx-auto min-w-0 px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-6;
+    @apply box-border w-full max-w-7xl mx-auto min-w-0 px-3 pt-4 sm:px-5 sm:pt-5 lg:px-8 lg:pt-6;
+    padding-bottom: calc(2.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  @media (min-width: 640px) {
+    .page-container {
+      padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .page-container {
+      padding-bottom: calc(2.25rem + env(safe-area-inset-bottom, 0px));
+    }
   }
 
   .touch-target {
@@ -43,5 +65,58 @@ body {
   .overflow-x-scroll-touch {
     @apply max-w-full min-w-0 w-full overflow-x-auto overscroll-x-contain touch-pan-x;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /** Modal shell — full viewport on phones, centered card on sm+. */
+  .modal-overlay {
+    @apply fixed inset-0 z-[110] flex items-end justify-center bg-slate-900/80 p-0 backdrop-blur-sm sm:items-center sm:p-4;
+  }
+
+  .modal-panel {
+    @apply flex h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col overflow-hidden bg-white shadow-2xl rounded-none sm:h-auto sm:max-h-[90dvh] sm:rounded-3xl;
+  }
+
+  .modal-panel-lg {
+    @apply sm:max-w-5xl sm:h-[85vh] sm:max-h-[85vh];
+  }
+
+  /** Wrap HTML tables so they scroll horizontally on narrow screens. */
+  .responsive-table-wrap {
+    @apply -mx-px max-w-full min-w-0 w-full overflow-x-auto overscroll-x-contain touch-pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .responsive-table-wrap table {
+    @apply min-w-[640px];
+  }
+
+  /** Wallet ticket date strip — stacks on xs, sidebar on sm+. */
+  .wallet-ticket-layout {
+    @apply relative flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-0;
+  }
+
+  .wallet-ticket-date {
+    @apply flex flex-row items-center justify-center gap-3 border-b-2 border-dashed pb-3 sm:mr-4 sm:min-w-[72px] sm:flex-col sm:justify-center sm:gap-0 sm:border-b-0 sm:border-r-2 sm:pb-0 sm:pr-4;
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /** Native <select> — constrain width in flex layouts; pair with .select-field wrapper when needed. */
+  .mobile-safe-select {
+    @apply box-border block w-full max-w-full min-w-0 appearance-auto bg-white;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /** Wrapper for selects inside flex rows so the control cannot blow past the viewport. */
+  .select-field {
+    @apply relative min-w-0 w-full max-w-full;
   }
 }

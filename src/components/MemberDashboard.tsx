@@ -232,8 +232,8 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
 
   if (loading) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
-        <div className="page-container flex flex-1 flex-col gap-6 py-4 sm:gap-8 sm:py-6">
+      <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
+        <div className="page-container flex w-full flex-col gap-6 sm:gap-8">
           <div className="h-10 w-64 rounded-xl bg-slate-200 animate-pulse" />
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div className="h-64 animate-pulse rounded-[2rem] bg-slate-100 lg:col-span-2" />
@@ -245,8 +245,8 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
-      <div className="page-container flex min-h-0 flex-1 flex-col gap-6 py-4 sm:gap-8 sm:py-6">
+    <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
+      <div className="page-container flex w-full flex-col gap-6 sm:gap-8">
         
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -265,17 +265,17 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
             <div className="space-y-8 lg:col-span-2">
                 
                 {/* Evolution Journey */}
-                <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
-                    <div className="flex justify-between items-center mb-8">
-                        <h3 className="font-bold text-slate-900 flex items-center">
-                            <Award size={20} className="text-blue-600 mr-2" /> Evolution Journey
+                <div className="rounded-[1.5rem] border border-slate-300 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
+                    <div className="mb-6 flex flex-col gap-2 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
+                        <h3 className="flex items-center font-bold text-slate-900">
+                            <Award size={20} className="mr-2 text-blue-600" /> Evolution Journey
                         </h3>
-                        <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-3 py-1 rounded-full uppercase tracking-widest border border-blue-100">
+                        <span className="w-fit text-[10px] font-black uppercase tracking-widest rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-blue-700">
                             {currentStageLabel}
                         </span>
                     </div>
                     
-                    <div className="relative px-4 py-3">
+                    <div className="relative overflow-x-auto px-2 py-3 sm:px-4">
                         {/* Track line — centered through step dots */}
                         <div
                             className="pointer-events-none absolute left-4 right-4 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-200"
@@ -289,7 +289,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                             aria-hidden
                         />
 
-                        <div className="relative flex justify-between items-center">
+                        <div className="relative flex min-w-[280px] justify-between items-center">
                             {STAGES.map((stage, idx) => {
                                 const isCompleted = idx < currentStageIdx;
                                 const isCurrent = idx === currentStageIdx;
@@ -325,7 +325,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
 
                 {/* Next Event Card */}
                 <div
-                  className={`group relative overflow-hidden rounded-[2.5rem] bg-slate-900 p-8 text-white shadow-xl ${
+                  className={`group relative overflow-hidden rounded-[1.5rem] bg-slate-900 p-5 text-white shadow-xl sm:rounded-[2.5rem] sm:p-8 ${
                     profileLocked
                       ? 'cursor-not-allowed opacity-60'
                       : 'cursor-pointer'
@@ -339,10 +339,10 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                     {nextEvent ? (
                         <div className="relative z-10">
                             <span className="bg-blue-600 text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-widest mb-4 inline-block">Next Up</span>
-                            <h2 className="text-3xl font-bold mb-2">{nextEvent.title}</h2>
-                            <p className="text-slate-400 text-sm mb-8">{nextEvent.subtitle}</p>
+                            <h2 className="mb-2 text-2xl font-bold sm:text-3xl">{nextEvent.title}</h2>
+                            <p className="mb-6 text-sm text-slate-400 sm:mb-8">{nextEvent.subtitle}</p>
                             
-                            <div className="grid grid-cols-2 gap-4 max-w-sm">
+                            <div className="grid max-w-sm grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                 <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10">
                                     <Clock size={18} className="text-blue-400" />
                                     <div>

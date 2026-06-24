@@ -393,7 +393,7 @@ const ProfileSettings: React.FC = () => {
     const reasonOk = reasonLen >= MIN_DELETION_REASON_LEN;
 
     return (
-        <div className="p-6 max-w-4xl mx-auto animate-fade-in">
+        <div className="page-container max-w-4xl animate-fade-in">
             {deletionModalOpen && (
                 <div
                     className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
@@ -472,7 +472,7 @@ const ProfileSettings: React.FC = () => {
                 </div>
             )}
 
-            <h1 className="text-2xl font-bold text-slate-900 mb-6">Account Settings</h1>
+            <h1 className="mb-4 text-xl font-bold text-slate-900 sm:mb-6 sm:text-2xl">Account Settings</h1>
 
             {!isProfileComplete && (
               <div className="mb-6 overflow-hidden rounded-xl border border-amber-200">
@@ -484,9 +484,9 @@ const ProfileSettings: React.FC = () => {
               </div>
             )}
 
-            <div className="flex flex-col md:flex-row gap-8">
+            <div className="flex flex-col gap-6 md:flex-row md:gap-8">
                 {/* Sidebar Navigation */}
-                <div className="w-full md:w-64 flex-shrink-0">
+                <div className="w-full shrink-0 md:w-64">
                     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                         <div className="p-6 flex flex-col items-center border-b border-slate-100 bg-slate-50">
                             <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0} onKeyDown={(e) => {
@@ -522,10 +522,10 @@ const ProfileSettings: React.FC = () => {
                             <p className="text-xs text-slate-500">{user?.role}</p>
                         </div>
                         
-                        <nav className="p-2 space-y-1">
+                        <nav className="flex gap-1 overflow-x-scroll-touch p-2 md:flex-col md:space-y-1 md:overflow-visible">
                             <button 
                                 onClick={() => setActiveTab('PROFILE')}
-                                className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${activeTab === 'PROFILE' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                                className={`flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors md:w-full ${activeTab === 'PROFILE' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
                             >
                                 <User size={18} className="mr-3"/> Profile
                             </button>
@@ -533,13 +533,13 @@ const ProfileSettings: React.FC = () => {
                                 disabled
                                 aria-disabled="true"
                                 title="Security settings are temporarily disabled."
-                                className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-slate-400 bg-slate-50 cursor-not-allowed opacity-70"
+                                className="flex min-h-11 shrink-0 cursor-not-allowed items-center whitespace-nowrap rounded-lg bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-400 opacity-70 md:w-full"
                             >
                                 <Lock size={18} className="mr-3"/> Security
                             </button>
                             <button 
                                 onClick={() => setActiveTab('NOTIFICATIONS')}
-                                className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${activeTab === 'NOTIFICATIONS' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                                className={`flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors md:w-full ${activeTab === 'NOTIFICATIONS' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
                             >
                                 <Bell size={18} className="mr-3"/> Notifications
                             </button>
@@ -578,7 +578,7 @@ const ProfileSettings: React.FC = () => {
 
                 {/* Content Area */}
                 <div className="flex-1">
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 md:p-8">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8">
                         
                         {activeTab === 'PROFILE' && (
                             <div className="space-y-6">
@@ -727,11 +727,11 @@ const ProfileSettings: React.FC = () => {
                                         />
                                     </div>
                                 </div>
-                                <div className="pt-4 flex justify-end">
+                                <div className="flex justify-end pt-4">
                                     <button 
                                         onClick={handleSaveProfile}
                                         disabled={isLoading}
-                                        className="bg-slate-900 text-white px-6 py-2.5 rounded-lg font-bold text-sm hover:bg-slate-800 transition-colors flex items-center disabled:opacity-50"
+                                        className="flex w-full min-h-11 items-center justify-center rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-slate-800 disabled:opacity-50 sm:w-auto sm:min-h-0"
                                     >
                                         {isLoading ? 'Saving...' : <><Save size={16} className="mr-2"/> Save Changes</>}
                                     </button>

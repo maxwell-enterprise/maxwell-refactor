@@ -11,7 +11,6 @@ import {
     Percent,
     Pencil,
     ShoppingCart,
-    Plus,
     Zap,
     Trash2,
     ToggleRight,
@@ -630,11 +629,6 @@ const Storefront: React.FC<StorefrontProps> = ({
         await mergeEventsForProducts(data);
     }, [buildListQuery, mergeEventsForProducts]);
 
-    const handleCreateProduct = () => {
-        setEditingProduct(undefined);
-        setIsProductModalOpen(true);
-    };
-
     const handleEditProduct = (product: Product) => {
         setEditingProduct(product);
         setIsProductModalOpen(true);
@@ -693,7 +687,7 @@ const Storefront: React.FC<StorefrontProps> = ({
     };
 
     return (
-        <div className="flex min-h-[min(70vh,560px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 min-w-0 sm:min-h-0 sm:h-full">
+        <div className="flex w-full min-w-0 flex-col rounded-xl border border-slate-200 bg-slate-50 sm:min-h-0 sm:h-full sm:overflow-hidden">
             <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-slate-200 bg-white p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:p-4 min-w-0">
                 <div className="relative min-w-0 w-full sm:max-w-md sm:flex-1">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" aria-hidden />
@@ -708,11 +702,6 @@ const Storefront: React.FC<StorefrontProps> = ({
                             ))}
                         </div>
                     </div>
-                    {canManageStore && (
-                        <button type="button" onClick={handleCreateProduct} className="touch-target flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-md hover:bg-blue-700 sm:px-4 sm:text-sm" aria-label="Add product">
-                            <Plus size={16} className="shrink-0" aria-hidden /><span className="hidden sm:inline">Add product</span>
-                        </button>
-                    )}
                     <button type="button" onClick={() => cart.length > 0 ? setIsPaymentModalOpen(true) : showToast('Cart empty', 'info')} className="touch-target relative shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-700 shadow-sm hover:bg-slate-50" aria-label={`Cart, ${cartCount} items`}>
                         <ShoppingCart size={20} />
                         {cartCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">{cartCount}</span>}
@@ -720,7 +709,7 @@ const Storefront: React.FC<StorefrontProps> = ({
                 </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6" ref={scrollRootRef}>
+            <div className="w-full p-3 sm:min-h-0 sm:flex-1 sm:overflow-auto sm:p-6" ref={scrollRootRef}>
                 {listLoading ? (
                     <div className="flex min-h-[160px] items-center justify-center py-16">
                         <p className="text-center text-sm text-slate-400">Loading products…</p>

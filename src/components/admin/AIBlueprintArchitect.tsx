@@ -224,7 +224,7 @@ const AIBlueprintArchitect: React.FC = () => {
     }, [usePostgresAudit, missingInRegistry, missingInDB]);
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
+        <div className="relative w-full min-w-0 bg-slate-50">
             {/* TOP NAVIGATION TABS */}
             <div className="flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:px-5 sm:pt-4 lg:px-8">
                 <div className="max-w-full min-w-0 overflow-x-scroll-touch">
@@ -278,11 +278,11 @@ const AIBlueprintArchitect: React.FC = () => {
             </div>
 
             {/* CONTENT AREA */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+            <div className="w-full bg-white">
                 
                 {/* 0. AUDIT TAB */}
                 {activeTab === 'AUDIT' && (
-                    <div className="mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-y-auto overscroll-y-contain px-3 py-5 sm:px-6 sm:py-8">
+                    <div className="mx-auto min-h-0 w-full max-w-5xl px-3 py-5 sm:px-6 sm:py-8">
                         <div className="mb-6 text-center sm:mb-8">
                             <h2 className="mb-2 text-xl font-bold leading-tight text-slate-900 sm:text-2xl">Schema Integrity Audit</h2>
                             {usePostgresAudit ? (

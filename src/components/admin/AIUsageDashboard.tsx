@@ -74,7 +74,7 @@ const AIUsageDashboard: React.FC = () => {
     };
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col animate-fade-in bg-slate-50">
+        <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
             <div className="shrink-0 border-b border-slate-200 bg-white">
                 <div className="page-container flex flex-col gap-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:py-5">
                     <div className="flex min-w-0 items-start gap-3">
@@ -104,7 +104,7 @@ const AIUsageDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="page-container flex min-h-0 flex-1 flex-col py-4 sm:py-6">
+            <div className="page-container w-full space-y-5">
             <div className="mb-5 flex flex-col gap-3 rounded-xl border border-slate-300 bg-white p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between sm:gap-4">
                 <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -112,10 +112,10 @@ const AIUsageDashboard: React.FC = () => {
                         Filters
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
-                        <select value={filterUser} onChange={e => setFilterUser(e.target.value)} className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
+                        <select value={filterUser} onChange={e => setFilterUser(e.target.value)} className="mobile-safe-select min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
                             {uniqueUsers.map(u => <option key={u} value={u}>{u === 'ALL' ? 'All users' : u}</option>)}
                         </select>
-                        <select value={filterFeature} onChange={e => setFilterFeature(e.target.value)} className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
+                        <select value={filterFeature} onChange={e => setFilterFeature(e.target.value)} className="mobile-safe-select min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
                             {uniqueFeatures.map(f => <option key={f} value={f}>{f === 'ALL' ? 'All features' : f}</option>)}
                         </select>
                     </div>
@@ -127,7 +127,7 @@ const AIUsageDashboard: React.FC = () => {
             </div>
 
             {activeTab === 'DASHBOARD' && (
-                <div className="flex min-h-0 flex-1 flex-col space-y-5">
+                <div className="space-y-5">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-5">
                         <div className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
                             <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Estimated cost</h3>
@@ -196,7 +196,7 @@ const AIUsageDashboard: React.FC = () => {
                         </div>
                     </div>
                  ) : (
-                  <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-300 bg-white shadow-sm">
+                  <div className="responsive-table-wrap rounded-xl border border-slate-300 bg-white shadow-sm">
                      <table className="w-full min-w-[920px] text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 sticky top-0">
                             <tr>

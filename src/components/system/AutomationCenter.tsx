@@ -128,7 +128,7 @@ const QueueMonitor = () => {
                         All systems operational. Queue empty.
                     </div>
                 ) : (
-                    <div className="overflow-x-scroll-touch">
+                    <div className="responsive-table-wrap">
                     <table className="w-full min-w-[300px] text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                             <tr>
@@ -445,7 +445,7 @@ const AutomationCenter: React.FC = () => {
     };
 
     return (
-        <div className="page-container relative flex min-h-0 flex-1 flex-col animate-fade-in min-w-0 pb-8">
+        <div className="page-container relative w-full min-w-0 animate-fade-in">
             
             {/* Header */}
             <div className="mb-4 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-end lg:justify-between">
@@ -478,10 +478,10 @@ const AutomationCenter: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-visible lg:flex-row lg:overflow-hidden">
+            <div className="flex flex-col gap-6 lg:flex-row">
                 
                 {/* MAIN CONTENT — below queue on mobile (order-2), left column on desktop */}
-                <div className="order-2 min-h-0 min-w-0 flex-1 overflow-y-auto lg:order-1 lg:pr-2">
+                <div className="order-2 min-w-0 flex-1 lg:order-1 lg:pr-2">
                     
                     {activeTab === 'REGISTRY' && (
                         <div className="space-y-4">

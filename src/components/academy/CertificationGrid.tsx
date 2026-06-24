@@ -9,6 +9,7 @@ import { Calendar, Search, RefreshCw, CheckCircle, Circle, AlertTriangle, Databa
 import { useToast } from '../../context/ToastContext';
 import { CERT_INTEGRATION_MEMBERS } from '../../seeds/certification_integration_test';
 import CertificationOverrideModal from './CertificationOverrideModal';
+import { truncateSelectLabel } from '../../utils/selectLabels';
 import { APP_CONFIG } from '../../lib/config';
 import { DevDatabase } from '../../utils/devDatabase';
 
@@ -167,20 +168,20 @@ const CertificationGrid: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-50 animate-fade-in">
-            {/* Header Toolbar */}
-            <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
-                <div className="flex items-center gap-4">
-                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+        <div className="relative w-full min-w-0 bg-slate-50 animate-fade-in">
+            <div className="page-container space-y-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 items-center gap-4">
+                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg shrink-0">
                         <Database size={20} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h2 className="text-lg font-bold text-slate-900">Certification Progress</h2>
                         <p className="text-xs text-slate-500">Evaluation Matrix based on Rules</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 lg:w-auto">
                      <div className="relative flex-1 md:w-64">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input 
@@ -193,11 +194,15 @@ const CertificationGrid: React.FC = () => {
                     </div>
                     
                     <select 
-                        className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 font-bold text-slate-700 outline-none focus:border-indigo-500 max-w-[250px]"
+                        className="mobile-safe-select max-w-full rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500"
                         value={selectedRuleId}
                         onChange={(e) => setSelectedRuleId(e.target.value)}
                     >
-                        {rules.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                        {rules.map((r) => (
+                            <option key={r.id} value={r.id} title={r.name}>
+                                {truncateSelectLabel(r.name, 36)}
+                            </option>
+                        ))}
                     </select>
 
                     <button 
@@ -219,7 +224,7 @@ const CertificationGrid: React.FC = () => {
             </div>
 
             {/* Grid Area */}
-            <div className="flex-1 overflow-auto relative custom-scrollbar bg-white">
+            <div className="responsive-table-wrap rounded-xl border border-slate-200 bg-white shadow-sm">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center min-h-[min(50vh,280px)] h-full text-slate-500 text-sm">
                         Loading data…
@@ -311,7 +316,7 @@ const CertificationGrid: React.FC = () => {
             </div>
             
             {/* Legend / Footer */}
-            <div className="px-6 py-2 bg-white border-t border-slate-200 text-[10px] text-slate-400 flex gap-4">
+            <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-3 py-2 text-[10px] text-slate-400 sm:flex-row sm:gap-4 sm:px-4">
                 <span className="flex items-center"><CheckCircle size={12} className="text-green-600 mr-1"/> Requirement Met</span>
                 <span className="flex items-center"><div className="w-3 h-3 border-2 border-slate-200 rounded-full mr-1"></div> Missing</span>
                 <span className="flex items-center ml-auto">
@@ -329,6 +334,7 @@ const CertificationGrid: React.FC = () => {
                     onSuccess={handleRefresh}
                 />
             )}
+            </div>
         </div>
     );
 };

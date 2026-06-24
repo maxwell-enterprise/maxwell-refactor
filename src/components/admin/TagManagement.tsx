@@ -4,6 +4,7 @@ import { CreditTagService } from '../../services/creditTagService';
 import { DataService } from '../../services/dataService';
 import { EntitlementService } from '../../services/entitlementService'; // NEW
 import { CreditTagMaster, WalletItem } from '../../types/access';
+import { formatEventSelectLabel, truncateSelectLabel } from '../../utils/selectLabels';
 import { Event, Member } from '../../types/index';
 import { useToast } from '../../context/ToastContext';
 import { useDialog } from '../../context/DialogContext';
@@ -331,7 +332,7 @@ const TagManagement: React.FC = () => {
     };
 
     return (
-        <div className="page-container flex min-h-0 flex-col animate-fade-in pb-8 min-w-0">
+        <div className="page-container relative w-full min-w-0 animate-fade-in">
             <div className="mb-5 flex flex-col gap-4 lg:mb-6 lg:flex-row lg:items-start lg:justify-between min-w-0">
                 <div className="flex min-w-0 gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
@@ -374,8 +375,8 @@ const TagManagement: React.FC = () => {
                                 <Plus size={16} className="mr-2"/> New Tag
                             </button>
                         </div>
-                        <div className="flex-1 overflow-auto overflow-x-scroll-touch">
-                            <table className="w-full min-w-[640px] text-left text-sm">
+                        <div className="responsive-table-wrap flex-1">
+                            <table className="w-full text-left text-sm">
                                 <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0 z-10">
                                     <tr>
                                         <th className="p-4">Tag Code (ID)</th>
@@ -528,13 +529,15 @@ const TagManagement: React.FC = () => {
                                                         <div>
                                                             <span className="text-[10px] font-bold text-slate-500 mb-1 block">1. Select Target Event</span>
                                                             <select 
-                                                                className="w-full p-2 border border-slate-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                                className="mobile-safe-select rounded border border-slate-300 p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                                                 value={eventToAddId}
                                                                 onChange={e => { setEventToAddId(e.target.value); setTierToAddId(''); }}
                                                             >
                                                                 <option value="">-- Choose Event --</option>
-                                                                {availableEventsToAdd.map(e => (
-                                                                    <option key={e.id} value={e.id}>{e.name} ({new Date(e.date).toLocaleDateString()})</option>
+                                                                {availableEventsToAdd.map((e) => (
+                                                                    <option key={e.id} value={e.id} title={`${e.name} (${new Date(e.date).toLocaleDateString()})`}>
+                                                                        {formatEventSelectLabel(e)}
+                                                                    </option>
                                                                 ))}
                                                             </select>
                                                         </div>
@@ -545,13 +548,15 @@ const TagManagement: React.FC = () => {
                                                                 <span className="text-[10px] font-bold text-slate-500 mb-1 block">2. Select Ticket Tier</span>
                                                                 {availableTiersForSelectedEvent.length > 0 ? (
                                                                     <select 
-                                                                        className="w-full p-2 border border-slate-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                                        className="mobile-safe-select rounded border border-slate-300 p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                                                         value={tierToAddId}
                                                                         onChange={e => setTierToAddId(e.target.value)}
                                                                     >
                                                                         <option value="">-- Choose Tier --</option>
-                                                                        {availableTiersForSelectedEvent.map(t => (
-                                                                            <option key={t.id} value={t.id}>{t.name} ({t.quota} seats)</option>
+                                                                        {availableTiersForSelectedEvent.map((t) => (
+                                                                            <option key={t.id} value={t.id} title={`${t.name} (${t.quota} seats)`}>
+                                                                                {truncateSelectLabel(`${t.name} (${t.quota} seats)`, 40)}
+                                                                            </option>
                                                                         ))}
                                                                     </select>
                                                                 ) : (

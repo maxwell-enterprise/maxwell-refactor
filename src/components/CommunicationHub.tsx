@@ -37,7 +37,7 @@ const CommunicationHub: React.FC = () => {
     };
 
     return (
-        <div className="page-container flex flex-col animate-fade-in relative pb-8 min-h-0 min-w-0">
+        <div className="page-container flex flex-col animate-fade-in relative min-w-0">
             
             {/* Page Header */}
             <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-end mb-5 lg:mb-6 min-w-0">
@@ -78,7 +78,7 @@ const CommunicationHub: React.FC = () => {
             </div>
 
             {/* Content Area — min-w-0 so inner tables can scroll horizontally */}
-            <div className="relative flex min-h-[50vh] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:min-h-[420px]">
+            <div className="relative flex min-w-0 w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 
                 {/* WHATSAPP QUEUE */}
                 {activeTab === 'WA_QUEUE' && (
@@ -87,15 +87,15 @@ const CommunicationHub: React.FC = () => {
 
                 {/* WHATSAPP TEMPLATES */}
                 {activeTab === 'WA_TEMPLATES' && (
-                    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col p-3 sm:p-6">
+                    <div className="flex min-w-0 w-full flex-col p-3 sm:p-6">
                         <WhatsAppTemplateManager />
                     </div>
                 )}
 
                 {/* CAMPAIGNS LIST */}
                 {activeTab === 'CAMPAIGNS' && (
-                    <div className="overflow-x-scroll-touch">
-                        <table className="w-full min-w-[640px] text-left text-sm">
+                    <div className="responsive-table-wrap">
+                        <table className="w-full text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                                 <tr>
                                     <th className="p-4">Campaign Name</th>
@@ -155,8 +155,8 @@ const CommunicationHub: React.FC = () => {
 
                 {/* LOGS LIST */}
                 {activeTab === 'LOGS' && (
-                     <div className="overflow-x-scroll-touch">
-                        <table className="w-full min-w-[640px] text-left text-sm">
+                     <div className="responsive-table-wrap">
+                        <table className="w-full text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                                 <tr>
                                     <th className="p-4">Timestamp</th>

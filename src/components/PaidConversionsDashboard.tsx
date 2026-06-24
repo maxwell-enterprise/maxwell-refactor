@@ -127,11 +127,11 @@ const PaidConversionsDashboard: React.FC = () => {
             </p>
           )}
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full lg:w-auto min-w-0 flex-wrap">
+        <div className="flex min-w-0 w-full flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap lg:w-auto">
           <select
             value={stageFilter}
             onChange={(e) => setStageFilter(e.target.value as StageFilter)}
-            className="px-3 py-2 rounded-lg text-xs font-bold border border-slate-300 bg-white text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+            className="mobile-safe-select rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
           >
             <option value="ALL">All stages</option>
             <option value="SIGNED_IN">Lead only</option>
@@ -166,7 +166,7 @@ const PaidConversionsDashboard: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-w-0">
-        <div className="overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
+        <div className="responsive-table-wrap">
           <table className="w-full min-w-[1040px] text-left text-sm">
             <thead className="bg-emerald-50 text-emerald-800 font-bold border-b border-emerald-100">
               <tr>
