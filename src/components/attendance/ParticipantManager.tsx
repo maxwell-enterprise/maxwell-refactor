@@ -5,7 +5,7 @@ import { EntitlementService } from '../../services/entitlementService';
 import { PaymentService } from '../../services/paymentService';
 import { Event, AttendanceRecord, WalletItem, Member, UserProfile } from '../../types/index';
 import { GiftAllocation } from '../../types/access';
-import { Search, CheckCircle2, Circle, UserCog, Calendar, Filter, Ticket } from 'lucide-react';
+import { Search, CheckCircle2, Circle, UserCog, Calendar, Ticket } from 'lucide-react';
 import MemberProfilingModal from '../crm/MemberProfilingModal';
 import WhatsAppQuickAction from '../common/WhatsAppQuickAction';
 import { UserService } from '../../services/userService';
@@ -367,6 +367,14 @@ const ParticipantManager: React.FC = () => {
         );
     }, [walletBuyers, searchTerm]);
 
+    const eventSummary = useMemo(() => {
+        const ticketsDistribution = walletBuyers.reduce((sum, row) => sum + row.ticketCount, 0);
+        const participants =
+            walletBuyers.reduce((sum, row) => sum + row.selfCount + row.claimedCount, 0);
+        const purchasers = walletBuyers.length;
+        return { ticketsDistribution, participants, purchasers };
+    }, [walletBuyers]);
+
     const formatStatus = (status: ParticipantStatus) => {
         if (status === 'CHECKED_IN') return 'Checked-In';
         if (status === 'MISSING') return 'Missing';
@@ -452,18 +460,40 @@ const ParticipantManager: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-semibold border border-slate-200">
-                        <Filter size={12} />{' '}
-                        {isWalletTicketsMode
-                            ? `${filteredWalletBuyers.length} purchasers`
-                            : `${filteredRows.length} participants`}
-                    </span>
-                    {selectedEvent && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-semibold border border-slate-200">
-                            Event Date: {selectedEvent.date}
+                <div className="overflow-x-scroll-touch -mx-1 px-1">
+                    <div className="inline-flex min-w-0 flex-nowrap items-center gap-2 pb-1 text-[11px] text-slate-500">
+                        <span
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold whitespace-nowrap"
+                            title="All tickets issued for this event (purchase + distribution)"
+                        >
+                            <Ticket size={12} className="shrink-0 text-indigo-500" />
+                            Tickets Distribution:{' '}
+                            <span className="font-bold text-slate-800">{eventSummary.ticketsDistribution}</span>
                         </span>
-                    )}
+                        {selectedEvent && (
+                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold whitespace-nowrap">
+                                <Calendar size={12} className="shrink-0 text-slate-400" />
+                                Event Date:{' '}
+                                <span className="font-bold text-slate-800">{selectedEvent.date}</span>
+                            </span>
+                        )}
+                        <span
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold whitespace-nowrap"
+                            title="Self tickets plus tickets claimed by recipients"
+                        >
+                            <CheckCircle2 size={12} className="shrink-0 text-emerald-500" />
+                            Participants:{' '}
+                            <span className="font-bold text-slate-800">{eventSummary.participants}</span>
+                        </span>
+                        <span
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold whitespace-nowrap"
+                            title="Unique purchasers who bought tickets (not gift recipients)"
+                        >
+                            <UserCog size={12} className="shrink-0 text-blue-500" />
+                            Purchasers:{' '}
+                            <span className="font-bold text-slate-800">{eventSummary.purchasers}</span>
+                        </span>
+                    </div>
                 </div>
             </div>
 
