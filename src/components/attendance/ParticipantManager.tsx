@@ -466,7 +466,7 @@ const ParticipantManager: React.FC = () => {
     };
 
     return (
-        <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex w-full min-w-0 max-w-full flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50 p-4">
                 <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="select-field flex min-w-0 w-full items-center gap-3 lg:max-w-sm">
@@ -602,7 +602,7 @@ const ParticipantManager: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-auto">
+            <div className="min-w-0 w-full max-w-full">
                 {loading ? (
                     <div className="p-8 text-center text-sm text-slate-400">Loading participants...</div>
                 ) : isRecipientsMode ? (
@@ -611,9 +611,10 @@ const ParticipantManager: React.FC = () => {
                             No gift recipients found for this event.
                         </div>
                     ) : (
-                        <div className="responsive-table-wrap">
-                            <table className="w-full min-w-[1100px] text-left text-xs">
-                                <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 font-bold text-slate-500">
+                        <div className="responsive-table-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
+                            <div className="responsive-table-scroll">
+                            <table className="min-w-[1100px] text-left text-xs">
+                                <thead className="border-b border-slate-200 bg-slate-100 font-bold text-slate-500 md:sticky md:top-0 md:z-10">
                                     <tr>
                                         <th className="p-3">Recipient</th>
                                         <th className="p-3">Recipient Email</th>
@@ -663,6 +664,7 @@ const ParticipantManager: React.FC = () => {
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     )
                 ) : isWalletTicketsMode ? (
@@ -671,8 +673,10 @@ const ParticipantManager: React.FC = () => {
                             No ticket purchasers found for this event.
                         </div>
                     ) : (
-                        <table className="w-full min-w-[900px] text-left text-xs">
-                            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 font-bold text-slate-500">
+                        <div className="responsive-table-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
+                        <div className="responsive-table-scroll">
+                        <table className="min-w-[900px] text-left text-xs">
+                            <thead className="border-b border-slate-200 bg-slate-100 font-bold text-slate-500 md:sticky md:top-0 md:z-10">
                                 <tr>
                                     <th className="p-3">Purchaser</th>
                                     <th className="p-3">Total Tickets</th>
@@ -726,12 +730,16 @@ const ParticipantManager: React.FC = () => {
                                 ))}
                             </tbody>
                         </table>
+                        </div>
+                        </div>
                     )
                 ) : filteredRows.length === 0 ? (
                     <div className="p-8 text-center text-sm text-slate-400">No participants found.</div>
                 ) : (
-                    <table className="w-full min-w-[1500px] text-left text-xs">
-                        <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 font-bold text-slate-500">
+                    <div className="responsive-table-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
+                    <div className="responsive-table-scroll">
+                    <table className="min-w-[1500px] text-left text-xs">
+                        <thead className="border-b border-slate-200 bg-slate-100 font-bold text-slate-500 md:sticky md:top-0 md:z-10">
                             <tr>
                                 <th className="p-3">Participant</th>
                                 <th className="p-3">Tier</th>
@@ -842,6 +850,8 @@ const ParticipantManager: React.FC = () => {
                             ))}
                         </tbody>
                     </table>
+                    </div>
+                    </div>
                 )}
             </div>
 

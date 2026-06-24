@@ -63,8 +63,9 @@ body {
 
   /** Horizontal scroll for wide tables/tabs; stays within parent width (no edge bleed). */
   .overflow-x-scroll-touch {
-    @apply max-w-full min-w-0 w-full overflow-x-auto overscroll-x-contain touch-pan-x;
+    @apply relative block max-w-full min-w-0 w-full overflow-x-scroll overscroll-x-contain;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
   }
 
   /** Modal shell — full viewport on phones, centered card on sm+. */
@@ -82,12 +83,19 @@ body {
 
   /** Wrap HTML tables so they scroll horizontally on narrow screens. */
   .responsive-table-wrap {
-    @apply -mx-px max-w-full min-w-0 w-full overflow-x-auto overscroll-x-contain touch-pan-x;
+    @apply relative block max-w-full min-w-0 w-full overflow-x-scroll overscroll-x-contain;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+    contain: inline-size;
+  }
+
+  /** Inner shim — tables expand layout oddly on iOS without a block/inline-block wrapper. */
+  .responsive-table-scroll {
+    @apply inline-block min-w-full align-top;
   }
 
   .responsive-table-wrap table {
-    @apply min-w-[640px];
+    @apply w-max min-w-full;
   }
 
   /** Wallet ticket date strip — stacks on xs, sidebar on sm+. */

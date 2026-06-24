@@ -240,7 +240,11 @@ const AttendanceConsole: React.FC = () => {
 
             {/* TAB CONTENT */}
             
-            {activeTab === 'PARTICIPANTS' && <ParticipantManager />}
+            {activeTab === 'PARTICIPANTS' && (
+                <div className="min-w-0 w-full max-w-full">
+                    <ParticipantManager />
+                </div>
+            )}
             
             {activeTab === 'DISTRIBUTION' && <UnassignedTicketMonitor />}
 
