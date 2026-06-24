@@ -9,6 +9,7 @@ export interface WalletBuyerRow {
   sourceUserId: string;
   buyerName: string;
   buyerEmail: string;
+  buyerPhone: string;
   ticketCount: number;
   selfCount: number;
   poolCount: number;
@@ -349,7 +350,7 @@ function resolveBuyerIdentity(
   userMap: Map<string, UserProfile>,
   membersByEmail: Map<string, Member>,
   paidBuyerEmailByUserId: Map<string, string>,
-): { buyerName: string; buyerEmail: string } {
+): { buyerName: string; buyerEmail: string; buyerPhone: string } {
   const workspaceUser = userMap.get(sourceUserId);
   const workspaceName = workspaceUser?.fullName?.trim() ?? '';
 
@@ -389,6 +390,7 @@ function resolveBuyerIdentity(
   return {
     buyerName,
     buyerEmail: buyerEmail || normalizeEmail(member?.email) || '',
+    buyerPhone: workspaceUser?.phone?.trim() || member?.phone?.trim() || '',
   };
 }
 
@@ -413,7 +415,7 @@ export function buildWalletBuyerRows(params: {
 
   const rows: WalletBuyerRow[] = [];
   for (const [sourceUserId, buyerTickets] of buckets.entries()) {
-    const { buyerName, buyerEmail } = resolveBuyerIdentity(
+    const { buyerName, buyerEmail, buyerPhone } = resolveBuyerIdentity(
       sourceUserId,
       buyerTickets,
       gifts,
@@ -445,6 +447,7 @@ export function buildWalletBuyerRows(params: {
       sourceUserId,
       buyerName,
       buyerEmail,
+      buyerPhone,
       ticketCount: buyerTickets.length,
       selfCount,
       poolCount,

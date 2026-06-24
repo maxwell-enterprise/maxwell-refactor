@@ -5,7 +5,7 @@ import { EntitlementService } from '../../services/entitlementService';
 import { PaymentService } from '../../services/paymentService';
 import { Event, AttendanceRecord, WalletItem, Member, UserProfile } from '../../types/index';
 import { GiftAllocation } from '../../types/access';
-import { Search, CheckCircle2, Circle, UserCog, Calendar, Ticket } from 'lucide-react';
+import { Search, CheckCircle2, Circle, UserCog, Calendar, Ticket, Gift, Download } from 'lucide-react';
 import MemberProfilingModal from '../crm/MemberProfilingModal';
 import WhatsAppQuickAction from '../common/WhatsAppQuickAction';
 import { UserService } from '../../services/userService';
@@ -17,9 +17,16 @@ import {
     WalletBuyerRow,
 } from './participantWalletBuyers';
 import { formatEventSelectLabel, truncateSelectLabel } from '../../utils/selectLabels';
+import {
+    buildGiftRecipientRows,
+    countUniqueGiftRecipients,
+    type GiftRecipientRow,
+} from './participantGiftRecipients';
+import { exportParticipantEventWorkbook } from './participantEventExport';
+import { useToast } from '../../context/ToastContext';
 
 type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'MISSING';
-type ParticipantStatusFilter = 'NAMED_ONLY' | 'WALLET_TICKETS' | 'ALL' | ParticipantStatus;
+type ParticipantStatusFilter = 'NAMED_ONLY' | 'WALLET_TICKETS' | 'RECIPIENTS' | 'ALL' | ParticipantStatus;
 
 const UNNAMED_PARTICIPANT_LABEL = 'Unnamed Participant';
 type AccessMethod = 'Ticket Scan' | 'Credit Deduction';
@@ -96,12 +103,14 @@ const buildFallbackMember = (
 };
 
 const ParticipantManager: React.FC = () => {
+    const { showToast } = useToast();
     const [events, setEvents] = useState<Event[]>([]);
     const [selectedEventId, setSelectedEventId] = useState<string>('');
     const [displaySessions, setDisplaySessions] = useState<Event[]>([]);
     const [participants, setParticipants] = useState<ParticipantRow[]>([]);
     const [walletBuyers, setWalletBuyers] = useState<WalletBuyerRow[]>([]);
     const [giftAllocations, setGiftAllocations] = useState<GiftAllocation[]>([]);
+    const [giftRecipientRows, setGiftRecipientRows] = useState<GiftRecipientRow[]>([]);
     const [selectedWalletBuyer, setSelectedWalletBuyer] = useState<WalletBuyerRow | null>(null);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -302,6 +311,14 @@ const ParticipantManager: React.FC = () => {
 
             setParticipants(rows);
             setGiftAllocations(gifts);
+            setGiftRecipientRows(
+                buildGiftRecipientRows({
+                    tickets,
+                    gifts,
+                    userMap,
+                    membersByEmail,
+                }),
+            );
             setWalletBuyers(
                 buildWalletBuyerRows({
                     tickets,
@@ -317,6 +334,7 @@ const ParticipantManager: React.FC = () => {
     };
 
     const isWalletTicketsMode = filterStatus === 'WALLET_TICKETS';
+    const isRecipientsMode = filterStatus === 'RECIPIENTS';
 
     const selectedEvent = events.find((event) => event.id === selectedEventId);
     const tierOptions = useMemo(
@@ -372,13 +390,73 @@ const ParticipantManager: React.FC = () => {
         const participants =
             walletBuyers.reduce((sum, row) => sum + row.selfCount + row.claimedCount, 0);
         const purchasers = walletBuyers.length;
-        return { ticketsDistribution, participants, purchasers };
-    }, [walletBuyers]);
+        const recipients = countUniqueGiftRecipients(giftRecipientRows);
+        return { ticketsDistribution, participants, purchasers, recipients };
+    }, [walletBuyers, giftRecipientRows]);
+
+    const filteredGiftRecipients = useMemo(() => {
+        const q = searchTerm.trim().toLowerCase();
+        if (!q) return giftRecipientRows;
+        return giftRecipientRows.filter(
+            (row) =>
+                row.recipientName.toLowerCase().includes(q) ||
+                row.recipientEmail.toLowerCase().includes(q) ||
+                row.recipientPhone.toLowerCase().includes(q) ||
+                row.inviterName.toLowerCase().includes(q) ||
+                row.inviterEmail.toLowerCase().includes(q) ||
+                row.inviterPhone.toLowerCase().includes(q) ||
+                row.statusLabel.toLowerCase().includes(q),
+        );
+    }, [giftRecipientRows, searchTerm]);
 
     const formatStatus = (status: ParticipantStatus) => {
         if (status === 'CHECKED_IN') return 'Checked-In';
         if (status === 'MISSING') return 'Missing';
         return 'Registered';
+    };
+
+    const handleExportEventData = () => {
+        if (!selectedEvent) {
+            showToast('Select an event first.', 'info');
+            return;
+        }
+        try {
+            exportParticipantEventWorkbook({
+                eventName: selectedEvent.name,
+                eventDate: selectedEvent.date,
+                purchasers: walletBuyers,
+                recipients: giftRecipientRows,
+                gifts: giftAllocations,
+                sessions: displaySessions.map((session, index) => ({
+                    id: session.id,
+                    label: `S${index + 1} ${session.name}`.trim(),
+                })),
+                participants: participants.map((row) => ({
+                    ticketId: row.ticketId,
+                    memberName: row.memberName,
+                    memberEmail: row.memberEmail,
+                    memberPhone: row.memberPhone,
+                    ticketTier: row.ticketTier,
+                    gateLabel: row.gateLabel,
+                    operatorLabel: row.operatorLabel,
+                    accessMethod: row.accessMethod,
+                    status: row.status,
+                    checkInTime: row.checkInTime,
+                    sessionsAttended: row.sessionsAttended,
+                    socialVerified: row.socialVerified,
+                    socialFollowers: row.socialFollowers,
+                    occupation: row.occupation,
+                    businessType: row.businessType,
+                    businessAccounts: row.businessAccounts,
+                    communities: row.communities,
+                    tags: row.tags,
+                })),
+            });
+            showToast('Event data exported.', 'success');
+        } catch (error) {
+            console.error(error);
+            showToast('Export failed.', 'error');
+        }
     };
 
     const statusTone = (status: ParticipantStatus) => {
@@ -406,12 +484,18 @@ const ParticipantManager: React.FC = () => {
                         </select>
                     </div>
 
-                    <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-                        <div className="relative">
+                    <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+                        <div className="relative lg:col-span-1">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
                                 type="text"
-                                placeholder="Search participant..."
+                                placeholder={
+                                    isRecipientsMode
+                                        ? 'Search recipient or inviter...'
+                                        : isWalletTicketsMode
+                                          ? 'Search purchaser...'
+                                          : 'Search participant...'
+                                }
                                 className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs outline-none focus:border-blue-500"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -421,7 +505,7 @@ const ParticipantManager: React.FC = () => {
                             className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             value={filterTier}
                             onChange={(e) => setFilterTier(e.target.value)}
-                            disabled={isWalletTicketsMode}
+                            disabled={isWalletTicketsMode || isRecipientsMode}
                         >
                             <option value="ALL">All Tiers</option>
                             {tierOptions.map((tier) => (
@@ -434,7 +518,7 @@ const ParticipantManager: React.FC = () => {
                             className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             value={filterGate}
                             onChange={(e) => setFilterGate(e.target.value)}
-                            disabled={isWalletTicketsMode}
+                            disabled={isWalletTicketsMode || isRecipientsMode}
                         >
                             <option value="ALL">All Gates</option>
                             {gateOptions.map((gate) => (
@@ -443,20 +527,33 @@ const ParticipantManager: React.FC = () => {
                                 </option>
                             ))}
                         </select>
-                        <select
-                            className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none"
-                            value={filterStatus}
-                            onChange={(e) =>
-                                setFilterStatus(e.target.value as ParticipantStatusFilter)
-                            }
-                        >
-                            <option value="NAMED_ONLY">Named Participants</option>
-                            <option value="WALLET_TICKETS">Wallet Tickets</option>
-                            <option value="ALL">All Status</option>
-                            <option value="REGISTERED">Registered</option>
-                            <option value="CHECKED_IN">Checked-In</option>
-                            <option value="MISSING">Missing</option>
-                        </select>
+                        <div className="flex min-w-0 items-center gap-2 lg:col-span-2">
+                            <select
+                                className="mobile-safe-select min-w-0 flex-1 rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none"
+                                value={filterStatus}
+                                onChange={(e) =>
+                                    setFilterStatus(e.target.value as ParticipantStatusFilter)
+                                }
+                            >
+                                <option value="NAMED_ONLY">Named Participants</option>
+                                <option value="WALLET_TICKETS">Wallet Tickets</option>
+                                <option value="RECIPIENTS">Recipients</option>
+                                <option value="ALL">All Status</option>
+                                <option value="REGISTERED">Registered</option>
+                                <option value="CHECKED_IN">Checked-In</option>
+                                <option value="MISSING">Missing</option>
+                            </select>
+                            <button
+                                type="button"
+                                onClick={handleExportEventData}
+                                disabled={loading || !selectedEventId}
+                                className="touch-target inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white p-2.5 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:min-w-0"
+                                title="Export all event records (Excel)"
+                                aria-label="Export all event records"
+                            >
+                                <Download size={18} />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -493,6 +590,14 @@ const ParticipantManager: React.FC = () => {
                             Purchasers:{' '}
                             <span className="font-bold text-slate-800">{eventSummary.purchasers}</span>
                         </span>
+                        <span
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold whitespace-nowrap"
+                            title="Unique people who received gift tickets"
+                        >
+                            <Gift size={12} className="shrink-0 text-violet-500" />
+                            Recipients:{' '}
+                            <span className="font-bold text-slate-800">{eventSummary.recipients}</span>
+                        </span>
                     </div>
                 </div>
             </div>
@@ -500,6 +605,66 @@ const ParticipantManager: React.FC = () => {
             <div className="flex-1 overflow-auto">
                 {loading ? (
                     <div className="p-8 text-center text-sm text-slate-400">Loading participants...</div>
+                ) : isRecipientsMode ? (
+                    filteredGiftRecipients.length === 0 ? (
+                        <div className="p-8 text-center text-sm text-slate-400">
+                            No gift recipients found for this event.
+                        </div>
+                    ) : (
+                        <div className="responsive-table-wrap">
+                            <table className="w-full min-w-[1100px] text-left text-xs">
+                                <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 font-bold text-slate-500">
+                                    <tr>
+                                        <th className="p-3">Recipient</th>
+                                        <th className="p-3">Recipient Email</th>
+                                        <th className="p-3">Recipient Phone</th>
+                                        <th className="p-3">Inviter</th>
+                                        <th className="p-3">Inviter Email</th>
+                                        <th className="p-3">Inviter Phone</th>
+                                        <th className="p-3">Tier</th>
+                                        <th className="p-3">Status</th>
+                                        <th className="p-3">Sent At</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredGiftRecipients.map((row) => (
+                                        <tr key={row.id} className="transition-colors hover:bg-slate-50">
+                                            <td className="p-3">
+                                                <div className="font-bold text-slate-900">{row.recipientName}</div>
+                                                <div className="text-[10px] text-slate-500">{row.itemName}</div>
+                                            </td>
+                                            <td className="p-3 text-slate-600">{row.recipientEmail || '-'}</td>
+                                            <td className="p-3 text-slate-600">{row.recipientPhone || '-'}</td>
+                                            <td className="p-3 font-medium text-slate-800">{row.inviterName}</td>
+                                            <td className="p-3 text-slate-600">{row.inviterEmail || '-'}</td>
+                                            <td className="p-3 text-slate-600">{row.inviterPhone || '-'}</td>
+                                            <td className="p-3">
+                                                <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-slate-700">
+                                                    {row.ticketTier}
+                                                </span>
+                                            </td>
+                                            <td className="p-3">
+                                                <span
+                                                    className={`inline-flex rounded-full border px-2 py-0.5 font-bold ${
+                                                        row.status === 'CLAIMED'
+                                                            ? 'border-green-100 bg-green-50 text-green-700'
+                                                            : row.status === 'REVOKED'
+                                                              ? 'border-red-100 bg-red-50 text-red-700'
+                                                              : 'border-amber-100 bg-amber-50 text-amber-800'
+                                                    }`}
+                                                >
+                                                    {row.statusLabel}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-slate-600">
+                                                {row.sentAt ? new Date(row.sentAt).toLocaleString() : '-'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
                 ) : isWalletTicketsMode ? (
                     filteredWalletBuyers.length === 0 ? (
                         <div className="p-8 text-center text-sm text-slate-400">
