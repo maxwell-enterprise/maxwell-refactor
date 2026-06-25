@@ -19,14 +19,23 @@ import {
 import { formatEventSelectLabel, truncateSelectLabel } from '../../utils/selectLabels';
 import {
     buildGiftRecipientRows,
+    buildEventParticipantTicketRows,
+    countEventParticipantTickets,
     countUniqueGiftRecipients,
+    type EventParticipantTicketRow,
     type GiftRecipientRow,
 } from './participantGiftRecipients';
 import { exportParticipantEventWorkbook } from './participantEventExport';
 import { useToast } from '../../context/ToastContext';
 
 type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'MISSING';
-type ParticipantStatusFilter = 'NAMED_ONLY' | 'WALLET_TICKETS' | 'RECIPIENTS' | 'ALL' | ParticipantStatus;
+type ParticipantStatusFilter =
+    | 'NAMED_ONLY'
+    | 'WALLET_TICKETS'
+    | 'RECIPIENTS'
+    | 'PARTICIPANTS'
+    | 'ALL'
+    | ParticipantStatus;
 
 const UNNAMED_PARTICIPANT_LABEL = 'Unnamed Participant';
 type AccessMethod = 'Ticket Scan' | 'Credit Deduction';
@@ -335,6 +344,8 @@ const ParticipantManager: React.FC = () => {
 
     const isWalletTicketsMode = filterStatus === 'WALLET_TICKETS';
     const isRecipientsMode = filterStatus === 'RECIPIENTS';
+    const isParticipantsTicketMode = filterStatus === 'PARTICIPANTS';
+    const isRecipientStyleMode = isRecipientsMode || isParticipantsTicketMode;
 
     const selectedEvent = events.find((event) => event.id === selectedEventId);
     const tierOptions = useMemo(
@@ -385,14 +396,23 @@ const ParticipantManager: React.FC = () => {
         );
     }, [walletBuyers, searchTerm]);
 
+    const eventParticipantTicketRows = useMemo(
+        () =>
+            buildEventParticipantTicketRows({
+                walletBuyers,
+                giftRecipientRows,
+                gifts: giftAllocations,
+            }),
+        [walletBuyers, giftRecipientRows, giftAllocations],
+    );
+
     const eventSummary = useMemo(() => {
         const ticketsDistribution = walletBuyers.reduce((sum, row) => sum + row.ticketCount, 0);
-        const participants =
-            walletBuyers.reduce((sum, row) => sum + row.selfCount + row.claimedCount, 0);
+        const participants = countEventParticipantTickets(eventParticipantTicketRows);
         const purchasers = walletBuyers.length;
         const recipients = countUniqueGiftRecipients(giftRecipientRows);
         return { ticketsDistribution, participants, purchasers, recipients };
-    }, [walletBuyers, giftRecipientRows]);
+    }, [walletBuyers, giftRecipientRows, eventParticipantTicketRows]);
 
     const filteredGiftRecipients = useMemo(() => {
         const q = searchTerm.trim().toLowerCase();
@@ -408,6 +428,37 @@ const ParticipantManager: React.FC = () => {
                 row.statusLabel.toLowerCase().includes(q),
         );
     }, [giftRecipientRows, searchTerm]);
+
+    const filteredEventParticipantTickets = useMemo(() => {
+        const q = searchTerm.trim().toLowerCase();
+        if (!q) return eventParticipantTicketRows;
+        return eventParticipantTicketRows.filter(
+            (row) =>
+                row.recipientName.toLowerCase().includes(q) ||
+                row.recipientEmail.toLowerCase().includes(q) ||
+                row.recipientPhone.toLowerCase().includes(q) ||
+                row.inviterName.toLowerCase().includes(q) ||
+                row.inviterEmail.toLowerCase().includes(q) ||
+                row.inviterPhone.toLowerCase().includes(q) ||
+                row.statusLabel.toLowerCase().includes(q),
+        );
+    }, [eventParticipantTicketRows, searchTerm]);
+
+    const recipientStyleTableRows: Array<GiftRecipientRow | EventParticipantTicketRow> =
+        isParticipantsTicketMode ? filteredEventParticipantTickets : filteredGiftRecipients;
+
+    const recipientStyleBadgeClass = (row: GiftRecipientRow | EventParticipantTicketRow) => {
+        if ('participantKind' in row && row.participantKind === 'SELF') {
+            return 'border-blue-100 bg-blue-50 text-blue-700';
+        }
+        if (row.status === 'CLAIMED') {
+            return 'border-green-100 bg-green-50 text-green-700';
+        }
+        if (row.status === 'REVOKED') {
+            return 'border-red-100 bg-red-50 text-red-700';
+        }
+        return 'border-amber-100 bg-amber-50 text-amber-800';
+    };
 
     const formatStatus = (status: ParticipantStatus) => {
         if (status === 'CHECKED_IN') return 'Checked-In';
@@ -490,11 +541,13 @@ const ParticipantManager: React.FC = () => {
                             <input
                                 type="text"
                                 placeholder={
-                                    isRecipientsMode
-                                        ? 'Search recipient or inviter...'
-                                        : isWalletTicketsMode
-                                          ? 'Search purchaser...'
-                                          : 'Search participant...'
+                                    isParticipantsTicketMode
+                                        ? 'Search participant or inviter...'
+                                        : isRecipientsMode
+                                          ? 'Search recipient or inviter...'
+                                          : isWalletTicketsMode
+                                            ? 'Search purchaser...'
+                                            : 'Search participant...'
                                 }
                                 className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs outline-none focus:border-blue-500"
                                 value={searchTerm}
@@ -505,7 +558,7 @@ const ParticipantManager: React.FC = () => {
                             className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             value={filterTier}
                             onChange={(e) => setFilterTier(e.target.value)}
-                            disabled={isWalletTicketsMode || isRecipientsMode}
+                            disabled={isWalletTicketsMode || isRecipientStyleMode}
                         >
                             <option value="ALL">All Tiers</option>
                             {tierOptions.map((tier) => (
@@ -518,7 +571,7 @@ const ParticipantManager: React.FC = () => {
                             className="mobile-safe-select rounded-lg border border-slate-300 p-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             value={filterGate}
                             onChange={(e) => setFilterGate(e.target.value)}
-                            disabled={isWalletTicketsMode || isRecipientsMode}
+                            disabled={isWalletTicketsMode || isRecipientStyleMode}
                         >
                             <option value="ALL">All Gates</option>
                             {gateOptions.map((gate) => (
@@ -538,6 +591,7 @@ const ParticipantManager: React.FC = () => {
                                 <option value="NAMED_ONLY">Named Participants</option>
                                 <option value="WALLET_TICKETS">Wallet Tickets</option>
                                 <option value="RECIPIENTS">Recipients</option>
+                                <option value="PARTICIPANTS">Participant</option>
                                 <option value="ALL">All Status</option>
                                 <option value="REGISTERED">Registered</option>
                                 <option value="CHECKED_IN">Checked-In</option>
@@ -605,10 +659,12 @@ const ParticipantManager: React.FC = () => {
             <div className="min-w-0 w-full max-w-full">
                 {loading ? (
                     <div className="p-8 text-center text-sm text-slate-400">Loading participants...</div>
-                ) : isRecipientsMode ? (
-                    filteredGiftRecipients.length === 0 ? (
+                ) : isRecipientStyleMode ? (
+                    recipientStyleTableRows.length === 0 ? (
                         <div className="p-8 text-center text-sm text-slate-400">
-                            No gift recipients found for this event.
+                            {isParticipantsTicketMode
+                                ? 'No participants found for this event.'
+                                : 'No gift recipients found for this event.'}
                         </div>
                     ) : (
                         <div className="responsive-table-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
@@ -616,9 +672,9 @@ const ParticipantManager: React.FC = () => {
                             <table className="min-w-[1100px] text-left text-xs">
                                 <thead className="border-b border-slate-200 bg-slate-100 font-bold text-slate-500 md:sticky md:top-0 md:z-10">
                                     <tr>
-                                        <th className="p-3">Recipient</th>
-                                        <th className="p-3">Recipient Email</th>
-                                        <th className="p-3">Recipient Phone</th>
+                                        <th className="p-3">{isParticipantsTicketMode ? 'Participant' : 'Recipient'}</th>
+                                        <th className="p-3">{isParticipantsTicketMode ? 'Participant Email' : 'Recipient Email'}</th>
+                                        <th className="p-3">{isParticipantsTicketMode ? 'Participant Phone' : 'Recipient Phone'}</th>
                                         <th className="p-3">Inviter</th>
                                         <th className="p-3">Inviter Email</th>
                                         <th className="p-3">Inviter Phone</th>
@@ -628,7 +684,7 @@ const ParticipantManager: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {filteredGiftRecipients.map((row) => (
+                                    {recipientStyleTableRows.map((row) => (
                                         <tr key={row.id} className="transition-colors hover:bg-slate-50">
                                             <td className="p-3">
                                                 <div className="font-bold text-slate-900">{row.recipientName}</div>
@@ -646,13 +702,7 @@ const ParticipantManager: React.FC = () => {
                                             </td>
                                             <td className="p-3">
                                                 <span
-                                                    className={`inline-flex rounded-full border px-2 py-0.5 font-bold ${
-                                                        row.status === 'CLAIMED'
-                                                            ? 'border-green-100 bg-green-50 text-green-700'
-                                                            : row.status === 'REVOKED'
-                                                              ? 'border-red-100 bg-red-50 text-red-700'
-                                                              : 'border-amber-100 bg-amber-50 text-amber-800'
-                                                    }`}
+                                                    className={`inline-flex rounded-full border px-2 py-0.5 font-bold ${recipientStyleBadgeClass(row)}`}
                                                 >
                                                     {row.statusLabel}
                                                 </span>

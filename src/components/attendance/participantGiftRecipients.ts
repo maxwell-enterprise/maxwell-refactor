@@ -5,6 +5,8 @@ import {
   readTicketRecipientEmail,
   readTicketRecipientName,
   readTicketRecipientPhone,
+  classifyWalletTicketForBuyer,
+  type WalletBuyerRow,
 } from './participantWalletBuyers';
 
 export type GiftRecipientStatus = 'CLAIMED' | 'PENDING_CLAIM' | 'REVOKED';
@@ -216,4 +218,84 @@ export function countUniqueGiftRecipients(rows: GiftRecipientRow[]): number {
     if (key) keys.add(key);
   }
   return keys.size;
+}
+
+export type EventParticipantTicketKind = 'SELF' | 'CLAIMED';
+
+/** Summary "Participants" rows: self tickets + gift tickets with claimed status. */
+export interface EventParticipantTicketRow extends GiftRecipientRow {
+  participantKind: EventParticipantTicketKind;
+}
+
+export function buildEventParticipantTicketRows(params: {
+  walletBuyers: WalletBuyerRow[];
+  giftRecipientRows: GiftRecipientRow[];
+  gifts: GiftAllocation[];
+}): EventParticipantTicketRow[] {
+  const { walletBuyers, giftRecipientRows, gifts } = params;
+  const giftByEntitlementId = new Map(gifts.map((gift) => [gift.entitlementId, gift]));
+  const rows: EventParticipantTicketRow[] = [];
+
+  for (const buyer of walletBuyers) {
+    for (const ticket of buyer.tickets) {
+      const gift = giftByEntitlementId.get(ticket.id);
+      const bucket = classifyWalletTicketForBuyer(
+        ticket,
+        buyer.sourceUserId,
+        gift,
+        buyer.buyerEmail,
+        buyer.buyerName,
+      );
+      if (bucket !== 'SELF') continue;
+
+      const recipientEmail =
+        normalizeEmail(readTicketRecipientEmail(ticket)) || buyer.buyerEmail;
+      const recipientName =
+        readTicketRecipientName(ticket) ||
+        buyer.buyerName ||
+        (recipientEmail ? recipientEmail.split('@')[0] : '') ||
+        'Guest';
+      const recipientPhone = readTicketRecipientPhone(ticket) || buyer.buyerPhone;
+      const ticketTier =
+        typeof ticket.meta?.targetTier === 'string' && ticket.meta.targetTier.trim()
+          ? ticket.meta.targetTier
+          : ticket.subtitle?.trim() || 'General';
+
+      rows.push({
+        id: `self-${ticket.id}`,
+        giftId: gift?.id ?? '',
+        ticketId: ticket.id,
+        recipientName,
+        recipientEmail,
+        recipientPhone,
+        inviterName: buyer.buyerName,
+        inviterEmail: buyer.buyerEmail,
+        inviterPhone: buyer.buyerPhone,
+        status: 'CLAIMED',
+        statusLabel: 'Self ticket',
+        participantKind: 'SELF',
+        ticketTier,
+        itemName: ticket.title,
+        sentAt: gift?.createdAt || ticket.expiryDate || '',
+        claimedAt: gift?.claimedAt,
+      });
+    }
+  }
+
+  for (const row of giftRecipientRows) {
+    if (row.status !== 'CLAIMED') continue;
+    rows.push({
+      ...row,
+      participantKind: 'CLAIMED',
+      statusLabel: formatGiftRecipientStatusLabel('CLAIMED'),
+    });
+  }
+
+  return rows.sort(
+    (a, b) => new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime(),
+  );
+}
+
+export function countEventParticipantTickets(rows: EventParticipantTicketRow[]): number {
+  return rows.length;
 }
