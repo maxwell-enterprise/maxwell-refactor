@@ -11,6 +11,7 @@ import {
     Percent,
     Pencil,
     ShoppingCart,
+    Plus,
     Zap,
     Trash2,
     ToggleRight,
@@ -63,10 +64,13 @@ function parseCampaignCheckoutSearch(search: string): {
 
 type StorefrontProps = {
     allowWorkspaceCheckoutConfig?: boolean;
+    /** Workspace catalog only — hidden in My Zone consumer storefront. */
+    showAddProduct?: boolean;
 };
 
 const Storefront: React.FC<StorefrontProps> = ({
     allowWorkspaceCheckoutConfig = false,
+    showAddProduct = false,
 }) => {
     const { user, userRole } = useAuth();
     const { showToast } = useToast();
@@ -629,6 +633,11 @@ const Storefront: React.FC<StorefrontProps> = ({
         await mergeEventsForProducts(data);
     }, [buildListQuery, mergeEventsForProducts]);
 
+    const handleCreateProduct = () => {
+        setEditingProduct(undefined);
+        setIsProductModalOpen(true);
+    };
+
     const handleEditProduct = (product: Product) => {
         setEditingProduct(product);
         setIsProductModalOpen(true);
@@ -702,6 +711,17 @@ const Storefront: React.FC<StorefrontProps> = ({
                             ))}
                         </div>
                     </div>
+                    {canManageStore && showAddProduct && (
+                        <button
+                            type="button"
+                            onClick={handleCreateProduct}
+                            className="touch-target flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-md hover:bg-blue-700 sm:px-4 sm:text-sm"
+                            aria-label="Add product"
+                        >
+                            <Plus size={16} className="shrink-0" aria-hidden />
+                            <span className="hidden sm:inline">Add product</span>
+                        </button>
+                    )}
                     <button type="button" onClick={() => cart.length > 0 ? setIsPaymentModalOpen(true) : showToast('Cart empty', 'info')} className="touch-target relative shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-700 shadow-sm hover:bg-slate-50" aria-label={`Cart, ${cartCount} items`}>
                         <ShoppingCart size={20} />
                         {cartCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">{cartCount}</span>}
