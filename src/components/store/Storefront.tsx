@@ -703,7 +703,7 @@ const Storefront: React.FC<StorefrontProps> = ({
                     <input type="search" placeholder="Search products…" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} aria-label="Search products" />
                 </div>
                 
-                <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:max-w-[55%] md:max-w-none">
+                <div className="flex w-full min-w-0 items-center gap-1.5 sm:gap-2 sm:w-auto sm:max-w-[55%] md:max-w-none">
                     <div className="min-w-0 flex-1 overflow-x-scroll-touch rounded-full bg-slate-100/80 py-1 pl-1 pr-0.5">
                         <div className="inline-flex flex-nowrap gap-1.5">
                             {categories.map(cat => (
@@ -715,15 +715,16 @@ const Storefront: React.FC<StorefrontProps> = ({
                         <button
                             type="button"
                             onClick={handleCreateProduct}
-                            className="touch-target flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-md hover:bg-blue-700 sm:px-4 sm:text-sm"
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 sm:h-auto sm:w-auto sm:gap-1.5 sm:rounded-full sm:px-4 sm:py-2 sm:text-sm sm:font-bold"
                             aria-label="Add product"
+                            title="Add product"
                         >
-                            <Plus size={16} className="shrink-0" aria-hidden />
+                            <Plus size={17} className="shrink-0" aria-hidden />
                             <span className="hidden sm:inline">Add product</span>
                         </button>
                     )}
-                    <button type="button" onClick={() => cart.length > 0 ? setIsPaymentModalOpen(true) : showToast('Cart empty', 'info')} className="touch-target relative shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-700 shadow-sm hover:bg-slate-50" aria-label={`Cart, ${cartCount} items`}>
-                        <ShoppingCart size={20} />
+                    <button type="button" onClick={() => cart.length > 0 ? setIsPaymentModalOpen(true) : showToast('Cart empty', 'info')} className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 sm:h-auto sm:w-auto sm:p-2.5" aria-label={`Cart, ${cartCount} items`}>
+                        <ShoppingCart size={18} />
                         {cartCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">{cartCount}</span>}
                     </button>
                 </div>

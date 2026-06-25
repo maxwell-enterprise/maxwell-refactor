@@ -5,7 +5,7 @@ import { MasterDoneTag } from '../../../types/certification';
 import { 
     X, Save, Calendar, Clock, MapPin, Tag, Users, Layers, 
     ShieldCheck, Box, Link, Image as ImageIcon, Settings, Info, 
-    Globe, Monitor, Map, ListFilter, CheckSquare, Eye, EyeOff, AlertCircle
+    Globe, Monitor, Map, ListFilter, CheckSquare, Eye, EyeOff, AlertCircle, Menu
 } from 'lucide-react';
 import TierManager from './TierManager';
 import SessionLogisticsManager from './SessionLogisticsManager';
@@ -60,7 +60,18 @@ function normalizeEventFormData(data: Partial<Event>): Partial<Event> {
     };
 }
 
-const EventForm: React.FC<EventFormProps> = ({ 
+type EventFormTab = 'GENERAL' | 'LOCATION' | 'ACCESS' | 'TIERS' | 'LOGISTICS' | 'HIERARCHY';
+
+const EVENT_FORM_TAB_LABELS: Record<EventFormTab, string> = {
+    GENERAL: 'General Info',
+    LOCATION: 'Location & Links',
+    ACCESS: 'Access & Policy',
+    TIERS: 'Ticket Tiers',
+    LOGISTICS: 'Session Logistics',
+    HIERARCHY: 'Hierarchy & Picker',
+};
+
+const EventForm: React.FC<EventFormProps> = ({
     isOpen, isEditing, initialData, masterDoneTags, availableCreditTags,
     bundleableEvents, availableContainers, orphanEvents, linkedChildren, onManageChild,
     onClose, onSave, isSaving = false
@@ -71,7 +82,8 @@ const EventForm: React.FC<EventFormProps> = ({
     const [formData, setFormData] = useState<Partial<Event>>(() =>
         normalizeEventFormData(initialData),
     );
-    const [activeTab, setActiveTab] = useState<'GENERAL' | 'LOCATION' | 'ACCESS' | 'TIERS' | 'LOGISTICS' | 'HIERARCHY'>('GENERAL');
+    const [activeTab, setActiveTab] = useState<EventFormTab>('GENERAL');
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const shouldShowHierarchyTab = formData.type !== 'SOLO';
     
     const [expandedTierIndex, setExpandedTierIndex] = useState<number | null>(null);
@@ -81,10 +93,28 @@ const EventForm: React.FC<EventFormProps> = ({
     }, [initialData]);
 
     useEffect(() => {
+        if (!isOpen) {
+            setMobileNavOpen(false);
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
         if (!shouldShowHierarchyTab && activeTab === 'HIERARCHY') {
             setActiveTab('GENERAL');
         }
     }, [activeTab, shouldShowHierarchyTab]);
+
+    const selectTab = (tab: EventFormTab) => {
+        setActiveTab(tab);
+        setMobileNavOpen(false);
+    };
+
+    const navButtonClass = (tab: EventFormTab, extra = '') =>
+        `px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center w-full ${
+            activeTab === tab
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-500 hover:bg-slate-100'
+        } ${extra}`.trim();
 
     const updateField = (field: keyof Event, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -149,6 +179,7 @@ const EventForm: React.FC<EventFormProps> = ({
                 showToast("Action Blocked: You must select a Parent Series for this Sub Event.", "error");
                 // Force switch to Hierarchy tab to show user where to fix
                 setActiveTab('HIERARCHY');
+                setMobileNavOpen(false);
                 return;
             }
         }
@@ -164,57 +195,85 @@ const EventForm: React.FC<EventFormProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-             <div className="bg-white w-full max-w-4xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <div>
-                        <h3 className="font-bold text-slate-900 text-lg">{isEditing ? 'Edit Event' : 'Create New Event'}</h3>
-                        <p className="text-xs text-slate-500">{formData.name || 'Untitled'}</p>
+        <div className="modal-overlay z-[100]">
+             <div className="modal-panel modal-panel-lg max-w-4xl animate-scale-in">
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-6 sm:py-4">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setMobileNavOpen(true)}
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-200 lg:hidden"
+                            aria-label="Open event form sections"
+                        >
+                            <Menu size={20} />
+                        </button>
+                        <div className="min-w-0">
+                            <h3 className="truncate text-base font-bold text-slate-900 sm:text-lg">{isEditing ? 'Edit Event' : 'Create New Event'}</h3>
+                            <p className="truncate text-xs text-slate-500">
+                                <span className="lg:hidden">{EVENT_FORM_TAB_LABELS[activeTab]} · </span>
+                                {formData.name || 'Untitled'}
+                            </p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-2 rounded-full hover:bg-slate-200 transition-all"><X size={24}/></button>
+                    <button type="button" onClick={onClose} className="shrink-0 rounded-full p-2 text-slate-400 transition-all hover:bg-slate-200 hover:text-slate-700"><X size={22}/></button>
                 </div>
 
-                <div className="flex flex-1 overflow-hidden">
-                     <div className="w-64 bg-slate-50 border-r border-slate-200 p-2 flex flex-col gap-1 overflow-y-auto">
-                        <button onClick={() => setActiveTab('GENERAL')} className={`px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center ${activeTab === 'GENERAL' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
-                            <Calendar size={16} className="mr-3"/> General Info
+                <div className="relative flex min-h-0 flex-1 overflow-hidden">
+                     {mobileNavOpen ? (
+                        <button
+                            type="button"
+                            className="absolute inset-0 z-20 bg-slate-900/50 lg:hidden"
+                            onClick={() => setMobileNavOpen(false)}
+                            aria-label="Close section menu"
+                        />
+                     ) : null}
+                     <div
+                        className={`absolute inset-y-0 left-0 z-30 flex w-[min(18rem,86vw)] flex-col gap-1 overflow-y-auto border-r border-slate-200 bg-slate-50 p-2 shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:translate-x-0 lg:shadow-none ${
+                            mobileNavOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+                        }`}
+                     >
+                        <button type="button" onClick={() => selectTab('GENERAL')} className={navButtonClass('GENERAL')}>
+                            <Calendar size={16} className="mr-3 shrink-0"/> General Info
                         </button>
-                        <button onClick={() => setActiveTab('LOCATION')} className={`px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center ${activeTab === 'LOCATION' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
-                            <Globe size={16} className="mr-3"/> Location & Links
+                        <button type="button" onClick={() => selectTab('LOCATION')} className={navButtonClass('LOCATION')}>
+                            <Globe size={16} className="mr-3 shrink-0"/> Location & Links
                         </button>
-                        <button onClick={() => setActiveTab('ACCESS')} className={`px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center ${activeTab === 'ACCESS' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
-                            <ShieldCheck size={16} className="mr-3"/> Access & Policy
+                        <button type="button" onClick={() => selectTab('ACCESS')} className={navButtonClass('ACCESS')}>
+                            <ShieldCheck size={16} className="mr-3 shrink-0"/> Access & Policy
                         </button>
-                        <button onClick={() => setActiveTab('TIERS')} className={`px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center ${activeTab === 'TIERS' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
-                            <Tag size={16} className="mr-3"/> Ticket Tiers
+                        <button type="button" onClick={() => selectTab('TIERS')} className={navButtonClass('TIERS')}>
+                            <Tag size={16} className="mr-3 shrink-0"/> Ticket Tiers
                         </button>
                         {formData.type !== 'CONTAINER' && (
-                            <button onClick={() => setActiveTab('LOGISTICS')} className={`px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center ${activeTab === 'LOGISTICS' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
-                                <Clock size={16} className="mr-3"/> Session Logistics
+                            <button type="button" onClick={() => selectTab('LOGISTICS')} className={navButtonClass('LOGISTICS')}>
+                                <Clock size={16} className="mr-3 shrink-0"/> Session Logistics
                             </button>
                         )}
                         {shouldShowHierarchyTab && (
                             <button 
-                                onClick={() => setActiveTab('HIERARCHY')} 
-                                className={`px-4 py-3 text-sm font-bold rounded-lg text-left flex items-center 
-                                    ${activeTab === 'HIERARCHY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-100'}
-                                    ${formData.type === 'SESSION' && !formData.parentEventId ? 'text-red-500 bg-red-50 animate-pulse' : ''}
-                                `}
+                                type="button"
+                                onClick={() => selectTab('HIERARCHY')} 
+                                className={navButtonClass(
+                                    'HIERARCHY',
+                                    formData.type === 'SESSION' && !formData.parentEventId
+                                        ? 'text-red-500 bg-red-50 animate-pulse'
+                                        : '',
+                                )}
                             >
-                                <Layers size={16} className="mr-3"/> Hierarchy & Picker
+                                <Layers size={16} className="mr-3 shrink-0"/> Hierarchy & Picker
                                 {formData.type === 'SESSION' && !formData.parentEventId && <AlertCircle size={14} className="ml-auto text-red-500"/>}
                             </button>
                         )}
                      </div>
 
-                    <div className="flex-1 overflow-y-auto p-8 bg-white">
+                    <div className="min-w-0 flex-1 overflow-y-auto bg-white p-4 sm:p-6 lg:p-8">
                         {activeTab === 'GENERAL' && (
                              <div className="space-y-4 max-w-2xl">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Event Name</label>
                                     <input type="text" className="w-full p-3 border border-slate-300 rounded-lg font-bold" value={formData.name} onChange={e => updateField('name', e.target.value)} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
                                         <select className="w-full p-3 border border-slate-300 rounded-lg bg-white" value={formData.type} onChange={e => updateField('type', e.target.value as EventType)}>
@@ -299,7 +358,7 @@ const EventForm: React.FC<EventFormProps> = ({
                                     <textarea className="w-full p-3 border border-slate-300 rounded-lg h-24 resize-none" value={formData.description} onChange={e => updateField('description', e.target.value)} />
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
                                         <input type="date" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.date} onChange={e => updateField('date', e.target.value)} />
@@ -309,7 +368,7 @@ const EventForm: React.FC<EventFormProps> = ({
                                         <input type="date" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.endDate || ''} onChange={e => updateField('endDate', e.target.value)} />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Time</label>
                                         <input type="text" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.time} onChange={e => updateField('time', e.target.value)} placeholder="09:00" />
@@ -341,7 +400,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
                                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-4">Location Mode</label>
-                                    <div className="grid grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                         {[
                                             { id: 'OFFLINE', label: 'Offline', icon: MapPin, desc: 'At venue' },
                                             { id: 'ONLINE', label: 'Online', icon: Monitor, desc: 'Zoom/Meet' },
@@ -515,7 +574,7 @@ const EventForm: React.FC<EventFormProps> = ({
                                              </div>
                                          </div>
 
-                                         <div className="grid grid-cols-2 gap-4">
+                                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                             <button 
                                                 type="button"
                                                 onClick={() => updateSelectionConfig('mode', 'BUNDLE')}
@@ -537,7 +596,7 @@ const EventForm: React.FC<EventFormProps> = ({
                                          </div>
 
                                          {formData.selectionConfig?.mode === 'OPTION' && (
-                                             <div className="grid grid-cols-2 gap-4 animate-fade-in p-4 bg-white rounded-xl border border-blue-200 shadow-sm">
+                                             <div className="grid grid-cols-1 gap-4 animate-fade-in rounded-xl border border-blue-200 bg-white p-4 shadow-sm sm:grid-cols-2">
                                                  <div>
                                                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Min Sessions to Pick</label>
                                                      <input 
@@ -565,12 +624,13 @@ const EventForm: React.FC<EventFormProps> = ({
                     </div>
                 </div>
 
-                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-200 rounded-xl transition-colors text-sm">Cancel</button>
+                <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 safe-area-bottom sm:gap-3 sm:px-6 sm:py-4">
+                    <button type="button" onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200 sm:px-6">Cancel</button>
                     <button 
+                        type="button"
                         disabled={isSaving}
                         onClick={handleSave} 
-                        className={`px-8 py-2.5 text-white rounded-xl shadow-lg flex items-center transition-all text-sm font-bold
+                        className={`flex items-center rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-lg transition-all sm:px-8
                             ${(formData.type === 'SESSION' && !formData.parentEventId) 
                                 ? 'bg-slate-400 cursor-not-allowed opacity-70' 
                                 : 'bg-slate-900 hover:bg-slate-800'
