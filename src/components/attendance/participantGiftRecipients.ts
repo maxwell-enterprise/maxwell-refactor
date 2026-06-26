@@ -57,18 +57,26 @@ function resolveInviterContact(
   sourceUserId: string,
   sourceUserName: string,
   userMap: Map<string, UserProfile>,
+  membersById: Map<string, Member>,
   membersByEmail: Map<string, Member>,
 ): { name: string; email: string; phone: string } {
+  const memberById = membersById.get(sourceUserId);
   const workspaceUser = userMap.get(sourceUserId);
   const email =
     normalizeEmail(workspaceUser?.email) ||
-    inferBuyerEmailFromMember(sourceUserId, userMap, membersByEmail);
-  const member = email ? membersByEmail.get(email) : undefined;
+    normalizeEmail(memberById?.email) ||
+    inferBuyerEmailFromMember(sourceUserId, userMap, membersByEmail, membersById);
+  const member = memberById || (email ? membersByEmail.get(email) : undefined);
 
   return {
-    name: workspaceUser?.fullName?.trim() || member?.name?.trim() || sourceUserName.trim() || 'Unknown',
+    name:
+      workspaceUser?.fullName?.trim() ||
+      member?.name?.trim() ||
+      memberById?.name?.trim() ||
+      sourceUserName.trim() ||
+      'Unknown',
     email: email || normalizeEmail(member?.email) || '',
-    phone: workspaceUser?.phone?.trim() || member?.phone?.trim() || '',
+    phone: workspaceUser?.phone?.trim() || member?.phone?.trim() || memberById?.phone?.trim() || '',
   };
 }
 
@@ -76,7 +84,12 @@ function inferBuyerEmailFromMember(
   sourceUserId: string,
   userMap: Map<string, UserProfile>,
   membersByEmail: Map<string, Member>,
+  membersById: Map<string, Member>,
 ): string {
+  const memberById = membersById.get(sourceUserId);
+  if (memberById?.email) {
+    return normalizeEmail(memberById.email);
+  }
   for (const member of membersByEmail.values()) {
     if (member.id === sourceUserId) {
       return normalizeEmail(member.email);
@@ -106,9 +119,10 @@ export function buildGiftRecipientRows(params: {
   tickets: WalletItem[];
   gifts: GiftAllocation[];
   userMap: Map<string, UserProfile>;
+  membersById: Map<string, Member>;
   membersByEmail: Map<string, Member>;
 }): GiftRecipientRow[] {
-  const { tickets, gifts, userMap, membersByEmail } = params;
+  const { tickets, gifts, userMap, membersById, membersByEmail } = params;
   const ticketIds = new Set(tickets.map((ticket) => ticket.id));
   const ticketById = new Map(tickets.map((ticket) => [ticket.id, ticket]));
   const coveredTicketIds = new Set<string>();
@@ -124,6 +138,7 @@ export function buildGiftRecipientRows(params: {
       gift.sourceUserId,
       gift.sourceUserName,
       userMap,
+      membersById,
       membersByEmail,
     );
     const { status, statusLabel } = resolveGiftRecipientStatus(gift, ticket);
@@ -161,7 +176,7 @@ export function buildGiftRecipientRows(params: {
     const recipientPhone = readTicketRecipientPhone(ticket);
     if (!recipientEmail && !recipientName && !recipientPhone) continue;
 
-    const inviter = resolveInviterContact(ticket.userId, '', userMap, membersByEmail);
+    const inviter = resolveInviterContact(ticket.userId, '', userMap, membersById, membersByEmail);
     const pending =
       ticket.status === 'PENDING_CLAIM' ||
       ticket.status === 'GIFT_PENDING' ||
@@ -225,14 +240,26 @@ export type EventParticipantTicketKind = 'SELF' | 'CLAIMED';
 /** Summary "Participants" rows: self tickets + gift tickets with claimed status. */
 export interface EventParticipantTicketRow extends GiftRecipientRow {
   participantKind: EventParticipantTicketKind;
+  /** When the wallet ticket was created / added (sort key). */
+  ticketAddedAt: string;
+}
+
+function resolveTicketAddedAt(ticket: WalletItem, gift?: GiftAllocation): string {
+  return (
+    ticket.createdAt?.trim() ||
+    gift?.claimedAt?.trim() ||
+    gift?.createdAt?.trim() ||
+    ''
+  );
 }
 
 export function buildEventParticipantTicketRows(params: {
   walletBuyers: WalletBuyerRow[];
   giftRecipientRows: GiftRecipientRow[];
   gifts: GiftAllocation[];
+  membersById?: Map<string, Member>;
 }): EventParticipantTicketRow[] {
-  const { walletBuyers, giftRecipientRows, gifts } = params;
+  const { walletBuyers, giftRecipientRows, gifts, membersById } = params;
   const giftByEntitlementId = new Map(gifts.map((gift) => [gift.entitlementId, gift]));
   const rows: EventParticipantTicketRow[] = [];
 
@@ -248,14 +275,17 @@ export function buildEventParticipantTicketRows(params: {
       );
       if (bucket !== 'SELF') continue;
 
+      const memberOwner = membersById?.get(ticket.userId);
       const recipientEmail =
         normalizeEmail(readTicketRecipientEmail(ticket)) || buyer.buyerEmail;
       const recipientName =
         readTicketRecipientName(ticket) ||
         buyer.buyerName ||
+        memberOwner?.name?.trim() ||
         (recipientEmail ? recipientEmail.split('@')[0] : '') ||
         'Guest';
-      const recipientPhone = readTicketRecipientPhone(ticket) || buyer.buyerPhone;
+      const recipientPhone =
+        readTicketRecipientPhone(ticket) || buyer.buyerPhone || memberOwner?.phone?.trim() || '';
       const ticketTier =
         typeof ticket.meta?.targetTier === 'string' && ticket.meta.targetTier.trim()
           ? ticket.meta.targetTier
@@ -276,7 +306,8 @@ export function buildEventParticipantTicketRows(params: {
         participantKind: 'SELF',
         ticketTier,
         itemName: ticket.title,
-        sentAt: gift?.createdAt || ticket.expiryDate || '',
+        sentAt: resolveTicketAddedAt(ticket, gift) || gift?.createdAt || '',
+        ticketAddedAt: resolveTicketAddedAt(ticket, gift),
         claimedAt: gift?.claimedAt,
       });
     }
@@ -288,11 +319,13 @@ export function buildEventParticipantTicketRows(params: {
       ...row,
       participantKind: 'CLAIMED',
       statusLabel: formatGiftRecipientStatusLabel('CLAIMED'),
+      ticketAddedAt: row.claimedAt?.trim() || row.sentAt?.trim() || '',
     });
   }
 
   return rows.sort(
-    (a, b) => new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime(),
+    (a, b) =>
+      new Date(b.ticketAddedAt || 0).getTime() - new Date(a.ticketAddedAt || 0).getTime(),
   );
 }
 

@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { FormDefinition, FormResponse } from '../types';
 import { FormService, normalizeFormResponse } from '@/services/formService';
 import { DataService } from '@/services/dataService';
-import { ChevronLeft, Users, BarChart3, Loader2, Eye, X, Clock } from 'lucide-react';
+import { ChevronLeft, Users, BarChart3, Loader2, Eye, X, Clock, Download } from 'lucide-react';
 import type { Event } from '@/types/index';
+import { ExcelHelper } from '@/utils/excelHelper';
 
 interface FormReportsPageProps {
     formId: string;
@@ -108,6 +109,32 @@ const FormReportsPage: React.FC<FormReportsPageProps> = ({ formId, onBack }) => 
         return r.sessionId;
     };
 
+    const handleExportResponses = () => {
+        const exportRows = responses.map((r) => {
+            const row: Record<string, string | number> = {
+                Submitted: new Date(r.submittedAt).toLocaleString(),
+                Name: r.userName || '-',
+                Email: r.userEmail || '-',
+                WhatsApp: r.userPhone || '-',
+                Session: getSessionDisplayName(r),
+            };
+            if (form.isQuiz) {
+                row.Score = `${r.score ?? 0}/${r.maxScore ?? 0}`;
+            }
+            for (const question of form.questions) {
+                const header = question.text.length > 80
+                    ? `${question.text.slice(0, 77)}...`
+                    : question.text;
+                row[header] = formatAnswerValue(r.answers[question.id]);
+            }
+            return row;
+        });
+
+        const safeTitle = form.title.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'form';
+        const dateStamp = new Date().toISOString().split('T')[0];
+        ExcelHelper.exportToExcel(exportRows, `${safeTitle}_responses_${dateStamp}`, 'Responses');
+    };
+
     return (
         <div className="page-container animate-fade-in relative min-w-0 space-y-5 pb-8 sm:space-y-6">
             <div className="flex items-start gap-4">
@@ -131,6 +158,16 @@ const FormReportsPage: React.FC<FormReportsPageProps> = ({ formId, onBack }) => 
                     </div>
                     <p className="mt-1 text-sm text-slate-500">Response analytics and respondent details</p>
                 </div>
+                <button
+                    type="button"
+                    onClick={handleExportResponses}
+                    disabled={responses.length === 0}
+                    className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Export responses to Excel"
+                >
+                    <Download size={16} />
+                    Export Excel
+                </button>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">

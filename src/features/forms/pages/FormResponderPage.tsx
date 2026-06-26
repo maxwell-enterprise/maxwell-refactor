@@ -5,6 +5,14 @@ import { FormDefinition, QuestionType, DataSource } from '../types';
 import { FormService } from '@/services/formService';
 import { DataService } from '@/services/dataService';
 import { useAuth } from '@/context/AuthContext';
+import { useDialog } from '@/context/DialogContext';
+import { ApiRequestError } from '@/repositories/api/apiClient';
+import {
+    GUEST_PHONE_MIN_LENGTH,
+    validateGuestContact,
+    mapApiGuestContactErrors,
+    type GuestFieldErrors,
+} from '../guestContactValidation';
 import type { Product, Event } from '@/types/index';
 
 interface FormResponderPageProps {
@@ -19,6 +27,7 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
     onComplete,
 }) => {
     const { user, isAuthenticated } = useAuth();
+    const { alert } = useDialog();
     const [form, setForm] = useState<FormDefinition | null>(null);
     const [answers, setAnswers] = useState<Record<string, unknown>>({});
     const [loading, setLoading] = useState(true);
@@ -28,6 +37,8 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
     const [guestName, setGuestName] = useState('');
     const [guestEmail, setGuestEmail] = useState('');
     const [guestPhone, setGuestPhone] = useState('');
+    const [guestErrors, setGuestErrors] = useState<GuestFieldErrors>({});
+    const [questionErrors, setQuestionErrors] = useState<Record<string, string>>({});
 
     const [dynamicOptions, setDynamicOptions] = useState<Record<string, Array<Product | Event>>>({});
 
@@ -68,17 +79,82 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
 
     const handleAnswer = (questionId: string, value: unknown) => {
         setAnswers((prev) => ({ ...prev, [questionId]: value }));
+        setQuestionErrors((prev) => {
+            if (!prev[questionId]) return prev;
+            const next = { ...prev };
+            delete next[questionId];
+            return next;
+        });
+    };
+
+    const isAnswerEmpty = (value: unknown): boolean => {
+        if (value === undefined || value === null) return true;
+        if (typeof value === 'string') return !value.trim();
+        if (Array.isArray(value)) return value.length === 0;
+        return false;
+    };
+
+    const validateRequiredQuestions = (): Record<string, string> => {
+        if (!form) return {};
+        const errors: Record<string, string> = {};
+        for (const q of form.questions) {
+            if (!q.required) continue;
+            if (isAnswerEmpty(answers[q.id])) {
+                errors[q.id] = 'Pertanyaan ini wajib dijawab.';
+            }
+        }
+        return errors;
+    };
+
+    const showValidationDialog = async (title: string, message: React.ReactNode) => {
+        await alert({
+            title,
+            message,
+            variant: 'warning',
+            confirmLabel: 'Mengerti',
+        });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form) return;
 
-        if (isGuest) {
-            if (!guestName.trim() || !guestEmail.trim() || !guestPhone.trim()) {
-                alert('Nama, email, dan WhatsApp wajib diisi.');
-                return;
+        const nextGuestErrors = isGuest
+            ? validateGuestContact({
+                  name: guestName,
+                  email: guestEmail,
+                  phone: guestPhone,
+              })
+            : {};
+        const nextQuestionErrors = validateRequiredQuestions();
+
+        setGuestErrors(nextGuestErrors);
+        setQuestionErrors(nextQuestionErrors);
+
+        const guestErrorCount = Object.keys(nextGuestErrors).length;
+        const questionErrorCount = Object.keys(nextQuestionErrors).length;
+
+        if (guestErrorCount > 0 || questionErrorCount > 0) {
+            const lines: string[] = [];
+            if (nextGuestErrors.name) lines.push(nextGuestErrors.name);
+            if (nextGuestErrors.email) lines.push(nextGuestErrors.email);
+            if (nextGuestErrors.phone) lines.push(nextGuestErrors.phone);
+            if (questionErrorCount > 0) {
+                lines.push(`${questionErrorCount} pertanyaan wajib belum dijawab.`);
             }
+
+            await showValidationDialog(
+                'Form belum lengkap',
+                <div className="space-y-2">
+                    <p>Periksa kembali data berikut sebelum mengirim:</p>
+                    <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                        {lines.map((line) => (
+                            <li key={line}>{line}</li>
+                        ))}
+                    </ul>
+                </div>,
+            );
+            return;
         }
 
         setSubmitting(true);
@@ -90,7 +166,7 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                 guestContact: isGuest
                     ? {
                           name: guestName.trim(),
-                          email: guestEmail.trim(),
+                          email: guestEmail.trim() || undefined,
                           phone: guestPhone.trim(),
                       }
                     : undefined,
@@ -101,11 +177,43 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
             }, 3000);
         } catch (error) {
             console.error('Submit error', error);
-            alert('Failed to submit form.');
+
+            if (error instanceof ApiRequestError && isGuest) {
+                const apiGuestErrors = mapApiGuestContactErrors(error.message);
+                if (Object.keys(apiGuestErrors).length > 0) {
+                    setGuestErrors(apiGuestErrors);
+                    await showValidationDialog(
+                        'Data kontak tidak valid',
+                        <div className="space-y-2">
+                            <p>Mohon perbaiki informasi kontak Anda:</p>
+                            <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                                {apiGuestErrors.name ? <li>{apiGuestErrors.name}</li> : null}
+                                {apiGuestErrors.email ? <li>{apiGuestErrors.email}</li> : null}
+                                {apiGuestErrors.phone ? <li>{apiGuestErrors.phone}</li> : null}
+                            </ul>
+                        </div>,
+                    );
+                    return;
+                }
+            }
+
+            const fallbackMessage =
+                error instanceof ApiRequestError
+                    ? error.message
+                    : 'Gagal mengirim form. Silakan coba lagi.';
+
+            await showValidationDialog('Gagal mengirim form', fallbackMessage);
         } finally {
             setSubmitting(false);
         }
     };
+
+    const guestInputClass = (field: keyof GuestFieldErrors) =>
+        `w-full border-b py-2 focus:outline-none transition-colors ${
+            guestErrors[field]
+                ? 'border-red-400 focus:border-red-500'
+                : 'border-slate-300 focus:border-indigo-600'
+        }`;
 
     if (loading) return <div className="p-8 text-center">Loading form...</div>;
     if (!form || !form.active) {
@@ -132,38 +240,100 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                 <div className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-widest">* Required</div>
             </div>
 
-            <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
+            <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6" noValidate>
                 {isGuest && (
                     <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                         <h2 className="text-lg font-bold text-slate-900 border-b pb-2 mb-4">Contact Information</h2>
                         <div>
                             <label className="block text-sm font-bold text-slate-700 mb-1">Full Name <span className="text-red-500">*</span></label>
-                            <input type="text" required value={guestName} onChange={(e) => setGuestName(e.target.value)} className="w-full border-b border-slate-300 py-2 focus:border-indigo-600 focus:outline-none" placeholder="Enter your full name" />
+                            <input
+                                type="text"
+                                value={guestName}
+                                onChange={(e) => {
+                                    setGuestName(e.target.value);
+                                    if (guestErrors.name) {
+                                        setGuestErrors((prev) => ({ ...prev, name: undefined }));
+                                    }
+                                }}
+                                className={guestInputClass('name')}
+                                placeholder="Enter your full name"
+                                aria-invalid={Boolean(guestErrors.name)}
+                            />
+                            {guestErrors.name ? (
+                                <p className="mt-1 text-xs font-medium text-red-600">{guestErrors.name}</p>
+                            ) : null}
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>
-                            <input type="email" required value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="w-full border-b border-slate-300 py-2 focus:border-indigo-600 focus:outline-none" placeholder="Enter your email" />
+                            <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                            <input
+                                type="email"
+                                value={guestEmail}
+                                onChange={(e) => {
+                                    setGuestEmail(e.target.value);
+                                    if (guestErrors.email) {
+                                        setGuestErrors((prev) => ({ ...prev, email: undefined }));
+                                    }
+                                }}
+                                className={guestInputClass('email')}
+                                placeholder="Enter your email (optional)"
+                                aria-invalid={Boolean(guestErrors.email)}
+                            />
+                            {guestErrors.email ? (
+                                <p className="mt-1 text-xs font-medium text-red-600">{guestErrors.email}</p>
+                            ) : (
+                                <p className="mt-1 text-xs text-slate-400">Opsional — isi jika ingin menerima update via email.</p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp / Phone <span className="text-red-500">*</span></label>
-                            <input type="tel" required value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full border-b border-slate-300 py-2 focus:border-indigo-600 focus:outline-none" placeholder="Enter your WhatsApp number" />
+                            <input
+                                type="tel"
+                                value={guestPhone}
+                                onChange={(e) => {
+                                    setGuestPhone(e.target.value);
+                                    if (guestErrors.phone) {
+                                        setGuestErrors((prev) => ({ ...prev, phone: undefined }));
+                                    }
+                                }}
+                                className={guestInputClass('phone')}
+                                placeholder="Contoh: 08123456789"
+                                aria-invalid={Boolean(guestErrors.phone)}
+                            />
+                            {guestErrors.phone ? (
+                                <p className="mt-1 text-xs font-medium text-red-600">{guestErrors.phone}</p>
+                            ) : (
+                                <p className="mt-1 text-xs text-slate-400">
+                                    Wajib diisi. Minimal {GUEST_PHONE_MIN_LENGTH} karakter.
+                                </p>
+                            )}
                         </div>
                     </div>
                 )}
 
                 {form.questions.map((q) => (
-                    <div key={q.id} className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                    <div
+                        key={q.id}
+                        className={`bg-white p-8 rounded-2xl shadow-sm border ${
+                            questionErrors[q.id] ? 'border-red-300' : 'border-slate-200'
+                        }`}
+                    >
                         <label className="block text-lg font-bold text-slate-800 mb-4">
                             {q.text} {q.required && <span className="text-red-500">*</span>}
                         </label>
+                        {questionErrors[q.id] ? (
+                            <p className="mb-3 text-xs font-medium text-red-600">{questionErrors[q.id]}</p>
+                        ) : null}
 
                         {q.type === QuestionType.SHORT_ANSWER && (
                             <input
                                 type="text"
-                                required={q.required}
                                 value={String(answers[q.id] ?? '')}
                                 onChange={(e) => handleAnswer(q.id, e.target.value)}
-                                className="w-full border-b border-slate-300 py-2 focus:border-indigo-600 focus:outline-none transition-colors"
+                                className={`w-full border-b py-2 focus:outline-none transition-colors ${
+                                    questionErrors[q.id]
+                                        ? 'border-red-400 focus:border-red-500'
+                                        : 'border-slate-300 focus:border-indigo-600'
+                                }`}
                                 placeholder="Your answer"
                             />
                         )}
@@ -182,7 +352,6 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                                                 <input
                                                     type="radio"
                                                     name={q.id}
-                                                    required={q.required}
                                                     value={val}
                                                     checked={answers[q.id] === String(val)}
                                                     onChange={(e) => handleAnswer(q.id, e.target.value)}
@@ -211,7 +380,6 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                                     if (q.type === QuestionType.DROPDOWN) {
                                         return (
                                             <select
-                                                required={q.required}
                                                 value={String(answers[q.id] ?? '')}
                                                 onChange={(e) => handleAnswer(q.id, e.target.value)}
                                                 className="w-full border border-slate-300 rounded p-3 focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -228,7 +396,6 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                                                 <input
                                                     type="radio"
                                                     name={q.id}
-                                                    required={q.required && !answers[q.id]}
                                                     value={opt}
                                                     checked={answers[q.id] === opt}
                                                     onChange={(e) => handleAnswer(q.id, e.target.value)}
@@ -261,7 +428,6 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                         {q.type === QuestionType.DATE && (
                             <input
                                 type="date"
-                                required={q.required}
                                 value={String(answers[q.id] ?? '')}
                                 onChange={(e) => handleAnswer(q.id, e.target.value)}
                                 className="border border-slate-300 rounded p-2 focus:ring-indigo-500 focus:outline-none"
@@ -270,7 +436,6 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                         {q.type === QuestionType.TIME && (
                             <input
                                 type="time"
-                                required={q.required}
                                 value={String(answers[q.id] ?? '')}
                                 onChange={(e) => handleAnswer(q.id, e.target.value)}
                                 className="border border-slate-300 rounded p-2 focus:ring-indigo-500 focus:outline-none"
@@ -280,7 +445,7 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                 ))}
 
                 <div className="flex justify-between items-center pt-6">
-                    <button type="button" onClick={() => setAnswers({})} className="text-sm font-bold text-indigo-600 hover:text-indigo-800">Clear Form</button>
+                    <button type="button" onClick={() => { setAnswers({}); setQuestionErrors({}); }} className="text-sm font-bold text-indigo-600 hover:text-indigo-800">Clear Form</button>
                     <button
                         type="submit"
                         disabled={submitting}

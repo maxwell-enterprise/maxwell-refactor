@@ -298,10 +298,11 @@ export const buyerSummaryHints: Record<keyof typeof buyerSummaryLabels, string> 
   claimed: 'Recipient has accepted the ticket',
 };
 
-function buildPaidBuyerEmailByUserId(
+export function buildPaidBuyerEmailByUserId(
   tickets: WalletItem[],
   gifts: GiftAllocation[],
   payments: PaymentTransaction[],
+  membersById?: Map<string, Member>,
 ): Map<string, string> {
   const map = new Map<string, string>();
   const giftByEntitlementId = new Map(gifts.map((g) => [g.entitlementId, g]));
@@ -321,6 +322,14 @@ function buildPaidBuyerEmailByUserId(
   }
 
   for (const [sourceUserId, buyerTickets] of buckets.entries()) {
+    if (membersById) {
+      const memberEmail = normalizeEmail(membersById.get(sourceUserId)?.email);
+      if (memberEmail) {
+        map.set(sourceUserId, memberEmail);
+        continue;
+      }
+    }
+
     const inferred = inferBuyerEmailFromTickets(sourceUserId, buyerTickets, gifts, '');
     if (inferred) {
       map.set(sourceUserId, inferred);
@@ -340,27 +349,71 @@ function buildPaidBuyerEmailByUserId(
     }
   }
 
+  for (const [sourceUserId, buyerTickets] of buckets.entries()) {
+    if (map.has(sourceUserId)) continue;
+
+    const ownedTickets = buyerTickets.filter((ticket) => ticket.userId === sourceUserId);
+    if (ownedTickets.length === 0) continue;
+
+    for (const payment of payments) {
+      if (payment.status !== 'PAID') continue;
+      const email = normalizeEmail(payment.customerEmail);
+      if (!email) continue;
+
+      const snapshotTitles = new Set(
+        (payment.itemsSnapshot ?? [])
+          .map((item) => item.name?.trim().toLowerCase())
+          .filter(Boolean),
+      );
+      const matchesPurchase = ownedTickets.some((ticket) => {
+        const ticketTitle = ticket.title.trim().toLowerCase();
+        if (!ticketTitle) return false;
+        return [...snapshotTitles].some(
+          (snapshotTitle) =>
+            snapshotTitle === ticketTitle ||
+            ticketTitle.includes(snapshotTitle) ||
+            snapshotTitle.includes(ticketTitle),
+        );
+      });
+      if (matchesPurchase) {
+        map.set(sourceUserId, email);
+        break;
+      }
+    }
+  }
+
   return map;
 }
 
-function resolveBuyerIdentity(
+export type WalletOwnerLookupContext = {
+  userMap: Map<string, UserProfile>;
+  membersById: Map<string, Member>;
+  membersByEmail: Map<string, Member>;
+  gifts?: GiftAllocation[];
+  paidBuyerEmailByUserId?: Map<string, string>;
+};
+
+/** Resolve wallet owner / purchaser display identity (Participants, Unassigned, exports). */
+export function resolveWalletOwnerIdentity(
   sourceUserId: string,
-  buyerTickets: WalletItem[],
-  gifts: GiftAllocation[],
-  userMap: Map<string, UserProfile>,
-  membersByEmail: Map<string, Member>,
-  paidBuyerEmailByUserId: Map<string, string>,
-): { buyerName: string; buyerEmail: string; buyerPhone: string } {
-  const workspaceUser = userMap.get(sourceUserId);
+  ownerTickets: WalletItem[],
+  ctx: WalletOwnerLookupContext,
+  unknownLabel = 'Unknown purchaser',
+): { name: string; email: string; phone: string } {
+  const gifts = ctx.gifts ?? [];
+  const paidBuyerEmailByUserId = ctx.paidBuyerEmailByUserId ?? new Map<string, string>();
+  const workspaceUser = ctx.userMap.get(sourceUserId);
   const workspaceName = workspaceUser?.fullName?.trim() ?? '';
+  const memberById = ctx.membersById.get(sourceUserId);
 
   let buyerEmail =
     normalizeEmail(workspaceUser?.email) ||
+    normalizeEmail(memberById?.email) ||
     paidBuyerEmailByUserId.get(sourceUserId) ||
-    inferBuyerEmailFromTickets(sourceUserId, buyerTickets, gifts, workspaceName) ||
+    inferBuyerEmailFromTickets(sourceUserId, ownerTickets, gifts, workspaceName) ||
     '';
 
-  let member = buyerEmail ? membersByEmail.get(buyerEmail) : undefined;
+  let member = memberById || (buyerEmail ? ctx.membersByEmail.get(buyerEmail) : undefined);
   if (!buyerEmail && member?.email) {
     buyerEmail = normalizeEmail(member.email);
   }
@@ -369,28 +422,51 @@ function resolveBuyerIdentity(
     buyerEmail =
       inferBuyerEmailFromTickets(
         sourceUserId,
-        buyerTickets,
+        ownerTickets,
         gifts,
-        inferBuyerNameFromTickets(sourceUserId, buyerTickets, gifts, ''),
+        inferBuyerNameFromTickets(sourceUserId, ownerTickets, gifts, ''),
       ) || '';
-    member = buyerEmail ? membersByEmail.get(buyerEmail) : undefined;
+    member = member || (buyerEmail ? ctx.membersByEmail.get(buyerEmail) : undefined);
   }
 
   const buyerName =
     formatBuyerDisplayName(workspaceName) ||
     formatBuyerDisplayName(member?.name) ||
     formatBuyerDisplayName(
-      inferBuyerNameFromTickets(sourceUserId, buyerTickets, gifts, buyerEmail),
+      inferBuyerNameFromTickets(sourceUserId, ownerTickets, gifts, buyerEmail),
     ) ||
     formatBuyerDisplayName(pickGiftSourceUserName(gifts, sourceUserId)) ||
     formatBuyerDisplayName(toTitleFromEmail(buyerEmail)) ||
     formatBuyerDisplayName(toTitleFromEmail(workspaceUser?.email)) ||
-    'Unknown purchaser';
+    formatBuyerDisplayName(toTitleFromEmail(memberById?.email)) ||
+    buyerEmail ||
+    unknownLabel;
 
   return {
-    buyerName,
-    buyerEmail: buyerEmail || normalizeEmail(member?.email) || '',
-    buyerPhone: workspaceUser?.phone?.trim() || member?.phone?.trim() || '',
+    name: buyerName,
+    email: buyerEmail || normalizeEmail(member?.email) || '',
+    phone: workspaceUser?.phone?.trim() || member?.phone?.trim() || '',
+  };
+}
+
+function resolveBuyerIdentity(
+  sourceUserId: string,
+  buyerTickets: WalletItem[],
+  gifts: GiftAllocation[],
+  userMap: Map<string, UserProfile>,
+  membersById: Map<string, Member>,
+  membersByEmail: Map<string, Member>,
+  paidBuyerEmailByUserId: Map<string, string>,
+): { buyerName: string; buyerEmail: string; buyerPhone: string } {
+  const resolved = resolveWalletOwnerIdentity(
+    sourceUserId,
+    buyerTickets,
+    { userMap, membersById, membersByEmail, gifts, paidBuyerEmailByUserId },
+  );
+  return {
+    buyerName: resolved.name,
+    buyerEmail: resolved.email,
+    buyerPhone: resolved.phone,
   };
 }
 
@@ -398,12 +474,18 @@ export function buildWalletBuyerRows(params: {
   tickets: WalletItem[];
   gifts: GiftAllocation[];
   userMap: Map<string, UserProfile>;
+  membersById: Map<string, Member>;
   membersByEmail: Map<string, Member>;
   payments?: PaymentTransaction[];
 }): WalletBuyerRow[] {
-  const { tickets, gifts, userMap, membersByEmail, payments = [] } = params;
+  const { tickets, gifts, userMap, membersById, membersByEmail, payments = [] } = params;
   const giftByEntitlementId = new Map(gifts.map((g) => [g.entitlementId, g]));
-  const paidBuyerEmailByUserId = buildPaidBuyerEmailByUserId(tickets, gifts, payments);
+  const paidBuyerEmailByUserId = buildPaidBuyerEmailByUserId(
+    tickets,
+    gifts,
+    payments,
+    membersById,
+  );
 
   const buckets = new Map<string, WalletItem[]>();
   for (const ticket of tickets) {
@@ -420,6 +502,7 @@ export function buildWalletBuyerRows(params: {
       buyerTickets,
       gifts,
       userMap,
+      membersById,
       membersByEmail,
       paidBuyerEmailByUserId,
     );

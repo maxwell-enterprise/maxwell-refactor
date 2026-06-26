@@ -738,6 +738,7 @@ export interface WalletItem {
     status: 'ACTIVE' | 'USED' | 'EXPIRED' | 'GIFTED' | 'GIFT_PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'PENDING_CLAIM' | 'CLAIMED';
     isTransferable?: boolean; 
     sponsoredBy?: string; 
+    createdAt?: string;
     meta?: {
         eventId?: string;
         location?: string;

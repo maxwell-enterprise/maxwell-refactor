@@ -82,6 +82,7 @@ export interface WalletItem {
     status: 'ACTIVE' | 'USED' | 'EXPIRED' | 'GIFTED' | 'GIFT_PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'PENDING_CLAIM' | 'CLAIMED'; // Added Shipping statuses
     isTransferable?: boolean; 
     sponsoredBy?: string; // NEW: Name of the person who gifted this
+    createdAt?: string;
     meta?: any; // Contains { credits: number, tag: string } for passes
 }
 

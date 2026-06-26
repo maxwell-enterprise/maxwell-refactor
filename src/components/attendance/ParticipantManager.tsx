@@ -16,6 +16,10 @@ import {
     toTitleFromEmail,
     WalletBuyerRow,
 } from './participantWalletBuyers';
+import {
+    buildWalletOwnerUserMap,
+    collectWalletOwnerIds,
+} from './walletOwnerUserMap';
 import { formatEventSelectLabel, truncateSelectLabel } from '../../utils/selectLabels';
 import {
     buildGiftRecipientRows,
@@ -120,12 +124,13 @@ const ParticipantManager: React.FC = () => {
     const [walletBuyers, setWalletBuyers] = useState<WalletBuyerRow[]>([]);
     const [giftAllocations, setGiftAllocations] = useState<GiftAllocation[]>([]);
     const [giftRecipientRows, setGiftRecipientRows] = useState<GiftRecipientRow[]>([]);
+    const [membersById, setMembersById] = useState<Map<string, Member>>(new Map());
     const [selectedWalletBuyer, setSelectedWalletBuyer] = useState<WalletBuyerRow | null>(null);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterTier, setFilterTier] = useState('ALL');
     const [filterGate, setFilterGate] = useState('ALL');
-    const [filterStatus, setFilterStatus] = useState<ParticipantStatusFilter>('NAMED_ONLY');
+    const [filterStatus, setFilterStatus] = useState<ParticipantStatusFilter>('PARTICIPANTS');
     const [profilingMember, setProfilingMember] = useState<Member | null>(null);
 
     useEffect(() => {
@@ -171,7 +176,18 @@ const ParticipantManager: React.FC = () => {
             const gateMap = new Map(
                 (selectedEvent?.gates ?? []).map((gate) => [gate.id, gate.name]),
             );
-            const userMap = new Map(internalUsers.map((user) => [user.id, user]));
+
+            const tickets = walletItems.filter((wallet) =>
+                wallet.type === 'TICKET' &&
+                wallet.status !== 'EXPIRED' &&
+                typeof wallet.meta?.eventId === 'string' &&
+                relevantEventIds.includes(wallet.meta.eventId)
+            );
+
+            const userMap = await buildWalletOwnerUserMap(
+                collectWalletOwnerIds(tickets, gifts),
+                internalUsers,
+            );
 
             const membersById = new Map(crmMembers.map((member) => [member.id, member]));
             const membersByEmail = new Map(
@@ -182,13 +198,6 @@ const ParticipantManager: React.FC = () => {
 
             const relevantAttendance = attendanceRows.filter((record) =>
                 relevantEventIds.includes(record.eventId),
-            );
-
-            const tickets = walletItems.filter((wallet) =>
-                wallet.type === 'TICKET' &&
-                wallet.status !== 'EXPIRED' &&
-                typeof wallet.meta?.eventId === 'string' &&
-                relevantEventIds.includes(wallet.meta.eventId)
             );
 
             const buildParticipantRow = (
@@ -320,11 +329,13 @@ const ParticipantManager: React.FC = () => {
 
             setParticipants(rows);
             setGiftAllocations(gifts);
+            setMembersById(membersById);
             setGiftRecipientRows(
                 buildGiftRecipientRows({
                     tickets,
                     gifts,
                     userMap,
+                    membersById,
                     membersByEmail,
                 }),
             );
@@ -333,6 +344,7 @@ const ParticipantManager: React.FC = () => {
                     tickets,
                     gifts,
                     userMap,
+                    membersById,
                     membersByEmail,
                     payments,
                 }),
@@ -402,8 +414,9 @@ const ParticipantManager: React.FC = () => {
                 walletBuyers,
                 giftRecipientRows,
                 gifts: giftAllocations,
+                membersById,
             }),
-        [walletBuyers, giftRecipientRows, giftAllocations],
+        [walletBuyers, giftRecipientRows, giftAllocations, membersById],
     );
 
     const eventSummary = useMemo(() => {

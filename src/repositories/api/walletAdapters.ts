@@ -91,6 +91,7 @@ export function normalizeWalletItem(row: Record<string, unknown>): WalletItem {
     status: normalizeWalletStatus(row.status),
     isTransferable: Boolean(row.isTransferable),
     sponsoredBy: row.sponsoredBy != null ? String(row.sponsoredBy) : undefined,
+    createdAt: toIsoString(row.createdAt),
     meta: Object.keys(meta).length ? meta : undefined,
   };
 }

@@ -183,5 +183,50 @@ export const UserService = {
         if (!supabase) return;
         const { error } = await supabase.from('sys_internal_users').insert(user);
         if (error) throw error;
-    }
+    },
+
+    /** Batch-resolve Prisma workspace `User` rows (wallet owners / purchasers). */
+    lookupWorkspaceUsers: async (ids: string[]): Promise<UserProfile[]> => {
+        const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+        if (unique.length === 0) return [];
+
+        if (APP_CONFIG.EXTERNAL_API_ONLY) {
+            const q = new URLSearchParams({ ids: unique.join(',') });
+            const rows = await apiRequest<
+                Array<{ id: string; name: string; email: string; phone?: string | null }>
+            >(`/wallet/workspace-users/lookup?${q.toString()}`);
+            return (Array.isArray(rows) ? rows : []).map((row) => {
+                const email = row.email?.trim() || '';
+                const fullName =
+                    row.name?.trim() ||
+                    (email ? email.split('@')[0].replace(/[._-]+/g, ' ') : 'User');
+                return {
+                    id: row.id,
+                    email,
+                    fullName,
+                    phone: row.phone?.trim() || undefined,
+                    role: UserRole.MEMBER,
+                    avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
+                    provider: 'email' as const,
+                };
+            });
+        }
+
+        if (APP_CONFIG.USE_MOCK) {
+            const members = await DataService.getMembers();
+            return members
+                .filter((member) => unique.includes(member.id))
+                .map((member) => ({
+                    id: member.id,
+                    email: member.email,
+                    fullName: member.name,
+                    phone: member.phone,
+                    role: UserRole.MEMBER,
+                    avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=random`,
+                    provider: 'email' as const,
+                }));
+        }
+
+        return [];
+    },
 };

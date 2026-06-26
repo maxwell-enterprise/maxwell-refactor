@@ -1,16 +1,28 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { WalletItem, Member, Event } from '../../types/index';
+import { WalletItem, Event, UserProfile } from '../../types/index';
 import { DataService } from '../../services/dataService';
 import { EntitlementService } from '../../services/entitlementService';
+import { PaymentService } from '../../services/paymentService';
+import { UserService } from '../../services/userService';
 import { WhatsAppService } from '../../services/whatsappService';
+import {
+    buildPaidBuyerEmailByUserId,
+    normalizeEmail,
+    resolveWalletOwnerIdentity,
+} from './participantWalletBuyers';
+import {
+    buildWalletOwnerUserMap,
+    collectWalletOwnerIds,
+} from './walletOwnerUserMap';
 import { Ticket, Send, RefreshCw, User, Filter, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
 interface UnassignedGroupRow {
-    groupId: string; // Composite key
+    groupId: string;
     ownerId: string;
     ownerName: string;
+    ownerEmail: string;
     ownerPhone: string;
     eventId: string;
     eventName: string;
@@ -25,64 +37,98 @@ const UnassignedTicketMonitor: React.FC = () => {
     const { showToast } = useToast();
     const [rows, setRows] = useState<UnassignedGroupRow[]>([]);
     const [loading, setLoading] = useState(true);
-    
-    // Filter State
+
     const [filterOwner, setFilterOwner] = useState('');
     const [filterEvent, setFilterEvent] = useState('');
-    
-    // Sort State
+
     const [sortField, setSortField] = useState<SortField>('ownerName');
     const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
     useEffect(() => {
-        loadData();
+        void loadData();
     }, []);
 
     const loadData = async () => {
         setLoading(true);
-        const [allWallets, allMembers, allEvents] = await Promise.all([
-            EntitlementService.getAllWalletItems(),
-            DataService.getMembers(),
-            DataService.getEvents()
-        ]);
+        const [allWallets, allMembers, allEvents, gifts, payments, internalUsers] =
+            await Promise.all([
+                EntitlementService.getAllWalletItems(),
+                DataService.getMembers(),
+                DataService.getEvents(),
+                EntitlementService.getAllGifts().catch(() => []),
+                PaymentService.getGatewayLogs().catch(() => []),
+                UserService.getAllUsers().catch(() => [] as UserProfile[]),
+            ]);
 
-        // STRICT FILTER LOGIC:
-        // 1. Must be TICKET
-        // 2. Must be ACTIVE (Not USED, EXPIRED, or REVOKED)
-        // 3. Must NOT be GIFT_PENDING (This means it's in the 'Sent Invites' bucket)
-        // 4. Must NOT have a recipientEmail in metadata (Draft state)
-        const unassigned = allWallets.filter(w => 
-            w.type === 'TICKET' && 
-            w.status === 'ACTIVE' && 
-            w.isTransferable && 
-            !w.meta?.recipientEmail && 
-            !w.meta?.recipientName
+        const membersById = new Map(allMembers.map((member) => [member.id, member]));
+        const membersByEmail = new Map(
+            allMembers
+                .filter((member) => normalizeEmail(member.email))
+                .map((member) => [normalizeEmail(member.email), member]),
+        );
+        const userMap = await buildWalletOwnerUserMap(
+            collectWalletOwnerIds(allWallets, gifts),
+            internalUsers,
+        );
+        const paidBuyerEmailByUserId = buildPaidBuyerEmailByUserId(
+            allWallets,
+            gifts,
+            payments,
+            membersById,
         );
 
-        // Grouping Logic
+        const ownerTickets = new Map<string, WalletItem[]>();
+        const unassigned = allWallets.filter(
+            (wallet) =>
+                wallet.type === 'TICKET' &&
+                wallet.status === 'ACTIVE' &&
+                wallet.isTransferable &&
+                !wallet.meta?.recipientEmail &&
+                !wallet.meta?.recipientName,
+        );
+
+        for (const ticket of unassigned) {
+            const list = ownerTickets.get(ticket.userId) ?? [];
+            list.push(ticket);
+            ownerTickets.set(ticket.userId, list);
+        }
+
         const groups: Record<string, UnassignedGroupRow> = {};
-        
-        unassigned.forEach(ticket => {
+
+        unassigned.forEach((ticket) => {
             const ownerId = ticket.userId;
             const eventId = ticket.meta?.eventId || 'unknown';
             const groupKey = `${ownerId}_${eventId}`;
-            
+
             if (!groups[groupKey]) {
-                const owner = allMembers.find(m => m.id === ownerId);
-                const event = allEvents.find(e => e.id === eventId);
-                
+                const event = allEvents.find((entry) => entry.id === eventId);
+                const ticketsForOwner = ownerTickets.get(ownerId) ?? [ticket];
+                const owner = resolveWalletOwnerIdentity(
+                    ownerId,
+                    ticketsForOwner,
+                    {
+                        userMap,
+                        membersById,
+                        membersByEmail,
+                        gifts,
+                        paidBuyerEmailByUserId,
+                    },
+                    'Unknown User',
+                );
+
                 groups[groupKey] = {
                     groupId: groupKey,
                     ownerId,
-                    ownerName: owner?.name || 'Unknown User',
-                    ownerPhone: owner?.phone || '',
+                    ownerName: owner.name,
+                    ownerEmail: owner.email,
+                    ownerPhone: owner.phone,
                     eventId,
                     eventName: event?.name || ticket.title || 'Unknown Event',
                     quantity: 0,
-                    ticketIds: []
+                    ticketIds: [],
                 };
             }
-            
+
             groups[groupKey].quantity += 1;
             groups[groupKey].ticketIds.push(ticket.id);
         });
@@ -93,7 +139,12 @@ const UnassignedTicketMonitor: React.FC = () => {
 
     const handleRemind = (row: UnassignedGroupRow) => {
         if (!row.ownerPhone) {
-            showToast('No phone number for this user.', 'error');
+            showToast(
+                row.ownerEmail
+                    ? `No phone on file. Email: ${row.ownerEmail}`
+                    : 'No phone number for this user.',
+                row.ownerEmail ? 'info' : 'error',
+            );
             return;
         }
 
@@ -105,7 +156,7 @@ const UnassignedTicketMonitor: React.FC = () => {
 
     const handleSort = (field: SortField) => {
         if (sortField === field) {
-            setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+            setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
         } else {
             setSortField(field);
             setSortOrder('asc');
@@ -115,18 +166,23 @@ const UnassignedTicketMonitor: React.FC = () => {
     const processedRows = useMemo(() => {
         let result = [...rows];
 
-        // 1. Filtering
         if (filterOwner) {
-            result = result.filter(r => r.ownerName.toLowerCase().includes(filterOwner.toLowerCase()));
+            const q = filterOwner.toLowerCase();
+            result = result.filter(
+                (row) =>
+                    row.ownerName.toLowerCase().includes(q) ||
+                    row.ownerEmail.toLowerCase().includes(q),
+            );
         }
         if (filterEvent) {
-            result = result.filter(r => r.eventName.toLowerCase().includes(filterEvent.toLowerCase()));
+            result = result.filter((row) =>
+                row.eventName.toLowerCase().includes(filterEvent.toLowerCase()),
+            );
         }
 
-        // 2. Sorting
         result.sort((a, b) => {
-            let valA = a[sortField];
-            let valB = b[sortField];
+            let valA: string | number = a[sortField];
+            let valB: string | number = b[sortField];
 
             if (typeof valA === 'string') valA = valA.toLowerCase();
             if (typeof valB === 'string') valB = valB.toLowerCase();
@@ -139,108 +195,137 @@ const UnassignedTicketMonitor: React.FC = () => {
         return result;
     }, [rows, filterOwner, filterEvent, sortField, sortOrder]);
 
-    // Render Sort Icon Helper
     const renderSortIcon = (field: SortField) => {
-        if (sortField !== field) return <div className="w-4 h-4" />; // Spacer
-        return sortOrder === 'asc' ? <ArrowUp size={14} className="ml-1"/> : <ArrowDown size={14} className="ml-1"/>;
+        if (sortField !== field) return <div className="h-4 w-4" />;
+        return sortOrder === 'asc' ? (
+            <ArrowUp size={14} className="ml-1" />
+        ) : (
+            <ArrowDown size={14} className="ml-1" />
+        );
     };
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col">
-            <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+        <div className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 p-4">
                 <div>
-                    <h3 className="font-bold text-slate-800 flex items-center">
-                        <Ticket size={18} className="mr-2 text-amber-500"/> Unassigned Tickets (Empty)
+                    <h3 className="flex items-center font-bold text-slate-800">
+                        <Ticket size={18} className="mr-2 text-amber-500" /> Unassigned Tickets (Empty)
                     </h3>
-                    <p className="text-xs text-slate-500">Tickets purchased but currently holding no attendee data.</p>
+                    <p className="text-xs text-slate-500">
+                        Tickets purchased but currently holding no attendee data.
+                    </p>
                 </div>
-                <button onClick={loadData} className="p-2 text-slate-500 hover:bg-white rounded-lg transition-colors">
-                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>
+                <button
+                    type="button"
+                    onClick={() => void loadData()}
+                    className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white"
+                >
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                 </button>
             </div>
 
             <div className="flex-1 overflow-auto">
                 {loading ? (
-                    <div className="p-12 text-center text-slate-400 text-sm">Scanning wallet database...</div>
+                    <div className="p-12 text-center text-sm text-slate-400">Scanning wallet database...</div>
                 ) : rows.length === 0 ? (
-                    <div className="p-12 text-center text-slate-400 text-sm">No unassigned tickets found. Good job!</div>
+                    <div className="p-12 text-center text-sm text-slate-400">
+                        No unassigned tickets found. Good job!
+                    </div>
                 ) : (
-                    <table className="w-full text-left text-sm border-collapse">
-                        <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 sticky top-0 z-10">
+                    <table className="w-full border-collapse text-left text-sm">
+                        <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 font-bold text-slate-600">
                             <tr>
-                                <th 
-                                    className="p-3 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                                <th
+                                    className="cursor-pointer p-3 transition-colors select-none hover:bg-slate-100"
                                     onClick={() => handleSort('ownerName')}
                                 >
-                                    <div className="flex items-center">Purchaser {renderSortIcon('ownerName')}</div>
+                                    <div className="flex items-center">
+                                        Purchaser {renderSortIcon('ownerName')}
+                                    </div>
                                 </th>
-                                <th 
-                                    className="p-3 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                                <th
+                                    className="cursor-pointer p-3 transition-colors select-none hover:bg-slate-100"
                                     onClick={() => handleSort('eventName')}
                                 >
-                                    <div className="flex items-center">Event {renderSortIcon('eventName')}</div>
+                                    <div className="flex items-center">
+                                        Event {renderSortIcon('eventName')}
+                                    </div>
                                 </th>
-                                <th 
-                                    className="p-3 text-center cursor-pointer hover:bg-slate-100 transition-colors select-none w-24"
+                                <th
+                                    className="w-24 cursor-pointer p-3 text-center transition-colors select-none hover:bg-slate-100"
                                     onClick={() => handleSort('quantity')}
                                 >
-                                    <div className="flex items-center justify-center">Qty {renderSortIcon('quantity')}</div>
+                                    <div className="flex items-center justify-center">
+                                        Qty {renderSortIcon('quantity')}
+                                    </div>
                                 </th>
                                 <th className="p-3 text-right">Action</th>
                             </tr>
-                            <tr className="bg-white border-b border-slate-200">
+                            <tr className="border-b border-slate-200 bg-white">
                                 <th className="p-2">
                                     <div className="relative">
-                                        <Filter size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"/>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Filter Owner..." 
-                                            className="w-full pl-7 pr-2 py-1 text-xs border border-slate-200 rounded outline-none focus:border-blue-500 font-normal"
+                                        <Filter
+                                            size={12}
+                                            className="absolute top-1/2 left-2 -translate-y-1/2 text-slate-400"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Filter Owner..."
+                                            className="w-full rounded border border-slate-200 py-1 pr-2 pl-7 text-xs font-normal outline-none focus:border-blue-500"
                                             value={filterOwner}
-                                            onChange={e => setFilterOwner(e.target.value)}
+                                            onChange={(e) => setFilterOwner(e.target.value)}
                                         />
                                     </div>
                                 </th>
                                 <th className="p-2">
                                     <div className="relative">
-                                        <Filter size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"/>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Filter Event..." 
-                                            className="w-full pl-7 pr-2 py-1 text-xs border border-slate-200 rounded outline-none focus:border-blue-500 font-normal"
+                                        <Filter
+                                            size={12}
+                                            className="absolute top-1/2 left-2 -translate-y-1/2 text-slate-400"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Filter Event..."
+                                            className="w-full rounded border border-slate-200 py-1 pr-2 pl-7 text-xs font-normal outline-none focus:border-blue-500"
                                             value={filterEvent}
-                                            onChange={e => setFilterEvent(e.target.value)}
+                                            onChange={(e) => setFilterEvent(e.target.value)}
                                         />
                                     </div>
                                 </th>
-                                <th className="p-2"></th>
-                                <th className="p-2"></th>
+                                <th className="p-2" />
+                                <th className="p-2" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {processedRows.map((row) => (
-                                <tr key={row.groupId} className="hover:bg-slate-50 transition-colors">
+                                <tr key={row.groupId} className="transition-colors hover:bg-slate-50">
                                     <td className="p-4">
-                                        <div className="font-bold text-slate-900 flex items-center">
-                                            <User size={14} className="mr-2 text-slate-400"/>
+                                        <div className="flex items-center font-bold text-slate-900">
+                                            <User size={14} className="mr-2 text-slate-400" />
                                             {row.ownerName}
                                         </div>
-                                        <div className="text-xs text-slate-500 ml-6">{row.ownerPhone}</div>
+                                        {row.ownerEmail ? (
+                                            <div className="ml-6 text-xs text-slate-500">{row.ownerEmail}</div>
+                                        ) : null}
+                                        {row.ownerPhone ? (
+                                            <div className="ml-6 text-xs text-slate-400">{row.ownerPhone}</div>
+                                        ) : null}
                                     </td>
                                     <td className="p-4">
-                                        <div className="text-slate-800 font-medium">{row.eventName}</div>
+                                        <div className="font-medium text-slate-800">{row.eventName}</div>
                                     </td>
                                     <td className="p-4 text-center">
-                                        <span className="bg-amber-100 text-amber-800 font-bold px-3 py-1 rounded-full text-xs">
+                                        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
                                             {row.quantity}
                                         </span>
                                     </td>
                                     <td className="p-4 text-right">
-                                        <button 
+                                        <button
+                                            type="button"
                                             onClick={() => handleRemind(row)}
-                                            className="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-700 text-xs font-bold rounded-lg hover:bg-green-200 transition-colors"
+                                            className="inline-flex items-center rounded-lg bg-green-100 px-3 py-1.5 text-xs font-bold text-green-700 transition-colors hover:bg-green-200"
                                         >
-                                            <Send size={12} className="mr-1.5"/> Remind User
+                                            <Send size={12} className="mr-1.5" /> Remind User
                                         </button>
                                     </td>
                                 </tr>

@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Discount } from '../../types/index';
 import { DiscountService } from '../../services/discountService';
 import { Tag, Calendar, User, Search, Ticket, Upload, Download, FileSpreadsheet, Plus, Edit3, Trash2 } from 'lucide-react';
@@ -85,14 +85,38 @@ const DiscountManager: React.FC = () => {
         });
 
         if (isConfirmed) {
-            await DiscountService.deleteDiscount(discount.id);
-            showToast('Voucher deleted.', 'info');
-            setDiscounts(prev => prev.filter(d => d.id !== discount.id));
+            try {
+                const result = await DiscountService.deleteDiscount(discount.id);
+                if (result.action === 'DEACTIVATED') {
+                    showToast(
+                        result.message ||
+                            `Voucher "${discount.code}" was deactivated by the system because it has already been used.`,
+                        'info',
+                    );
+                } else {
+                    showToast(result.message || 'Voucher deleted.', 'info');
+                }
+                setDiscounts((prev) => prev.filter((d) => d.id !== discount.id));
+            } catch (e) {
+                showToast(
+                    e instanceof Error ? e.message : 'Could not delete voucher.',
+                    'error',
+                );
+            }
         }
     };
     // ----------------------------------------
 
-    const filteredDiscounts = discounts.filter(d => 
+    const activeDiscounts = useMemo(
+        () =>
+            discounts.filter((d) => {
+                if (d.conditions?.deactivatedBySystem === true) return false;
+                return new Date(d.validUntil).getTime() >= Date.now();
+            }),
+        [discounts],
+    );
+
+    const filteredDiscounts = activeDiscounts.filter(d =>
         d.code.toLowerCase().includes(searchTerm.toLowerCase()) || 
         d.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -190,7 +214,7 @@ const DiscountManager: React.FC = () => {
                     <EmptyStatePlaceholder
                         icon={Ticket}
                         message={
-                            discounts.length === 0
+                            activeDiscounts.length === 0
                                 ? 'No vouchers yet. Create one with New Voucher.'
                                 : 'No vouchers match your search.'
                         }

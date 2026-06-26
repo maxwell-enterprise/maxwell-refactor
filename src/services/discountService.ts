@@ -44,6 +44,12 @@ export type VoucherFailureCode =
   | 'MIN_QTY_NOT_MET'
   | 'ALREADY_REDEEMED';
 
+export type DeleteDiscountResult = {
+  action: 'DELETED' | 'DEACTIVATED';
+  code: string;
+  message: string;
+};
+
 function formatDate(input: string): string {
   try {
     return new Date(input).toLocaleDateString();
@@ -171,22 +177,36 @@ export const DiscountService = {
       await supabase.from('discounts').upsert(discount);
   },
 
-  deleteDiscount: async (id: string): Promise<void> => {
+  deleteDiscount: async (id: string): Promise<DeleteDiscountResult> => {
       assertExternalApiMode('Discount vouchers', getDiscountMode());
       if (shouldUseApi()) {
-          await apiRequest<void>(`/store/discounts/${encodeURIComponent(id)}`, {
+          return apiRequest<DeleteDiscountResult>(`/store/discounts/${encodeURIComponent(id)}`, {
               method: 'DELETE'
           });
-          return;
       }
 
       if (APP_CONFIG.USE_MOCK) {
           await DevDatabase.delete('discounts', id);
-          return;
+          return {
+              action: 'DELETED',
+              code: id,
+              message: 'Voucher deleted.',
+          };
       }
 
-      if (!supabase) return;
+      if (!supabase) {
+          return {
+              action: 'DELETED',
+              code: id,
+              message: 'Voucher deleted.',
+          };
+      }
       await supabase.from('discounts').delete().eq('id', id);
+      return {
+          action: 'DELETED',
+          code: id,
+          message: 'Voucher deleted.',
+      };
   },
 
   findByCode: async (code: string): Promise<Discount | undefined> => {
@@ -199,6 +219,9 @@ export const DiscountService = {
   // Refactored to be Async for Context Fetching
   isValid: async (discount: Discount, userRole: UserRole, userId?: string): Promise<{ valid: boolean; reason?: string }> => {
     const now = new Date();
+    if (discount.conditions?.deactivatedBySystem === true) {
+      return { valid: false, reason: 'Voucher ini sudah dinonaktifkan oleh sistem.' };
+    }
     if (new Date(discount.validFrom) > now) {
       return { valid: false, reason: `Promo belum berlaku sampai ${formatDate(discount.validFrom)}.` };
     }

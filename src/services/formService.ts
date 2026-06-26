@@ -169,7 +169,7 @@ export const FormService = {
     formId: string;
     sessionId?: string;
     answers: Record<string, unknown>;
-    guestContact?: { name: string; email: string; phone: string };
+    guestContact?: { name: string; email?: string; phone: string };
   }): Promise<FormResponse & { successMessage?: string }> => {
     const row = await apiRequest<Record<string, unknown>>('/forms/public/respond', {
       method: 'POST',
