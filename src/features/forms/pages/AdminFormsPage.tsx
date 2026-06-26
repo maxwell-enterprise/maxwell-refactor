@@ -6,6 +6,7 @@ import { FormService, buildFormDeploymentUrl } from '@/services/formService';
 import { DataService } from '@/services/dataService';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useDialog } from '@/context/DialogContext';
 import {
     Plus,
     Edit,
@@ -26,6 +27,7 @@ import type { Event } from '@/types/index';
 const AdminFormsPage: React.FC = () => {
     const { user } = useAuth();
     const { showToast } = useToast();
+    const { confirm } = useDialog();
     const [forms, setForms] = useState<FormDefinition[]>([]);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'LIST' | 'BUILDER' | 'REPORTS'>('LIST');
@@ -117,11 +119,29 @@ const AdminFormsPage: React.FC = () => {
         setView('BUILDER');
     };
 
-    const handleDeleteForm = async (id: string) => {
-        if (!confirm('Delete this form and all its responses?')) return;
+    const handleDeleteForm = async (form: FormDefinition) => {
+        const isConfirmed = await confirm({
+            title: form.isQuiz ? 'Delete Quiz?' : 'Delete Form?',
+            variant: 'danger',
+            message: (
+                <div className="space-y-2">
+                    <p>
+                        Are you sure you want to delete{' '}
+                        <strong>{form.title}</strong>?
+                    </p>
+                    <p className="text-xs leading-relaxed text-red-600">
+                        All deployments and submitted responses will be permanently removed.
+                        This action cannot be undone.
+                    </p>
+                </div>
+            ),
+            confirmLabel: 'Yes, Delete',
+        });
+        if (!isConfirmed) return;
+
         try {
-            await FormService.deleteForm(id);
-            showToast('Form deleted', 'success');
+            await FormService.deleteForm(form.id);
+            showToast(form.isQuiz ? 'Quiz deleted' : 'Form deleted', 'success');
             await loadForms();
         } catch {
             showToast('Failed to delete form', 'error');
@@ -160,11 +180,30 @@ const AdminFormsPage: React.FC = () => {
         }
     };
 
-    const handleDeleteSession = async (sessionId: string) => {
+    const handleDeleteSession = async (session: FormSession) => {
         if (!qrForm) return;
-        if (!confirm('Delete this deployment?')) return;
+
+        const isConfirmed = await confirm({
+            title: 'Delete Deployment?',
+            variant: 'danger',
+            message: (
+                <div className="space-y-2">
+                    <p>
+                        Remove deployment <strong>{session.name}</strong> from{' '}
+                        <strong>{qrForm.title}</strong>?
+                    </p>
+                    <p className="text-xs leading-relaxed text-red-600">
+                        The QR link for this session will stop working. Existing responses tied to
+                        this deployment may no longer be reachable from reports.
+                    </p>
+                </div>
+            ),
+            confirmLabel: 'Yes, Delete',
+        });
+        if (!isConfirmed) return;
+
         try {
-            await FormService.deleteDeployment(qrForm.id, sessionId);
+            await FormService.deleteDeployment(qrForm.id, session.id);
             await refreshQrForm(qrForm.id);
             await loadForms();
             showToast('Deployment removed', 'info');
@@ -358,7 +397,7 @@ const AdminFormsPage: React.FC = () => {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => void handleDeleteForm(form.id)}
+                                                    onClick={() => void handleDeleteForm(form)}
                                                     className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
                                                     title="Delete"
                                                 >
@@ -456,7 +495,7 @@ const AdminFormsPage: React.FC = () => {
                                         >
                                             <button
                                                 type="button"
-                                                onClick={() => void handleDeleteSession(s.id)}
+                                                onClick={() => void handleDeleteSession(s)}
                                                 className="absolute right-2 top-2 rounded p-1.5 text-slate-300 transition hover:bg-red-50 hover:text-red-500"
                                                 title="Delete deployment"
                                             >
