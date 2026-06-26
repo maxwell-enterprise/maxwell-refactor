@@ -2,12 +2,13 @@
 
 import React from "react";
 import dynamic from "next/dynamic";
+import { withChunkLoadRecovery } from "../../../lib/chunkLoadRecovery";
 import { ViewState, UserRole } from "../../../types/index";
 
 /** Code-split each dashboard feature; no visible loading shell (keeps existing UI). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic() erases prop types; views keep their real contracts.
 const dynamicView = (importer: () => Promise<{ default: React.ComponentType<any> }>) =>
-  dynamic(importer, { loading: () => null, ssr: false });
+  dynamic(withChunkLoadRecovery(importer), { loading: () => null, ssr: false });
 
 const Dashboard = dynamicView(() => import("../../../components/Dashboard"));
 const MemberDashboard = dynamicView(() => import("../../../components/MemberDashboard"));
