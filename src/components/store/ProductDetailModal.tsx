@@ -6,6 +6,7 @@ import { CreditTagService } from '../../services/creditTagService';
 import { X, Calendar, MapPin, Tag, Package, ShoppingCart, Info, Check, Zap, Layers, Ticket, ChevronDown, ChevronUp, Clock, AlertTriangle } from 'lucide-react';
 import { CreditTagMaster } from '../../types/access';
 import { formatStorePriceIdr } from '../../utils/formatStorePrice';
+import { isEventExpiredForCatalog, resolveEventScheduleMeta } from '@/lib/eventScheduleMeta';
 
 interface ProductDetailModalProps {
     product: Product;
@@ -46,6 +47,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     // Detailed Data Maps
     const [relatedEvents, setRelatedEvents] = useState<Record<string, Event>>({});
     const [relatedTags, setRelatedTags] = useState<Record<string, CreditTagMaster>>({});
+    const [catalogEvents, setCatalogEvents] = useState<Event[]>([]);
 
     // Expiry Check
     const [isExpired, setIsExpired] = useState(false);
@@ -99,15 +101,18 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         }
 
         const eventFetchList = [...eventIds];
-        const fetchedEvents = await Promise.all(
-            eventFetchList.map((id) => DataService.getEventById(id)),
-        );
+        const [catalogEventList, ...fetchedEvents] = await Promise.all([
+            DataService.getEvents(),
+            ...eventFetchList.map((id) => DataService.getEventById(id)),
+        ]);
         const relevantEvents = fetchedEvents.filter((e): e is Event => e != null);
         const eventMap: Record<string, Event> = {};
 
+        setCatalogEvents(catalogEventList);
+
         relevantEvents.forEach((e) => {
             eventMap[e.id] = e;
-            if (e.date < today) expiredFlag = true;
+            if (isEventExpiredForCatalog(e, catalogEventList, today)) expiredFlag = true;
         });
 
         const allTags = await CreditTagService.getAllTags();
@@ -154,8 +159,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         
         if (item.type === 'TICKET') {
             const evt = relatedEvents[item.meta?.eventId];
-            const eventDate = evt ? new Date(evt.date).toLocaleDateString() : '';
-            const isItemExpired = evt && evt.date < today;
+            const schedule = evt ? resolveEventScheduleMeta(evt, catalogEvents, today) : null;
+            const eventDate = schedule?.displayDateLabel ?? (evt ? new Date(evt.date).toLocaleDateString() : '');
+            const isItemExpired = evt ? isEventExpiredForCatalog(evt, catalogEvents, today) : false;
 
             return (
                 <div 

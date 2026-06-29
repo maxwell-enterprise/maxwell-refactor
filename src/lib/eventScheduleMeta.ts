@@ -132,6 +132,16 @@ export function resolveEventScheduleMeta(
   };
 }
 
+/** True when the event (or full series, for containers) is fully in the past. */
+export function isEventExpiredForCatalog(
+  event: Event | undefined,
+  allEvents: readonly Event[],
+  referenceDate = todayYmd(),
+): boolean {
+  if (!event) return false;
+  return resolveEventScheduleMeta(event, allEvents, referenceDate).phase === 'PAST';
+}
+
 export function formatEventSchedulePhaseLabel(phase: EventSchedulePhase): string {
   switch (phase) {
     case 'PAST':

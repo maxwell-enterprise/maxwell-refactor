@@ -28,7 +28,7 @@ import { useAccess } from '../../context/SecurityContext';
 import { PricingEngine } from '../../services/pricingEngine'; 
 import { PricingRule } from '../../types/pricing';
 import { UserEntitlements } from '../../types/access'; 
-import { collectEventIdsFromProducts } from '../../utils/productEventRefs';
+import { isEventExpiredForCatalog } from '@/lib/eventScheduleMeta';
 import { EmptyStatePlaceholder } from './EmptyStatePlaceholder';
 import { CampaignService } from '../../services/campaignService';
 import { CampaignAttributionService } from '../../services/campaignAttributionService';
@@ -125,7 +125,6 @@ const Storefront: React.FC<StorefrontProps> = ({
     const scrollRootRef = useRef<HTMLDivElement>(null);
     const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
     const listFetchGenRef = useRef(0);
-    const fetchedEventIdsRef = useRef<Set<string>>(new Set());
     const pageRef = useRef(1);
     const campaignTargetSeenInCartRef = useRef(false);
 
@@ -250,33 +249,10 @@ const Storefront: React.FC<StorefrontProps> = ({
         [debouncedSearch, selectedCategory, isStoreAdmin],
     );
 
-    const mergeEventsForProducts = useCallback(async (batch: Product[]) => {
-        const ids = collectEventIdsFromProducts(batch);
-        const toFetch = ids.filter((id) => !fetchedEventIdsRef.current.has(id));
-        for (const id of toFetch) {
-            fetchedEventIdsRef.current.add(id);
-        }
-        if (toFetch.length === 0) return;
-
-        const results = await Promise.all(toFetch.map((id) => DataService.getEventById(id)));
-        const arrived = results.filter((e): e is Event => e != null);
-        if (arrived.length === 0) return;
-
-        setEvents((prev) => {
-            const map = new Map(prev.map((e) => [e.id, e]));
-            for (const e of arrived) {
-                map.set(e.id, e);
-            }
-            return Array.from(map.values());
-        });
-    }, []);
-
     useEffect(() => {
         let cancelled = false;
         listFetchGenRef.current += 1;
         const gen = listFetchGenRef.current;
-
-        fetchedEventIdsRef.current.clear();
 
         (async () => {
             setListLoading(true);
@@ -287,13 +263,15 @@ const Storefront: React.FC<StorefrontProps> = ({
             setHasMore(true);
 
             try {
-                const [rules, userEnt] = await Promise.all([
+                const [rules, userEnt, catalogEvents] = await Promise.all([
                     PricingEngine.getRules(),
                     user ? EntitlementService.getUserEntitlements(user.id) : Promise.resolve(null),
+                    DataService.getEvents(),
                 ]);
                 if (cancelled || gen !== listFetchGenRef.current) return;
                 setPricingRules(rules);
                 setEntitlements(userEnt);
+                setEvents(catalogEvents);
 
                 const { data, total: t } = await DataService.listProducts(buildListQuery(1));
                 if (cancelled || gen !== listFetchGenRef.current) return;
@@ -302,7 +280,6 @@ const Storefront: React.FC<StorefrontProps> = ({
                 setTotal(t);
                 pageRef.current = 1;
                 setHasMore(t > 0 && data.length < t);
-                await mergeEventsForProducts(data);
 
                 // Auto-checkout: if URL carries productId+discount, prefill cart then open checkout.
                 if (autoCheckoutArmed && autoCheckoutProductId) {
@@ -337,7 +314,7 @@ const Storefront: React.FC<StorefrontProps> = ({
         return () => {
             cancelled = true;
         };
-    }, [user, debouncedSearch, selectedCategory, buildListQuery, mergeEventsForProducts, autoCheckoutArmed, autoCheckoutProductId]);
+    }, [user, debouncedSearch, selectedCategory, buildListQuery, autoCheckoutArmed, autoCheckoutProductId]);
 
     // If URL had voucher params, claim to backend so it sticks to account.
     useEffect(() => {
@@ -444,13 +421,12 @@ const Storefront: React.FC<StorefrontProps> = ({
             pageRef.current = nextPage;
             setPage(nextPage);
             setHasMore(mergedLength < t);
-            await mergeEventsForProducts(data);
         } catch {
             showToast('Could not load more products', 'error');
         } finally {
             setLoadingMore(false);
         }
-    }, [loadingMore, hasMore, buildListQuery, mergeEventsForProducts, showToast]);
+    }, [loadingMore, hasMore, buildListQuery, showToast]);
 
     useEffect(() => {
         const root = scrollRootRef.current;
@@ -498,7 +474,7 @@ const Storefront: React.FC<StorefrontProps> = ({
                 for (const item of items) {
                     if (item.type === 'TICKET' && item.meta?.eventId) {
                         const evt = events.find((e) => e.id === item.meta!.eventId);
-                        if (evt && evt.date < today) return true;
+                        if (isEventExpiredForCatalog(evt, events, today)) return true;
                     }
                     if (
                         (item.type === 'EVENT_CREDIT' || item.type === 'RECURRING_PASS') &&
@@ -630,8 +606,7 @@ const Storefront: React.FC<StorefrontProps> = ({
         setPage(1);
         pageRef.current = 1;
         setHasMore(t > 0 && data.length < t);
-        await mergeEventsForProducts(data);
-    }, [buildListQuery, mergeEventsForProducts]);
+    }, [buildListQuery]);
 
     const handleCreateProduct = () => {
         setEditingProduct(undefined);

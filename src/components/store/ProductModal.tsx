@@ -9,6 +9,7 @@ import { UserService } from '../../services/userService';
 import { CreditTagService } from '../../services/creditTagService'; 
 import { APP_CONFIG } from '../../lib/config';
 import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
+import { isEventExpiredForCatalog } from '@/lib/eventScheduleMeta';
 import { X, Save, Box, Image, DollarSign, Tag, CreditCard, Package, Ticket, Zap, Link, Trash2, Plus, Gift, Layers, Percent, User, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useAccess } from '../../context/SecurityContext';
@@ -455,10 +456,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     const totalRoyalty = royaltyContracts.reduce((sum, c) => sum + c.percentage, 0);
 
     const checkItemExpiry = (item: ProductItem) => {
-        const today = new Date().toISOString().split('T')[0];
         if (item.type === 'TICKET' && item.meta?.eventId) {
             const evt = events.find(e => e.id === item.meta.eventId);
-            if (evt && evt.date < today) return true;
+            if (isEventExpiredForCatalog(evt, events)) return true;
         }
         return false;
     };
