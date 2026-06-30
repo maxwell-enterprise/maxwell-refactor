@@ -3,6 +3,8 @@ import { Member, Event, Transaction, Product } from '../types/index';
 import { PaymentService } from './paymentService';
 import { RepositoryFactory } from './repositories/index';
 import { DataUtils } from '../utils/dataUtils';
+import { APP_CONFIG } from '../lib/config';
+import { apiRequest } from '../repositories/api/apiClient';
 import {
   TransactionQueryParams,
   ProductListQuery,
@@ -168,17 +170,26 @@ export const DataService = {
     return combinedLedger.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   },
 
-  addTransaction: async (tx: Transaction): Promise<void> => {
-      // ID generation logic moved to Repository, but we keep this for legacy safety
-      // If ID exists, repo uses it. If not, repo generates it.
+  addTransaction: async (tx: Omit<Transaction, 'id'> & { id?: string }): Promise<string | undefined> => {
       const newTx: Transaction = {
+          id: tx.id ?? '',
           ...tx,
           createdAt: tx.createdAt || DataUtils.nowISO(),
           updatedAt: DataUtils.nowISO(),
           date: DataUtils.toISO(tx.date).split('T')[0]
       };
 
-      return await RepositoryFactory.getTransactionRepository().create(newTx);
+      if (APP_CONFIG.DOMAINS.TRANSACTIONS === 'API') {
+          const { id: _omit, ...body } = newTx;
+          const res = await apiRequest<{ id: string }>('/store/ledger-transactions', {
+              method: 'POST',
+              body: JSON.stringify(body),
+          });
+          return res.id;
+      }
+
+      await RepositoryFactory.getTransactionRepository().create(newTx);
+      return newTx.id || undefined;
   },
 
   updateTransactionStatus: async (id: string, status: 'Pending' | 'Approved' | 'Paid'): Promise<void> => {

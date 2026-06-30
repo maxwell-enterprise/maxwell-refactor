@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { StatCardProps } from '../../types/index';
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, change, isPositive, icon, color }) => (
+const StatCard: React.FC<StatCardProps> = ({ title, value, change, subtitle, isPositive, icon, color }) => (
   <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
     <div className="flex justify-between items-start mb-4">
       <div className={`p-3 rounded-lg ${color}`}>
@@ -17,6 +17,9 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, change, isPositive, i
     </div>
     <h3 className="text-slate-500 text-sm font-medium">{title}</h3>
     <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
+    {subtitle ? (
+      <p className="text-[10px] text-slate-400 mt-2 leading-snug">{subtitle}</p>
+    ) : null}
   </div>
 );
 

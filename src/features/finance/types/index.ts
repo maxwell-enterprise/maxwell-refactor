@@ -13,6 +13,10 @@ export interface FinancialLedgerEntry {
   eventId?: string; // Tagging per event for P&L
   status: SettlementStatus;
   paymentMethod?: string;
+  /** Source manual transaction type (PO / Expense) when applicable */
+  txnType?: 'PO' | 'Expense' | 'Royalty';
+  /** Raw status on `transactions` row */
+  txnStatus?: 'Pending' | 'Approved' | 'Paid';
 }
 
 export interface EventProfitLoss {

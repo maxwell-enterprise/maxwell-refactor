@@ -1,17 +1,18 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, FileText, CreditCard, Calendar, User, AlignLeft, DollarSign, CheckCircle, AlertCircle, MapPin } from 'lucide-react';
 import { Transaction, Event } from '../../types/index';
-import { EVENTS_DATA } from '../../constants'; // Import Events
 import { formatEventSelectLabel } from '../../utils/selectLabels';
 import TaxInvoiceForm from './TaxInvoiceForm';
 import { SpecificBusinessService } from '../../services/specificBusinessService';
-import { DataUtils } from '../../utils/dataUtils';
+import { DataService } from '../../services/dataService';
+import { FinanceService, FinanceVendor } from '../../services/financeService';
+import { APP_CONFIG } from '../../lib/config';
 
 interface TransactionModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (transaction: Omit<Transaction, 'id' | 'status'>) => Promise<void>;
+    onSave: (transaction: Omit<Transaction, 'id' | 'status'>) => Promise<string | undefined>;
 }
 
 type TransactionType = 'PO' | 'Expense';
@@ -21,25 +22,41 @@ const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose, on
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showTaxForm, setShowTaxForm] = useState(false);
     const [lastTransactionId, setLastTransactionId] = useState('');
+    const [events, setEvents] = useState<Event[]>([]);
+    const [vendors, setVendors] = useState<FinanceVendor[]>([]);
 
     // Form State
     const [formData, setFormData] = useState({
-        payee: '', // Vendor Name or Staff Name
+        payee: '',
         description: '',
         amount: '' as string | number,
         date: new Date().toISOString().split('T')[0],
-        eventId: '' // NEW: Event Linkage
+        eventId: ''
     });
+
+    useEffect(() => {
+        if (!isOpen) return;
+        void (async () => {
+            const [ev, ven] = await Promise.all([
+                DataService.getEvents(),
+                FinanceService.listFinanceVendors(),
+            ]);
+            setEvents(ev);
+            setVendors(ven);
+        })();
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.payee || !formData.description || !formData.amount) return;
+        if (!formData.eventId) {
+            return;
+        }
 
         setIsSubmitting(true);
         
-        // Format description to include payee for the simple Transaction model
         const finalDescription = activeTab === 'PO' 
             ? `${formData.payee}: ${formData.description}`
             : `${formData.description} (Claim by ${formData.payee})`;
@@ -49,29 +66,31 @@ const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose, on
             type: activeTab,
             description: finalDescription,
             amount: Number(formData.amount),
-            eventId: formData.eventId || undefined
+            eventId: formData.eventId
         };
 
-        // Save triggers DataService.addTransaction which now handles ID gen
-        await onSave(transactionData);
-        
-        // Mock ID for next step (Tax Invoice) - In real app, onSave should return the ID
-        const generatedId = DataUtils.generateID(); 
-        
-        // --- ROYALTY LOGIC ---
-        // If this is a Revenue PO (mock check by amount > 10M for demo), trigger royalty split
-        if (activeTab === 'PO' && Number(formData.amount) > 10000000) {
-            await SpecificBusinessService.calculateAndSaveRoyalties(generatedId, Number(formData.amount));
-        }
+        try {
+            if (activeTab === 'PO') {
+                await FinanceService.ensureFinanceVendor(formData.payee);
+            }
 
-        setIsSubmitting(false);
-        // Don't close yet if PO, ask for Tax Invoice
-        if (activeTab === 'PO') {
-            setLastTransactionId(generatedId); 
-            setShowTaxForm(true);
-        } else {
-            onClose();
-            setFormData({ payee: '', description: '', amount: '', date: new Date().toISOString().split('T')[0], eventId: '' });
+            const savedId = await onSave(transactionData);
+            const recordId = savedId ?? '';
+
+            if (activeTab === 'PO' && Number(formData.amount) > 10000000 && APP_CONFIG.USE_MOCK) {
+                await SpecificBusinessService.calculateAndSaveRoyalties(recordId, Number(formData.amount));
+            }
+
+            setIsSubmitting(false);
+            if (activeTab === 'PO' && recordId) {
+                setLastTransactionId(recordId);
+                setShowTaxForm(true);
+            } else {
+                onClose();
+                setFormData({ payee: '', description: '', amount: '', date: new Date().toISOString().split('T')[0], eventId: '' });
+            }
+        } catch {
+            setIsSubmitting(false);
         }
     };
 
@@ -142,17 +161,25 @@ const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose, on
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2">
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 flex items-center">
-                                        <User size={12} className="mr-1"/> {activeTab === 'PO' ? 'Vendor / Supplier Name' : 'Staff Name / Claimant'}
+                                        <User size={12} className="mr-1"/> {activeTab === 'PO' ? 'Vendor / Supplier' : 'Staff Name / Claimant'}
                                     </label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         required
+                                        list={activeTab === 'PO' && vendors.length > 0 ? 'finance-vendor-list' : undefined}
                                         autoFocus
                                         className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                                         placeholder={activeTab === 'PO' ? "e.g. PT Catering Sejahtera" : "e.g. Budi Santoso"}
                                         value={formData.payee}
-                                        onChange={e => setFormData({...formData, payee: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, payee: e.target.value })}
                                     />
+                                    {activeTab === 'PO' && vendors.length > 0 && (
+                                      <datalist id="finance-vendor-list">
+                                        {vendors.map((v) => (
+                                          <option key={v.id} value={v.name} />
+                                        ))}
+                                      </datalist>
+                                    )}
                                 </div>
 
                                 <div className="col-span-2">
@@ -202,18 +229,19 @@ const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose, on
                                         <MapPin size={12} className="mr-1"/> Allocation (Event / Cost Center)
                                     </label>
                                     <select 
+                                        required
                                         className="mobile-safe-select rounded-lg border border-slate-300 p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                         value={formData.eventId}
                                         onChange={e => setFormData({...formData, eventId: e.target.value})}
                                     >
-                                        <option value="">-- General Operational Expense --</option>
-                                        {EVENTS_DATA.map((evt) => (
+                                        <option value="">— Select event (required) —</option>
+                                        {events.map((evt) => (
                                             <option key={evt.id} value={evt.id} title={`${evt.name} (${evt.date})`}>
                                                 {formatEventSelectLabel(evt)}
                                             </option>
                                         ))}
                                     </select>
-                                    <p className="text-[10px] text-slate-400 mt-1">Link this cost to an event to calculate Profit & Loss.</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">Event tag is required for P&amp;L reporting.</p>
                                 </div>
                             </div>
 

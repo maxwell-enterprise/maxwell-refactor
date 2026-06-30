@@ -2,27 +2,39 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FinanceService } from '../../services/financeService';
 import { FinancialLedgerEntry, EventProfitLoss } from '../../types/finance';
-import { 
-  Download, FileSpreadsheet, CheckCircle2, 
-  ArrowUpRight, ArrowDownRight, Search, 
+import {
+  canSettleLedgerEntry,
+  settlementBlockReason,
+} from '../../services/financeLedgerUtils';
+import ExpenseApprovalPanel from './ExpenseApprovalPanel';
+import {
+  FileSpreadsheet, CheckCircle2,
+  ArrowUpRight, ArrowDownRight, Search,
   Landmark, Tag, Clock
 } from 'lucide-react';
 import { ExcelHelper } from '../../utils/excelHelper';
 import { useToast } from '../../context/ToastContext';
+import { useAccess } from '../../context/SecurityContext';
 
-const SettlementHub: React.FC = () => {
+type Props = {
+  refreshKey?: number;
+};
+
+const SettlementHub: React.FC<Props> = ({ refreshKey = 0 }) => {
   const { showToast } = useToast();
+  const { can } = useAccess('fin_invoices');
   const [ledger, setLedger] = useState<FinancialLedgerEntry[]>([]);
   const [pnl, setPnl] = useState<EventProfitLoss[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'LEDGER' | 'PNL'>('LEDGER');
+  const [view, setView] = useState<'LEDGER' | 'PNL' | 'APPROVALS'>('LEDGER');
   const [searchTerm, setSearchTerm] = useState('');
-  
+  const [apOnly, setApOnly] = useState(true);
+
   const [settlingId, setSettlingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [refreshKey]);
 
   const loadData = async () => {
     setLoading(true);
@@ -43,8 +55,12 @@ const SettlementHub: React.FC = () => {
 
   const filteredLedger = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    if (!q) return ledger;
-    return ledger.filter(e =>
+    let rows = ledger;
+    if (apOnly) {
+      rows = rows.filter((e) => e.category === 'AP');
+    }
+    if (!q) return rows;
+    return rows.filter(e =>
       e.date.toLowerCase().includes(q) ||
       e.category.toLowerCase().includes(q) ||
       (e.entityName || '').toLowerCase().includes(q) ||
@@ -52,7 +68,7 @@ const SettlementHub: React.FC = () => {
       (e.referenceId || '').toLowerCase().includes(q) ||
       (e.eventId || '').toLowerCase().includes(q)
     );
-  }, [ledger, searchTerm]);
+  }, [ledger, searchTerm, apOnly]);
 
   const filteredPnl = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -64,6 +80,15 @@ const SettlementHub: React.FC = () => {
   }, [pnl, searchTerm]);
 
   const handleSettle = async (entry: FinancialLedgerEntry) => {
+      if (!can('WRITE')) {
+          showToast('You do not have permission to settle transactions.', 'error');
+          return;
+      }
+      const block = settlementBlockReason(entry);
+      if (block) {
+          showToast(block, 'error');
+          return;
+      }
       if(!window.confirm(`Confirm payment/settlement for ${entry.description}? Amount: ${formatIDR(entry.amount)}`)) return;
       
       setSettlingId(entry.id);
@@ -131,10 +156,23 @@ const SettlementHub: React.FC = () => {
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 min-w-0">
         <div className="max-w-full overflow-x-scroll-touch rounded-lg bg-slate-100 p-1">
           <div className="inline-flex flex-nowrap gap-0.5">
-            <button type="button" onClick={() => setView('LEDGER')} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-all sm:px-4 ${view === 'LEDGER' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Raw ledger</button>
+            <button type="button" onClick={() => setView('LEDGER')} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-all sm:px-4 ${view === 'LEDGER' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Settlement queue</button>
+            <button type="button" onClick={() => setView('APPROVALS')} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-all sm:px-4 ${view === 'APPROVALS' ? 'bg-white shadow text-amber-700' : 'text-slate-500'}`}>Approvals</button>
             <button type="button" onClick={() => setView('PNL')} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-all sm:px-4 ${view === 'PNL' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}>Event P&amp;L</button>
           </div>
         </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {view === 'LEDGER' && (
+            <label className="flex items-center gap-2 text-[10px] font-bold text-slate-500 whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={apOnly}
+                onChange={(e) => setApOnly(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              AP only (vendor &amp; commissions)
+            </label>
+          )}
         <div className="relative w-full min-w-0 sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
@@ -146,11 +184,14 @@ const SettlementHub: React.FC = () => {
             aria-label="Search ledger"
           />
         </div>
+        </div>
       </div>
 
       {/* TABLE / CARDS */}
       <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {view === 'LEDGER' ? (
+        {view === 'APPROVALS' ? (
+          <ExpenseApprovalPanel refreshKey={refreshKey} onChanged={loadData} />
+        ) : view === 'LEDGER' ? (
           <>
             {/* Mobile cards */}
             <div className="divide-y divide-slate-100 md:hidden">
@@ -184,7 +225,7 @@ const SettlementHub: React.FC = () => {
                       <p className={`font-mono text-base font-bold tabular-nums ${entry.category === 'AR' ? 'text-green-600' : 'text-slate-900'}`}>
                         {entry.category === 'AP' && '−'}{formatIDR(entry.amount)}
                       </p>
-                      {entry.status !== 'SETTLED' && (
+                      {entry.status !== 'SETTLED' && canSettleLedgerEntry(entry) ? (
                         <button
                           type="button"
                           onClick={() => handleSettle(entry)}
@@ -193,7 +234,11 @@ const SettlementHub: React.FC = () => {
                         >
                           {settlingId === entry.id ? 'Processing…' : (entry.category === 'AP' ? 'Pay vendor' : 'Reconcile')}
                         </button>
-                      )}
+                      ) : entry.status !== 'SETTLED' && settlementBlockReason(entry) ? (
+                        <span className="text-[10px] font-bold text-amber-600 text-right">
+                          Awaiting approval
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 ))
@@ -247,7 +292,7 @@ const SettlementHub: React.FC = () => {
                             <div className="flex items-center justify-end gap-1.5 text-[10px] font-bold text-green-600">
                                 <CheckCircle2 size={14}/> Settled
                             </div>
-                        ) : (
+                        ) : canSettleLedgerEntry(entry) ? (
                             <button 
                                 type="button"
                                 onClick={() => handleSettle(entry)}
@@ -258,6 +303,8 @@ const SettlementHub: React.FC = () => {
                             >
                                 {settlingId === entry.id ? 'Processing…' : (entry.category === 'AP' ? 'Pay vendor' : 'Reconcile')}
                             </button>
+                        ) : (
+                            <span className="text-[10px] font-bold text-amber-600">Awaiting approval</span>
                         )}
                       </td>
                     </tr>

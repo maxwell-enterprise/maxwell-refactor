@@ -148,8 +148,13 @@ export const RepositoryFactory = {
     getTransactionRepository: (): ITransactionRepository => {
         if (!transactionRepo) {
             const mode = getDomainMode('Transactions', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.TRANSACTIONS);
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
-            transactionRepo = useRealDb ? new SupabaseTransactionRepository() : new MockTransactionRepository();
+            if (mode === 'API') {
+                transactionRepo = new ApiTransactionRepository();
+            } else if (!APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE') {
+                transactionRepo = new SupabaseTransactionRepository();
+            } else {
+                transactionRepo = new MockTransactionRepository();
+            }
         }
         return transactionRepo;
     },
@@ -157,8 +162,13 @@ export const RepositoryFactory = {
     getPaymentRepository: (): IPaymentRepository => {
         if (!paymentRepo) {
             const mode = getDomainMode('Payments', APP_CONFIG.USE_MOCK_GLOBAL ? 'MOCK' : APP_CONFIG.DOMAINS.PAYMENTS);
-            const useRealDb = !APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE';
-            paymentRepo = useRealDb ? new SupabasePaymentRepository() : new MockPaymentRepository();
+            if (mode === 'API') {
+                paymentRepo = new ApiPaymentRepository();
+            } else if (!APP_CONFIG.USE_MOCK_GLOBAL && mode === 'SUPABASE') {
+                paymentRepo = new SupabasePaymentRepository();
+            } else {
+                paymentRepo = new MockPaymentRepository();
+            }
         }
         return paymentRepo;
     },

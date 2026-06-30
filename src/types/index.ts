@@ -109,6 +109,7 @@ export interface StatCardProps {
   title: string;
   value: string | number;
   change?: string;
+  subtitle?: string;
   isPositive?: boolean;
   icon: ReactNode;
   color: string;

@@ -13,6 +13,7 @@ import {
   Layers,
   TrendingUp,
   ArrowUpRight,
+  ArrowDownRight,
   Target,
   BarChart3,
   Zap,
@@ -48,7 +49,9 @@ export type ExecutiveDashboardPayload = {
   uniquePrograms: string[];
   members: {
     total: number;
+    activeMemberCount: number;
     momPercent: number | null;
+    lifecycleBreakdown: Array<{ stage: string; count: number }>;
     scholarshipCount: number;
     scholarshipRate: number;
     nonGuestCount: number;
@@ -73,6 +76,34 @@ export type ExecutiveDashboardPayload = {
 };
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+
+const LIFECYCLE_CHART_COLORS: Record<string, string> = {
+  GUEST: '#94a3b8',
+  IDENTIFIED: '#f59e0b',
+  PARTICIPANT: '#8b5cf6',
+  MEMBER: '#3b82f6',
+  CERTIFIED: '#10b981',
+  FACILITATOR: '#6366f1',
+};
+
+function lifecycleColor(stage: string, index: number): string {
+  return LIFECYCLE_CHART_COLORS[stage] ?? COLORS[index % COLORS.length];
+}
+
+function formatLifecycleLabel(stage: string): string {
+  if (stage === 'IDENTIFIED') return 'Identified (lead)';
+  return stage.charAt(0) + stage.slice(1).toLowerCase();
+}
+
+/** SVG gradient / element ids must not contain spaces or punctuation from program names. */
+function toChartDomId(raw: string): string {
+  const slug = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug.length > 0 ? slug : 'default';
+}
 
 function formatIDR(num: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -128,7 +159,6 @@ const Dashboard: React.FC = () => {
         }
       } catch (e) {
         if (!cancelled) {
-          setData(null);
           setError(e instanceof Error ? e.message : String(e));
         }
       } finally {
@@ -147,10 +177,13 @@ const Dashboard: React.FC = () => {
   const finance = data?.finance;
   const uniquePrograms = data?.uniquePrograms ?? [];
   const growthData = members?.growthData ?? [];
-  const categoryData = members?.categoryData ?? [];
+  const lifecycleData = members?.lifecycleBreakdown ?? [];
 
   const memberMom = formatMomPercent(members?.momPercent ?? null);
   const revenueMom = formatMomPercent(finance?.momPercent ?? null);
+  const chartFilterKey = toChartDomId(
+    `${timeRange}-${selectedProgram}-${selectedRegion}`,
+  );
 
   return (
     <div className="page-container space-y-6 sm:space-y-8 animate-fade-in pb-16 sm:pb-20">
@@ -259,14 +292,61 @@ const Dashboard: React.FC = () => {
       <div className={`space-y-6 sm:space-y-8 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {canViewMembers('READ') ? (
-            <StatCard
-              title="Active Members"
-              value={members?.total ?? 0}
-              change={memberMom}
-              isPositive={(members?.momPercent ?? 0) >= 0}
-              icon={<Users className="text-blue-600" size={24} />}
-              color="bg-blue-50"
-            />
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 rounded-lg bg-blue-50">
+                  <Users className="text-blue-600" size={24} />
+                </div>
+                {memberMom && (
+                  <div
+                    className={`flex items-center text-xs font-medium ${
+                      (members?.momPercent ?? 0) >= 0
+                        ? 'text-emerald-600 bg-emerald-50'
+                        : 'text-rose-600 bg-rose-50'
+                    } px-2 py-1 rounded-full`}
+                  >
+                    {(members?.momPercent ?? 0) >= 0 ? (
+                      <ArrowUpRight size={14} className="mr-1" />
+                    ) : (
+                      <ArrowDownRight size={14} className="mr-1" />
+                    )}
+                    {memberMom}
+                  </div>
+                )}
+              </div>
+              <h3 className="text-slate-500 text-sm font-medium">Total Members</h3>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{members?.total ?? 0}</p>
+              <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                All lifecycle stages in selected filters
+                {members?.activeMemberCount != null
+                  ? ` · ${members.activeMemberCount} active (Member / Certified / Facilitator)`
+                  : ''}
+              </p>
+              {lifecycleData.length > 0 ? (
+                <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                  {lifecycleData.map((entry) => (
+                    <div
+                      key={entry.stage}
+                      className="flex items-center justify-between gap-2 text-[10px]"
+                    >
+                      <span className="flex items-center gap-1.5 text-slate-600 truncate">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{
+                            backgroundColor: lifecycleColor(
+                              entry.stage,
+                              lifecycleData.indexOf(entry),
+                            ),
+                          }}
+                        />
+                        {formatLifecycleLabel(entry.stage)}
+                      </span>
+                      <span className="font-bold text-slate-800 tabular-nums">{entry.count}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ) : (
             <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 border-dashed flex flex-col items-center justify-center text-slate-400">
               <Lock size={20} className="mb-2" />
@@ -279,6 +359,7 @@ const Dashboard: React.FC = () => {
               title="Paid Revenue"
               value={formatIDR(finance?.totalPaidRevenue ?? 0)}
               change={revenueMom}
+              subtitle="PAID store orders; respects program & region filters"
               isPositive={(finance?.momPercent ?? 0) >= 0}
               icon={<DollarSign className="text-emerald-600" size={24} />}
               color="bg-emerald-50"
@@ -294,13 +375,15 @@ const Dashboard: React.FC = () => {
             title="Impact Scholarships"
             value={members?.scholarshipCount ?? 0}
             change={`${(members?.scholarshipRate ?? 0).toFixed(1)}%`}
+            subtitle="Scholarship flag among all members in cohort"
             icon={<Award className="text-purple-600" size={24} />}
             color="bg-purple-50"
           />
           <StatCard
             title="Engagement Score"
             value={`${(members?.engagementScore ?? 0).toFixed(1)}%`}
-            change={`${members?.nonGuestCount ?? 0} active lifecycle`}
+            change={`${members?.activeMemberCount ?? 0} / ${members?.total ?? 0} active`}
+            subtitle="Active lifecycle (Member, Certified, Facilitator) share of total"
             isPositive={(members?.engagementScore ?? 0) >= 50}
             icon={<Activity className="text-amber-600" size={24} />}
             color="bg-amber-50"
@@ -323,7 +406,7 @@ const Dashboard: React.FC = () => {
                   <BarChart3 size={18} />
                 </div>
                 <span className="text-xs font-bold text-slate-500 uppercase">
-                  Customer Lifetime Value
+                  Avg Revenue per Payer
                 </span>
               </div>
               <div className="text-2xl font-bold text-slate-900">
@@ -333,11 +416,11 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded flex items-center">
-                  <ArrowUpRight size={12} className="mr-1" /> Paid orders
+                  <ArrowUpRight size={12} className="mr-1" /> In selected period
                 </span>
                 <span className="text-[10px] text-slate-400">
                   {canViewFinance('READ')
-                    ? `${finance?.payingCustomerCount ?? 0} unique payers`
+                    ? `${finance?.payingCustomerCount ?? 0} unique payers (not lifetime CLTV)`
                     : 'Finance access required'}
                 </span>
               </div>
@@ -354,7 +437,7 @@ const Dashboard: React.FC = () => {
                   <Target size={18} />
                 </div>
                 <span className="text-xs font-bold text-slate-500 uppercase">
-                  Retention Rate
+                  N-Tag Rate
                 </span>
               </div>
               <div className="text-2xl font-bold text-slate-900">
@@ -367,7 +450,7 @@ const Dashboard: React.FC = () => {
                 />
               </div>
               <p className="text-[10px] text-slate-400 mt-2">
-                N-Tag received vs total enrolled
+                N-Tag received among active members (Member / Certified / Facilitator)
               </p>
             </div>
           </div>
@@ -389,7 +472,7 @@ const Dashboard: React.FC = () => {
                 {(members?.qualifiedRate ?? 0).toFixed(1)}%
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                Qualified tag ratio from filtered members
+                Qualified tag ratio among active members
               </p>
               <div className="mt-4 flex gap-2">
                 <div className="flex-1 bg-white/10 rounded px-2 py-1 text-center">
@@ -397,8 +480,8 @@ const Dashboard: React.FC = () => {
                   <div className="text-xs font-bold">{members?.qualifiedCount ?? 0}</div>
                 </div>
                 <div className="flex-1 bg-white/10 rounded px-2 py-1 text-center">
-                  <div className="text-[9px] text-slate-400 uppercase">Total</div>
-                  <div className="text-xs font-bold">{members?.total ?? 0}</div>
+                  <div className="text-[9px] text-slate-400 uppercase">Active</div>
+                  <div className="text-xs font-bold">{members?.activeMemberCount ?? 0}</div>
                 </div>
               </div>
             </div>
@@ -411,17 +494,30 @@ const Dashboard: React.FC = () => {
               <h3 className="font-semibold text-slate-800">Acquisition Trajectory</h3>
               <div className="flex gap-2 text-xs">
                 <span className="flex items-center text-slate-500">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 mr-1" /> New Members
+                  <span className="w-2 h-2 rounded-full bg-blue-500 mr-1" /> New members (all types)
                 </span>
               </div>
             </div>
             {canViewMembers('READ') ? (
-              <div className="h-72">
+              <div className="h-72 w-full min-h-[288px]">
                 {growthData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={growthData}>
+                  <ResponsiveContainer
+                    key={`growth-${chartFilterKey}`}
+                    width="100%"
+                    height={288}
+                  >
+                    <AreaChart
+                      data={growthData}
+                      margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                    >
                       <defs>
-                        <linearGradient id="colorMembers" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient
+                          id={`colorMembers-${chartFilterKey}`}
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
                           <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
                           <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                         </linearGradient>
@@ -439,6 +535,9 @@ const Dashboard: React.FC = () => {
                         axisLine={false}
                         tickLine={false}
                         tick={{ fill: '#64748b', fontSize: 10 }}
+                        allowDecimals={false}
+                        domain={[0, (max: number) => Math.max(Math.ceil(max), 1)]}
+                        width={40}
                       />
                       <Tooltip
                         contentStyle={{
@@ -453,13 +552,20 @@ const Dashboard: React.FC = () => {
                         stroke="#3b82f6"
                         strokeWidth={3}
                         fillOpacity={1}
-                        fill="url(#colorMembers)"
+                        fill={`url(#colorMembers-${chartFilterKey})`}
+                        dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 6 }}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-sm text-slate-400">
-                    No member acquisitions for the selected filters.
+                  <div className="h-full flex flex-col items-center justify-center text-sm text-slate-400 px-4 text-center">
+                    <p>No acquisitions in this time window for the selected program.</p>
+                    {(members?.total ?? 0) > 0 ? (
+                      <p className="text-[10px] mt-2 text-slate-400">
+                        {members?.total} member(s) match other filters — try All Time or a wider range.
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -474,25 +580,34 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-            <h3 className="font-semibold text-slate-800 mb-2">Member Distribution</h3>
+            <h3 className="font-semibold text-slate-800 mb-2">Lifecycle Distribution</h3>
+            <p className="text-[10px] text-slate-400 mb-2">All members by lifecycle stage</p>
             {canViewMembers('READ') ? (
-              <div className="flex-1 min-h-[250px] relative">
-                {categoryData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
+              <div className="h-72 w-full min-h-[288px]">
+                {lifecycleData.length > 0 ? (
+                  <ResponsiveContainer
+                    key={`lifecycle-${chartFilterKey}`}
+                    width="100%"
+                    height={288}
+                  >
                     <PieChart>
                       <Pie
-                        data={categoryData}
+                        data={lifecycleData.map((entry) => ({
+                          name: formatLifecycleLabel(entry.stage),
+                          value: entry.count,
+                          stage: entry.stage,
+                        }))}
                         cx="50%"
                         cy="50%"
                         innerRadius={60}
                         outerRadius={80}
-                        paddingAngle={5}
+                        paddingAngle={lifecycleData.length > 1 ? 5 : 0}
                         dataKey="value"
                       >
-                        {categoryData.map((entry, index) => (
+                        {lifecycleData.map((entry, index) => (
                           <Cell
-                            key={`cell-${entry.name}`}
-                            fill={COLORS[index % COLORS.length]}
+                            key={`cell-${entry.stage}`}
+                            fill={lifecycleColor(entry.stage, index)}
                           />
                         ))}
                       </Pie>
@@ -513,8 +628,13 @@ const Dashboard: React.FC = () => {
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-sm text-slate-400">
-                    No members for the selected filters.
+                  <div className="h-full flex flex-col items-center justify-center text-sm text-slate-400 px-4 text-center">
+                    <p>No lifecycle data for the selected filters.</p>
+                    {(members?.total ?? 0) > 0 ? (
+                      <p className="text-[10px] mt-2 text-slate-400">
+                        {members?.total} member(s) in cohort — check program / region / time range.
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </div>

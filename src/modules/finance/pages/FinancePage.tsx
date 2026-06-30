@@ -20,15 +20,29 @@ const FinancePage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [forecastRefreshKey, setForecastRefreshKey] = useState(0);
 
-  const handleCreateTransaction = async (data: Omit<Transaction, 'id' | 'status'>) => {
-      const newTx: Transaction = {
-          id: `${data.type === 'PO' ? 'PO' : 'EXP'}-${Date.now()}`,
+  const handleCreateTransaction = async (
+    data: Omit<Transaction, 'id' | 'status'>,
+  ): Promise<string | undefined> => {
+      if (!can('WRITE')) {
+          showToast('You do not have permission to create finance records.', 'error');
+          throw new Error('Forbidden');
+      }
+      const newTx = {
           ...data,
-          status: 'Pending'
+          status: 'Pending' as const,
       };
-      await DataService.addTransaction(newTx);
+      const id = await DataService.addTransaction(newTx);
       showToast('Record created successfully.', 'success');
       setForecastRefreshKey((k) => k + 1);
+      return id;
+  };
+
+  const openCreateModal = () => {
+      if (!can('WRITE')) {
+          showToast('You do not have permission to create finance records.', 'error');
+          return;
+      }
+      setIsModalOpen(true);
   };
 
   if (!can('READ')) {
@@ -59,13 +73,13 @@ const FinancePage: React.FC = () => {
           <FinanceForecastDashboard
             active={activeTab === 'DASHBOARD'}
             refreshKey={forecastRefreshKey}
-            onNewAp={() => setIsModalOpen(true)}
+            onNewAp={openCreateModal}
           />
         </div>
       )}
 
       {activeTab === 'UNIFIED_LEDGER' && <UnifiedLedger />}
-      {activeTab === 'LEDGER_HUB' && <SettlementHub />}
+      {activeTab === 'LEDGER_HUB' && <SettlementHub refreshKey={forecastRefreshKey} />}
       {activeTab === 'PAYOUTS' && <CommissionPayoutPanel />}
       {activeTab === 'EXCEPTIONS' && <RefundManager />}
 

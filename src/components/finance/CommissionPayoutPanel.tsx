@@ -2,35 +2,40 @@
 import React, { useState, useEffect } from 'react';
 import { TribeService } from '../../services/tribeService';
 import { PayoutTransaction } from '../../types/tribe';
-import { CheckCircle2, Clock, Wallet, ArrowRight, User, MoreHorizontal, FileText, Landmark } from 'lucide-react';
+import { CheckCircle2, User } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
+import { UserRole } from '../../types/index';
 
 const CommissionPayoutPanel: React.FC = () => {
   const { showToast } = useToast();
+  const { user, userRole } = useAuth();
   const [payouts, setPayouts] = useState<PayoutTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const loadPayouts = async () => {
+    setLoading(true);
+    try {
+      const viewerId = user?.id ?? '';
+      const isFinanceViewer =
+        userRole === UserRole.FINANCE || userRole === UserRole.SUPER_ADMIN;
+      const data = isFinanceViewer
+          ? await TribeService.getAllPayouts()
+          : await TribeService.getMyCommissions(viewerId);
+      setPayouts(data);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    void (async () => {
-      try {
-        const data = await TribeService.getMyCommissions('admin-1');
-        setPayouts(data);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    void loadPayouts();
+  }, [user?.id, userRole]);
 
   const handleApprove = async (id: string) => {
     try {
       await TribeService.markPayoutPaid(id);
-      setPayouts((prev) =>
-        prev.map((p) =>
-          p.id === id
-            ? { ...p, status: 'PAID' as const, paidAt: new Date().toISOString() }
-            : p,
-        ),
-      );
+      await loadPayouts();
       showToast('Payout marked as paid.', 'success');
     } catch {
       showToast('Failed to update payout.', 'error');
@@ -46,9 +51,6 @@ const CommissionPayoutPanel: React.FC = () => {
           <h3 className="font-bold text-slate-900">Commission Payout Queue</h3>
           <p className="text-xs text-slate-500">Process earned commissions for Facilitators.</p>
         </div>
-        <button className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors">
-          Process Batch (Pending)
-        </button>
       </div>
 
       <div className="overflow-x-auto">
@@ -63,7 +65,11 @@ const CommissionPayoutPanel: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {payouts.map(p => (
+            {loading ? (
+              <tr><td colSpan={5} className="p-8 text-center text-slate-400">Loading payouts…</td></tr>
+            ) : payouts.length === 0 ? (
+              <tr><td colSpan={5} className="p-8 text-center text-slate-400">No payout records.</td></tr>
+            ) : payouts.map(p => (
               <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                 <td className="p-4">
                   <div className="flex items-center gap-3">
@@ -89,7 +95,7 @@ const CommissionPayoutPanel: React.FC = () => {
                 <td className="p-4 text-right">
                   {p.status === 'PENDING' ? (
                     <button 
-                      onClick={() => handleApprove(p.id)}
+                      onClick={() => void handleApprove(p.id)}
                       className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-all shadow-sm"
                     >
                       Settle Payment
