@@ -392,6 +392,7 @@ const Marketing: React.FC = () => {
             <EventCampaignPanel
                 products={products}
                 discounts={selectableDiscounts}
+                allDiscounts={discounts}
             />
         )}
 

@@ -20,6 +20,7 @@ export type EventCampaign = {
   mustBeAccepted: boolean;
   createdAt: string;
   stats: EventCampaignStats;
+  recipientEmails?: string[];
 };
 
 export type FormRespondentOption = {
@@ -86,6 +87,34 @@ export const EventCampaignService = {
     return apiRequest('/event-campaigns/send', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+
+  getCampaign: async (id: string): Promise<EventCampaign> => {
+    return apiRequest<EventCampaign>(
+      `/event-campaigns/${encodeURIComponent(id)}`,
+    );
+  },
+
+  updateCampaign: async (
+    id: string,
+    payload: {
+      name: string;
+      targetProductId: string;
+      linkedDiscountCode?: string;
+      mustBeAccepted: boolean;
+      recipientEmails: string[];
+    },
+  ): Promise<{ id: string; name: string; stats: Record<string, number> }> => {
+    return apiRequest(`/event-campaigns/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteCampaign: async (id: string): Promise<void> => {
+    await apiRequest(`/event-campaigns/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
   },
 

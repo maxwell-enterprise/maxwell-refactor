@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarHeart,
   CheckSquare,
   Loader2,
+  Pencil,
+  Save,
   Search,
   Send,
   Square,
-  Users,
+  Trash2,
+  X,
 } from 'lucide-react';
 import type { Discount, Product } from '../../types/index';
 import type { FormDefinition } from '@/features/forms/types';
@@ -21,12 +24,14 @@ import { useToast } from '../../context/ToastContext';
 type EventCampaignPanelProps = {
   products: Product[];
   discounts: Discount[];
+  allDiscounts?: Discount[];
   onSent?: () => void;
 };
 
 const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
   products,
   discounts,
+  allDiscounts = [],
   onSent,
 }) => {
   const { showToast } = useToast();
@@ -38,6 +43,11 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [campaignPendingDelete, setCampaignPendingDelete] =
+    useState<EventCampaign | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const skipRespondentAutoSelectRef = useRef(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -76,7 +86,9 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
   useEffect(() => {
     if (!formData.formId) {
       setRespondents([]);
-      setSelectedEmails(new Set());
+      if (!editingId) {
+        setSelectedEmails(new Set());
+      }
       return;
     }
 
@@ -89,7 +101,10 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
         );
         if (!cancelled) {
           setRespondents(rows);
-          setSelectedEmails(new Set(rows.map((r) => r.email.toLowerCase())));
+          if (!skipRespondentAutoSelectRef.current) {
+            setSelectedEmails(new Set(rows.map((r) => r.email.toLowerCase())));
+          }
+          skipRespondentAutoSelectRef.current = false;
         }
       } catch (error) {
         if (!cancelled) {
@@ -100,7 +115,9 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
             'error',
           );
           setRespondents([]);
-          setSelectedEmails(new Set());
+          if (!editingId) {
+            setSelectedEmails(new Set());
+          }
         }
       } finally {
         if (!cancelled) setLoadingRespondents(false);
@@ -110,7 +127,7 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [formData.formId, showToast]);
+  }, [formData.formId, editingId, showToast]);
 
   const filteredCampaigns = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -121,6 +138,15 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
         c.formTitle.toLowerCase().includes(q),
     );
   }, [campaigns, searchTerm]);
+
+  const discountOptions = useMemo(() => {
+    if (!editingId || !formData.discountCode) return discounts;
+    const current = allDiscounts.find((d) => d.code === formData.discountCode);
+    if (current && !discounts.some((d) => d.code === current.code)) {
+      return [current, ...discounts];
+    }
+    return discounts;
+  }, [allDiscounts, discounts, editingId, formData.discountCode]);
 
   const allSelected =
     respondents.length > 0 && selectedEmails.size === respondents.length;
@@ -145,7 +171,50 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
     );
   };
 
-  const handleSend = async () => {
+  const resetForm = () => {
+    setEditingId(null);
+    setFormData({
+      name: '',
+      formId: '',
+      productId: '',
+      discountCode: '',
+      mustBeAccepted: false,
+    });
+    setRespondents([]);
+    setSelectedEmails(new Set());
+  };
+
+  const handleCancelEdit = () => {
+    resetForm();
+  };
+
+  const handleEditClick = async (campaign: EventCampaign) => {
+    try {
+      const detail = await EventCampaignService.getCampaign(campaign.id);
+      skipRespondentAutoSelectRef.current = true;
+      setEditingId(campaign.id);
+      setFormData({
+        name: detail.name,
+        formId: detail.formId,
+        productId: detail.targetProductId,
+        discountCode: detail.linkedDiscountCode ?? '',
+        mustBeAccepted: detail.mustBeAccepted,
+      });
+      setSelectedEmails(
+        new Set(
+          (detail.recipientEmails ?? []).map((email) => email.toLowerCase()),
+        ),
+      );
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Failed to load campaign',
+        'error',
+      );
+    }
+  };
+
+  const handleSave = async () => {
     if (!formData.name.trim()) {
       showToast('Isi nama campaign dulu.', 'error');
       return;
@@ -168,32 +237,33 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
 
     setSubmitting(true);
     try {
-      const result = await EventCampaignService.sendCampaign({
+      const payload = {
         name: formData.name.trim(),
-        formId: formData.formId,
         targetProductId: formData.productId,
         linkedDiscountCode: formData.discountCode || undefined,
         mustBeAccepted: formData.mustBeAccepted,
         recipientEmails,
-      });
+      };
+
+      const result = editingId
+        ? await EventCampaignService.updateCampaign(editingId, payload)
+        : await EventCampaignService.sendCampaign({
+            ...payload,
+            formId: formData.formId,
+          });
+
       showToast(
-        `Campaign sent: ${result.stats.active ?? 0} active, ${result.stats.pendingLogin ?? 0} pending login, ${result.stats.skippedHasTicket ?? 0} skipped.`,
+        editingId
+          ? `Campaign updated: ${result.stats.active ?? 0} active, ${result.stats.pendingLogin ?? 0} pending login.`
+          : `Campaign sent: ${result.stats.active ?? 0} active, ${result.stats.pendingLogin ?? 0} pending login, ${result.stats.skippedHasTicket ?? 0} skipped.`,
         'success',
       );
-      setFormData({
-        name: '',
-        formId: '',
-        productId: '',
-        discountCode: '',
-        mustBeAccepted: false,
-      });
-      setRespondents([]);
-      setSelectedEmails(new Set());
+      resetForm();
       await loadFormsAndCampaigns();
       onSent?.();
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : 'Failed to send campaign',
+        error instanceof Error ? error.message : 'Failed to save campaign',
         'error',
       );
     } finally {
@@ -201,12 +271,53 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!campaignPendingDelete) return;
+    setDeleteSubmitting(true);
+    try {
+      await EventCampaignService.deleteCampaign(campaignPendingDelete.id);
+      if (editingId === campaignPendingDelete.id) {
+        resetForm();
+      }
+      setCampaignPendingDelete(null);
+      showToast('Event campaign deleted.', 'success');
+      await loadFormsAndCampaigns();
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Failed to delete campaign',
+        'error',
+      );
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
-      <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-5 h-fit lg:sticky lg:top-4 min-w-0">
-        <h3 className="font-bold text-slate-900 flex items-center">
-          <CalendarHeart size={18} className="mr-2 text-violet-600" />
-          Create Event Campaign
+      <div
+        className={`bg-white p-4 sm:p-6 rounded-xl border shadow-sm space-y-5 h-fit lg:sticky lg:top-4 transition-colors min-w-0 ${
+          editingId ? 'border-violet-300 ring-2 ring-violet-100' : 'border-slate-200'
+        }`}
+      >
+        <h3 className="font-bold text-slate-900 flex items-center justify-between">
+          <span className="flex items-center">
+            {editingId ? (
+              <Pencil size={18} className="mr-2 text-violet-600" />
+            ) : (
+              <CalendarHeart size={18} className="mr-2 text-violet-600" />
+            )}
+            {editingId ? 'Edit Event Campaign' : 'Create Event Campaign'}
+          </span>
+          {editingId ? (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="text-slate-400 hover:text-slate-600"
+              aria-label="Cancel edit"
+            >
+              <X size={18} />
+            </button>
+          ) : null}
         </h3>
 
         <div>
@@ -256,7 +367,7 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
             }
           >
             <option value="">-- No Discount --</option>
-            {discounts.map((d) => (
+            {discountOptions.map((d) => (
               <option key={d.id} value={d.code}>
                 {d.code} ({d.value}
                 {d.type === 'PERCENTAGE' ? '%' : ''} Off)
@@ -268,14 +379,21 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
             Target Form
+            {editingId ? (
+              <span className="text-red-500 text-[10px] ml-1 normal-case">
+                (Read only)
+              </span>
+            ) : null}
           </label>
           <select
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none bg-white"
+            className={`w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none ${
+              editingId ? 'bg-slate-100 text-slate-500' : 'bg-white'
+            }`}
             value={formData.formId}
             onChange={(e) =>
               setFormData({ ...formData, formId: e.target.value })
             }
-            disabled={loadingForms}
+            disabled={loadingForms || Boolean(editingId)}
           >
             <option value="">-- Select form / quiz --</option>
             {forms.map((f) => (
@@ -366,19 +484,28 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
 
         <button
           type="button"
-          onClick={() => void handleSend()}
+          onClick={() => void handleSave()}
           disabled={
             submitting ||
             !formData.name.trim() ||
             !formData.formId ||
             !formData.productId
           }
-          className="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-lg text-sm font-bold transition-colors shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`w-full text-white py-2.5 rounded-lg text-sm font-bold transition-colors shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${
+            editingId
+              ? 'bg-violet-600 hover:bg-violet-700'
+              : 'bg-violet-600 hover:bg-violet-700'
+          }`}
         >
           {submitting ? (
             <>
               <Loader2 size={16} className="mr-2 animate-spin" />
-              Sending...
+              {editingId ? 'Updating...' : 'Sending...'}
+            </>
+          ) : editingId ? (
+            <>
+              <Save size={16} className="mr-2" />
+              Update Campaign
             </>
           ) : (
             <>
@@ -439,8 +566,26 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
                       : 'Dismissible offer'}
                   </p>
                 </div>
-                <div className="text-xs text-slate-500 shrink-0">
-                  {new Date(campaign.createdAt).toLocaleString()}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-xs text-slate-500 mr-2 hidden sm:block">
+                    {new Date(campaign.createdAt).toLocaleString()}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleEditClick(campaign)}
+                    className="p-2 rounded-lg text-slate-500 hover:bg-violet-50 hover:text-violet-700 transition-colors"
+                    title="Edit campaign"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignPendingDelete(campaign)}
+                    className="p-2 rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                    title="Delete campaign"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
 
@@ -470,6 +615,37 @@ const EventCampaignPanel: React.FC<EventCampaignPanelProps> = ({
           ))
         )}
       </div>
+
+      {campaignPendingDelete ? (
+        <div className="fixed inset-0 z-[110] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-slate-900">Delete event campaign?</h3>
+            <p className="text-sm text-slate-600">
+              <span className="font-semibold">{campaignPendingDelete.name}</span>{' '}
+              and all pending assignments will be removed. Converted records are
+              deleted with the campaign.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteSubmitting}
+                onClick={() => setCampaignPendingDelete(null)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteSubmitting}
+                onClick={() => void handleConfirmDelete()}
+                className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteSubmitting ? 'Deleting…' : 'Delete campaign'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
