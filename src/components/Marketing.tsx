@@ -3,7 +3,7 @@ import { Campaign, Product, Discount, CampaignCategory } from '../types/index';
 import { CampaignService } from '../services/campaignService';
 import { AIService, MarketingInsight } from '../services/aiService';
 import { DataService } from '../services/dataService';
-import { DiscountService } from '../services/discountService';
+import { DiscountService, filterSelectableDiscounts } from '../services/discountService';
 import { useToast } from '../context/ToastContext';
 import { useAccess } from '../context/SecurityContext'; 
 import { useAuth } from '../context/AuthContext';
@@ -11,12 +11,13 @@ import { getWorkspaceToken } from '../lib/workspaceAuthToken';
 import { ApiRequestError } from '../repositories/api/apiClient';
 import { 
   Link, QrCode, Copy, BarChart3, Plus, ExternalLink, 
-  Target, TrendingUp, DollarSign, MousePointer2, Pencil, Save, X, PieChart as PieIcon, Tag, CheckCircle, Upload, Download, FileSpreadsheet, Filter, Search, Trash2
+  Target, TrendingUp, DollarSign, MousePointer2, Pencil, Save, X, PieChart as PieIcon, Tag, CheckCircle, Upload, Download, FileSpreadsheet, Filter, Search, Trash2, CalendarHeart, Users
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 import AIMarketingAdvisor from './marketing/AIMarketingAdvisor';
+import EventCampaignPanel from './marketing/EventCampaignPanel';
 import QRCodeDisplay from './common/QRCodeDisplay';
 import { ExcelHelper } from '../utils/excelHelper';
 import { useCampaignMetricsRealtime } from '../hooks/useCampaignMetricsRealtime';
@@ -27,12 +28,13 @@ import {
   sanitizeCampaignSourceCodeInput,
   validateCampaignSourceCode,
 } from '../lib/campaignSourceCode';
+import { EventCampaignService, type EventCampaignAnalyticsSummary } from '../services/eventCampaignService';
 
 const Marketing: React.FC = () => {
   const { can: canManageCampaigns } = useAccess('mkt_campaigns');
   const { showToast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'create' | 'analytics'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'event' | 'analytics'>('create');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
@@ -48,6 +50,7 @@ const Marketing: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [hasShownAuthWarning, setHasShownAuthWarning] = useState(false);
+  const [eventCampaignAnalytics, setEventCampaignAnalytics] = useState<EventCampaignAnalyticsSummary | null>(null);
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -129,8 +132,13 @@ const Marketing: React.FC = () => {
   };
 
   useEffect(() => {
-      if (activeTab === 'analytics' && campaigns.length > 0) {
-          runAnalysis();
+      if (activeTab === 'analytics') {
+          if (campaigns.length > 0) {
+              runAnalysis();
+          }
+          void EventCampaignService.getAnalyticsSummary()
+            .then(setEventCampaignAnalytics)
+            .catch(() => setEventCampaignAnalytics(null));
       }
   }, [activeTab, campaigns]);
 
@@ -149,6 +157,20 @@ const Marketing: React.FC = () => {
       () => validateCampaignSourceCode(formData.sourceCode),
       [formData.sourceCode],
   );
+
+  const selectableDiscounts = useMemo(
+      () => filterSelectableDiscounts(discounts),
+      [discounts],
+  );
+
+  const campaignCreatorDiscountOptions = useMemo(() => {
+      if (!editingId || !formData.discountCode) return selectableDiscounts;
+      const current = discounts.find((d) => d.code === formData.discountCode);
+      if (current && !selectableDiscounts.some((d) => d.code === current.code)) {
+          return [current, ...selectableDiscounts];
+      }
+      return selectableDiscounts;
+  }, [discounts, selectableDiscounts, editingId, formData.discountCode]);
 
   const handleEditClick = (campaign: Campaign) => {
       setEditingId(campaign.id);
@@ -347,6 +369,14 @@ const Marketing: React.FC = () => {
                             <Link size={16} className="shrink-0" /> <span>Campaign Creator</span>
                         </button>
                     )}
+                    {canManageCampaigns('WRITE') && (
+                        <button 
+                            onClick={() => setActiveTab('event')}
+                            className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-medium rounded-md transition-all inline-flex items-center gap-2 whitespace-nowrap ${activeTab === 'event' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <CalendarHeart size={16} className="shrink-0" /> <span>Event Campaign</span>
+                        </button>
+                    )}
                     <button 
                         onClick={() => setActiveTab('analytics')}
                         className={`shrink-0 px-3 sm:px-4 py-2 text-sm font-medium rounded-md transition-all inline-flex items-center gap-2 whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -357,6 +387,13 @@ const Marketing: React.FC = () => {
                 </div>
             </div>
         </div>
+
+        {activeTab === 'event' && (
+            <EventCampaignPanel
+                products={products}
+                discounts={selectableDiscounts}
+            />
+        )}
 
         {activeTab === 'create' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
@@ -467,7 +504,7 @@ const Marketing: React.FC = () => {
                             onChange={e => setFormData({...formData, discountCode: e.target.value})}
                         >
                             <option value="">-- No Discount --</option>
-                            {discounts.map(d => (
+                            {campaignCreatorDiscountOptions.map(d => (
                                 <option key={d.id} value={d.code}>{d.code} ({d.value}{d.type === 'PERCENTAGE' ? '%' : ''} Off)</option>
                             ))}
                         </select>
@@ -744,6 +781,31 @@ const Marketing: React.FC = () => {
                             </ResponsiveContainer>
                         </div>
                     </div>
+
+                    {eventCampaignAnalytics ? (
+                        <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm min-w-0">
+                            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <Users size={18} className="text-violet-600" />
+                                Event Campaign Performance
+                            </h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                                {[
+                                    ['Campaigns', eventCampaignAnalytics.totalCampaigns],
+                                    ['Assignments', eventCampaignAnalytics.totalAssignments],
+                                    ['Active', eventCampaignAnalytics.active],
+                                    ['Pending login', eventCampaignAnalytics.pendingLogin],
+                                    ['Converted', eventCampaignAnalytics.converted],
+                                    ['Dismissed', eventCampaignAnalytics.dismissed],
+                                    ['Skipped', eventCampaignAnalytics.skippedHasTicket],
+                                ].map(([label, value]) => (
+                                    <div key={label} className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-3">
+                                        <div className="text-[10px] uppercase font-bold text-violet-500">{label}</div>
+                                        <div className="text-xl font-bold text-slate-900">{value}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
             </div>
         )}

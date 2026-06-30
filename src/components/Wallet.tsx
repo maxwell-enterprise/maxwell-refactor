@@ -21,6 +21,8 @@ import TicketDetailModal from './wallet/TicketDetailModal'; // Use the full deta
 import GiftClaimModal from './wallet/GiftClaimModal';
 import CreateGiftLinkModal from './wallet/CreateGiftLinkModal';
 import { Badge } from './ui/badge';
+import EventCampaignOfferStack from './marketing/EventCampaignOfferStack';
+import { isProfileComplete as resolveProfileComplete } from '../lib/profileCompletion';
 
 interface WalletProps {
   /** Opens Event Catalogue so users can redeem program credits (Nest-backed events). */
@@ -114,6 +116,7 @@ function groupTicketsByEvent(
 const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const profileComplete = resolveProfileComplete(user);
   const [items, setItems] = useState<WalletItem[]>([]);
   const [pendingGifts, setPendingGifts] = useState<GiftAllocation[]>([]);
   const [sentGifts, setSentGifts] = useState<GiftAllocation[]>([]);
@@ -954,6 +957,10 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                 }}
             />
         )}
+        <EventCampaignOfferStack
+          enabled={profileComplete}
+          onNavigate={onNavigate}
+        />
       </div>
     </div>
   );

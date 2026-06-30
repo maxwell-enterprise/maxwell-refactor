@@ -118,6 +118,33 @@ const shouldUseApi = () =>
 const getDiscountMode = (): BackendMode =>
     shouldUseApi() ? 'API' : APP_CONFIG.USE_MOCK ? 'MOCK' : 'SUPABASE';
 
+/** Vouchers eligible for campaign dropdowns (not deactivated, in date range, quota/budget remaining). */
+export function isDiscountSelectableForCampaign(
+  discount: Discount,
+  now: Date = new Date(),
+): boolean {
+  if (discount.conditions?.deactivatedBySystem === true) return false;
+  if (new Date(discount.validFrom) > now) return false;
+  if (new Date(discount.validUntil) < now) return false;
+  if (
+    discount.maxUsageLimit != null &&
+    discount.currentUsageCount >= discount.maxUsageLimit
+  ) {
+    return false;
+  }
+  if (
+    discount.maxBudgetLimit != null &&
+    discount.currentBudgetBurned >= discount.maxBudgetLimit
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function filterSelectableDiscounts(discounts: Discount[]): Discount[] {
+  return discounts.filter((d) => isDiscountSelectableForCampaign(d));
+}
+
 export const DiscountService = {
   
   getDiscounts: async (): Promise<Discount[]> => {

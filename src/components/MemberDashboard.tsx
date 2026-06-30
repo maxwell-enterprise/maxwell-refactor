@@ -22,6 +22,7 @@ import {
   invalidateMemberZoneSessionCache,
 } from '../lib/memberZoneSessionCache';
 import { WALLET_REFRESH_EVENT } from '../services/paymentService';
+import EventCampaignOfferStack from './marketing/EventCampaignOfferStack';
 
 interface MemberDashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -399,6 +400,11 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                 }}
             />
         )}
+
+        <EventCampaignOfferStack
+          enabled={isProfileComplete}
+          onNavigate={guardedNavigate}
+        />
       </div>
     </div>
   );
