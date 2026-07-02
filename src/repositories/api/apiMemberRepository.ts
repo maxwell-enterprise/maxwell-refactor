@@ -43,6 +43,24 @@ export class ApiMemberRepository implements IMemberRepository {
     return apiRequest<Member[]>(`/members?${sp.toString()}`);
   }
 
+  async getByWorkspaceUserId(workspaceUserId: string): Promise<Member | null> {
+    const trimmed = workspaceUserId.trim();
+    if (!trimmed) return null;
+    try {
+      return await apiRequest<Member | null>(
+        `/members/by-workspace-user/${encodeURIComponent(trimmed)}`,
+      );
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        return null;
+      }
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async create(member: Member): Promise<void> {
     await apiRequest<Member>('/members', {
       method: 'POST',

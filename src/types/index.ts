@@ -128,6 +128,8 @@ export interface SocialProfile {
 
 export interface Member {
   id: string;
+  /** Workspace User id when CRM member is linked (`members.user_id`). */
+  userId?: string;
   name: string;
   email: string;
   phone: string;

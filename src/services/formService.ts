@@ -140,13 +140,32 @@ export const FormService = {
   getPublicForm: async (
     formId: string,
     sessionId?: string,
-  ): Promise<{ form: FormDefinition; session: FormSession | null }> => {
+  ): Promise<{
+    form: FormDefinition;
+    session: FormSession | null;
+    respondentContact?: {
+      name: string;
+      email: string;
+      phone: string;
+      workspaceUserId: string | null;
+    } | null;
+    sessionWarning?: string | null;
+  }> => {
     const q = new URLSearchParams({ formId });
     if (sessionId?.trim()) q.set('sessionId', sessionId.trim());
     const payload = await apiRequest<{
       form: Record<string, unknown>;
       session: Record<string, unknown> | null;
-    }>(`/forms/public/respond?${q.toString()}`);
+      respondentContact?: {
+        name: string;
+        email: string;
+        phone: string;
+        workspaceUserId: string | null;
+      } | null;
+      sessionWarning?: string | null;
+    }>(`/forms/public/respond?${q.toString()}`, {
+      skipBackendFailureTracking: true,
+    });
     return {
       form: normalizeForm(payload.form),
       session: payload.session
@@ -162,15 +181,34 @@ export const FormService = {
             ),
           }
         : null,
+      respondentContact: payload.respondentContact ?? null,
+      sessionWarning: payload.sessionWarning ?? null,
     };
+  },
+
+  lookupRespondentContact: async (input: {
+    phone?: string;
+    email?: string;
+  }): Promise<{
+    matched: boolean;
+    matchedUserBy: 'phone' | 'email' | null;
+    name: string;
+    email: string;
+    phone: string;
+  }> => {
+    return apiRequest('/forms/public/lookup-contact', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      skipBackendFailureTracking: true,
+    });
   },
 
   submitResponse: async (input: {
     formId: string;
     sessionId?: string;
     answers: Record<string, unknown>;
-    guestContact?: { name: string; email?: string; phone: string };
-  }): Promise<FormResponse & { successMessage?: string }> => {
+    guestContact?: { name: string; email?: string; phone?: string };
+  }): Promise<FormResponse & { successMessage?: string; sessionWarning?: string }> => {
     const row = await apiRequest<Record<string, unknown>>('/forms/public/respond', {
       method: 'POST',
       body: JSON.stringify({
@@ -179,11 +217,14 @@ export const FormService = {
         answers: input.answers,
         guestContact: input.guestContact,
       }),
+      skipBackendFailureTracking: true,
     });
     return {
       ...normalizeFormResponse(row),
       successMessage:
         typeof row.successMessage === 'string' ? row.successMessage : undefined,
+      sessionWarning:
+        typeof row.sessionWarning === 'string' ? row.sessionWarning : undefined,
     };
   },
 

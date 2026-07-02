@@ -41,8 +41,25 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
     const [questionErrors, setQuestionErrors] = useState<Record<string, string>>({});
 
     const [dynamicOptions, setDynamicOptions] = useState<Record<string, Array<Product | Event>>>({});
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [sessionWarning, setSessionWarning] = useState<string | null>(null);
 
     const isGuest = !isAuthenticated || !user;
+
+    const buildSubmitContact = () => {
+        if (isGuest) {
+            return {
+                name: guestName.trim(),
+                email: guestEmail.trim() || undefined,
+                phone: guestPhone.trim(),
+            };
+        }
+        if (!user) return undefined;
+        const name = user.fullName?.trim() || user.email?.split('@')[0] || 'User';
+        const email = user.email?.trim() || undefined;
+        const phone = user.phone?.trim() || undefined;
+        return { name, email, phone };
+    };
 
     useEffect(() => {
         void loadForm();
@@ -50,28 +67,70 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
 
     const loadForm = async () => {
         setLoading(true);
+        setLoadError(null);
+        setSessionWarning(null);
         try {
             const payload = await FormService.getPublicForm(formId, sessionId);
             const f = payload.form;
+            if (!f.active) {
+                setLoadError('Form ini tidak menerima respons saat ini.');
+                setForm(null);
+                return;
+            }
             setForm(f);
+            setSessionWarning(payload.sessionWarning ?? null);
 
             const opts: Record<string, Array<Product | Event>> = {};
             for (const q of f.questions) {
-                if (q.dataSource === DataSource.PRODUCTS) {
-                    let products = await DataService.getProducts();
-                    if (q.dataSourceFilter && q.dataSourceFilter.length > 0) {
-                        products = products.filter((p) => q.dataSourceFilter!.includes(p.id));
+                try {
+                    if (q.dataSource === DataSource.PRODUCTS) {
+                        let products = await DataService.getProducts();
+                        if (q.dataSourceFilter && q.dataSourceFilter.length > 0) {
+                            products = products.filter((p) =>
+                                q.dataSourceFilter!.includes(p.id),
+                            );
+                        }
+                        opts[q.id] = products;
+                    } else if (q.dataSource === DataSource.EVENTS) {
+                        let events = await DataService.getEvents();
+                        if (q.dataSourceFilter && q.dataSourceFilter.length > 0) {
+                            events = events.filter((e) =>
+                                q.dataSourceFilter!.includes(e.id),
+                            );
+                        }
+                        opts[q.id] = events;
                     }
-                    opts[q.id] = products;
-                } else if (q.dataSource === DataSource.EVENTS) {
-                    let events = await DataService.getEvents();
-                    if (q.dataSourceFilter && q.dataSourceFilter.length > 0) {
-                        events = events.filter((e) => q.dataSourceFilter!.includes(e.id));
-                    }
-                    opts[q.id] = events;
+                } catch (err) {
+                    console.warn(`Form question ${q.id} options failed to load`, err);
+                    opts[q.id] = [];
                 }
             }
             setDynamicOptions(opts);
+
+            if (payload.respondentContact) {
+                const c = payload.respondentContact;
+                if (c.name) setGuestName(c.name);
+                if (c.email) setGuestEmail(c.email);
+                if (c.phone) setGuestPhone(c.phone);
+            }
+        } catch (error) {
+            console.error('Load form error', error);
+            setForm(null);
+            if (error instanceof ApiRequestError) {
+                if (error.status === 404) {
+                    setLoadError('Form tidak ditemukan atau sudah tidak tersedia.');
+                } else if (error.status === 429) {
+                    setLoadError('Terlalu banyak permintaan. Coba lagi dalam satu menit.');
+                } else {
+                    setLoadError(error.message);
+                }
+            } else {
+                setLoadError(
+                    error instanceof Error
+                        ? error.message
+                        : 'Gagal memuat form. Periksa koneksi Anda.',
+                );
+            }
         } finally {
             setLoading(false);
         }
@@ -113,6 +172,28 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
             variant: 'warning',
             confirmLabel: 'Mengerti',
         });
+    };
+
+    const applyWorkspaceContactMatch = async (input: {
+        phone?: string;
+        email?: string;
+    }) => {
+        const phone = input.phone?.trim() ?? '';
+        const email = input.email?.trim() ?? '';
+        if (!phone && !email) return;
+        if (phone && phone.length < GUEST_PHONE_MIN_LENGTH && !email) return;
+        try {
+            const hit = await FormService.lookupRespondentContact({
+                phone: phone || undefined,
+                email: email || undefined,
+            });
+            if (!hit.matched) return;
+            if (hit.name) setGuestName(hit.name);
+            if (hit.email) setGuestEmail(hit.email);
+            if (hit.phone) setGuestPhone(hit.phone);
+        } catch {
+            // lookup is best-effort; guest can still submit manually
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -159,26 +240,24 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
 
         setSubmitting(true);
         try {
+            const contact = buildSubmitContact();
             const result = await FormService.submitResponse({
                 formId: form.id,
                 sessionId,
                 answers,
-                guestContact: isGuest
-                    ? {
-                          name: guestName.trim(),
-                          email: guestEmail.trim() || undefined,
-                          phone: guestPhone.trim(),
-                      }
-                    : undefined,
+                guestContact: contact,
             });
             setSuccessMessage(result.successMessage || form.successMessage || 'Thank you for your response.');
+            if (result.sessionWarning) {
+                setSessionWarning(result.sessionWarning);
+            }
             setTimeout(() => {
                 onComplete?.();
             }, 3000);
         } catch (error) {
             console.error('Submit error', error);
 
-            if (error instanceof ApiRequestError && isGuest) {
+            if (error instanceof ApiRequestError) {
                 const apiGuestErrors = mapApiGuestContactErrors(error.message);
                 if (Object.keys(apiGuestErrors).length > 0) {
                     setGuestErrors(apiGuestErrors);
@@ -194,6 +273,16 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                         </div>,
                     );
                     return;
+                }
+
+                if (
+                    error.message.includes('answers.') ||
+                    error.message.toLowerCase().includes('required')
+                ) {
+                    const nextQuestionErrors = validateRequiredQuestions();
+                    if (Object.keys(nextQuestionErrors).length > 0) {
+                        setQuestionErrors(nextQuestionErrors);
+                    }
                 }
             }
 
@@ -216,8 +305,12 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
         }`;
 
     if (loading) return <div className="p-8 text-center">Loading form...</div>;
-    if (!form || !form.active) {
-        return <div className="p-8 text-center text-red-600">Form is not available.</div>;
+    if (loadError || !form || !form.active) {
+        return (
+            <div className="p-8 text-center text-red-600 max-w-lg mx-auto">
+                {loadError || 'Form is not available.'}
+            </div>
+        );
     }
 
     if (successMessage) {
@@ -237,6 +330,11 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 border-t-8 border-t-indigo-600 mb-6">
                 <h1 className="text-3xl font-bold text-slate-900 mb-3">{form.title}</h1>
                 {form.description && <p className="text-slate-600 whitespace-pre-wrap">{form.description}</p>}
+                {sessionWarning ? (
+                    <p className="mt-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        {sessionWarning}
+                    </p>
+                ) : null}
                 <div className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-widest">* Required</div>
             </div>
 
@@ -276,6 +374,12 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                                 }}
                                 className={guestInputClass('email')}
                                 placeholder="Enter your email (optional)"
+                                onBlur={() => {
+                                    void applyWorkspaceContactMatch({
+                                        phone: guestPhone,
+                                        email: guestEmail,
+                                    });
+                                }}
                                 aria-invalid={Boolean(guestErrors.email)}
                             />
                             {guestErrors.email ? (
@@ -297,6 +401,9 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                                 }}
                                 className={guestInputClass('phone')}
                                 placeholder="Contoh: 08123456789"
+                                onBlur={() => {
+                                    void applyWorkspaceContactMatch({ phone: guestPhone });
+                                }}
                                 aria-invalid={Boolean(guestErrors.phone)}
                             />
                             {guestErrors.phone ? (

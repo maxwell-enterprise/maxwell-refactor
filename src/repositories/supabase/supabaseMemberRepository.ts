@@ -53,6 +53,19 @@ export class SupabaseMemberRepository implements IMemberRepository {
         return data as Member;
     }
 
+    async getByWorkspaceUserId(workspaceUserId: string): Promise<Member | null> {
+        if (!supabase) throw new Error("Supabase client not initialized");
+        const uid = workspaceUserId.trim();
+        if (!uid) return null;
+        const { data, error } = await supabase
+            .from('members')
+            .select('*')
+            .eq('user_id', uid)
+            .maybeSingle();
+        if (error) return null;
+        return (data as Member) ?? null;
+    }
+
     async create(member: Member): Promise<void> {
         if (!supabase) throw new Error("Supabase client not initialized");
 
