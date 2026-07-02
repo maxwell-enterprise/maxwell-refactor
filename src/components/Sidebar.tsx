@@ -280,7 +280,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
             {isMemberMode ? (
-                <div className="px-3 space-y-1">
+                <div className="px-3 space-y-1" data-tour="myzone-sidebar-nav">
                     <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">Personal Growth</div>
                     <button onClick={() => handleNavClick(ViewState.DASHBOARD)} disabled={profileGateActive} className={navButtonClass(ViewState.DASHBOARD, !profileGateActive)}>
                         <LayoutDashboard size={18} className="mr-3" /> Dashboard
@@ -288,7 +288,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <button onClick={() => handleNavClick(ViewState.EVENT_MARKETPLACE)} disabled={profileGateActive} className={navButtonClass(ViewState.EVENT_MARKETPLACE, !profileGateActive)}>
                         <CalendarDays size={18} className="mr-3" /> Event Catalogue
                     </button>
-                    <button onClick={() => handleNavClick(ViewState.WALLET)} disabled={profileGateActive} className={navButtonClass(ViewState.WALLET, !profileGateActive)}>
+                    <button
+                      data-tour="myzone-nav-wallet"
+                      onClick={() => handleNavClick(ViewState.WALLET)}
+                      disabled={profileGateActive}
+                      className={navButtonClass(ViewState.WALLET, !profileGateActive)}
+                    >
                         <Banknote size={18} className="mr-3" /> My Wallet
                         {pendingGiftCount > 0 && (
                           <Badge
@@ -299,7 +304,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                           </Badge>
                         )}
                     </button>
-                    <button onClick={() => handleNavClick(ViewState.STORE_CATALOG)} disabled={profileGateActive} className={navButtonClass(ViewState.STORE_CATALOG, !profileGateActive)}>
+                    <button
+                      data-tour="myzone-nav-store"
+                      onClick={() => handleNavClick(ViewState.STORE_CATALOG)}
+                      disabled={profileGateActive}
+                      className={navButtonClass(ViewState.STORE_CATALOG, !profileGateActive)}
+                    >
                         <ShoppingBag size={18} className="mr-3" /> Store
                     </button>
                     {canSelfAttend && (
@@ -321,7 +331,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <Users size={18} className="mr-3" /> My Tribe
                     </button>
                     <div className="my-4 border-t border-slate-800 mx-3"></div>
-                    <button onClick={() => handleNavClick(ViewState.SETTINGS)} className={navButtonClass(ViewState.SETTINGS, true)}>
+                    <button
+                      data-tour="myzone-nav-settings"
+                      onClick={() => handleNavClick(ViewState.SETTINGS)}
+                      className={navButtonClass(ViewState.SETTINGS, true)}
+                    >
                         <Settings size={18} className="mr-3" /> Settings
                     </button>
                 </div>

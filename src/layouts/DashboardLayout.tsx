@@ -20,6 +20,11 @@ import { markRbacInboxRead } from '../lib/rbacInboxClient';
 import type { GiftAllocation } from '../types/access';
 import ProfileCompletionBanner from '../components/settings/ProfileCompletionBanner';
 import { getMissingProfileFieldLabels } from '../lib/profileCompletion';
+import OnboardingTrigger from '../components/onboarding/OnboardingTrigger';
+import {
+  ONBOARDING_CLOSE_SIDEBAR_EVENT,
+  ONBOARDING_OPEN_SIDEBAR_EVENT,
+} from '../features/onboarding/onboarding-sidebar-events';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -253,6 +258,17 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [user?.avatarUrl]);
 
   useEffect(() => {
+    const onOpenSidebar = () => setIsSidebarOpen(true);
+    const onCloseSidebar = () => setIsSidebarOpen(false);
+    window.addEventListener(ONBOARDING_OPEN_SIDEBAR_EVENT, onOpenSidebar);
+    window.addEventListener(ONBOARDING_CLOSE_SIDEBAR_EVENT, onCloseSidebar);
+    return () => {
+      window.removeEventListener(ONBOARDING_OPEN_SIDEBAR_EVENT, onOpenSidebar);
+      window.removeEventListener(ONBOARDING_CLOSE_SIDEBAR_EVENT, onCloseSidebar);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!showNotifications) return;
     const onPointerDown = (e: MouseEvent | TouchEvent) => {
       const target = e.target as HTMLElement | null;
@@ -328,6 +344,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
                 <button 
                   onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                  data-tour="mobile-menu-toggle"
                   className="touch-target lg:hidden -ml-1 flex shrink-0 items-center justify-center rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100"
                   aria-label="Open menu"
                 >
@@ -369,6 +386,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
               {/* Center/Right: Actions Area */}
               <div className="flex shrink-0 items-center gap-2 sm:gap-4 md:gap-6">
+
+                {isPersonalZone && <OnboardingTrigger />}
                 
                 {!isPersonalZone && (
                 <div 

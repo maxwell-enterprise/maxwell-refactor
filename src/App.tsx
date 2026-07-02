@@ -24,6 +24,7 @@ import {
   resolvePersonalZoneForView,
   toFeatureSlug,
 } from './lib/dashboardNavigation';
+import { OnboardingProvider } from './components/onboarding/OnboardingProvider';
 
 const CAMPAIGN_QUERY_KEYS = [
   'product',
@@ -181,15 +182,20 @@ const App: React.FC = () => {
   return (
     <>
       <BackgroundWorker /> 
-      <DashboardLayout 
-        currentView={currentView} 
-        onNavigate={setCurrentView}
+      <OnboardingProvider
+        currentView={currentView}
         isPersonalZone={isPersonalZone}
-        onToggleZone={setPersonalZone}
-        profileGateActive={profileGateActive}
       >
-        {resolveView(currentView, userRole, isPersonalZone, setCurrentView)}
-      </DashboardLayout>
+        <DashboardLayout 
+          currentView={currentView} 
+          onNavigate={setCurrentView}
+          isPersonalZone={isPersonalZone}
+          onToggleZone={setPersonalZone}
+          profileGateActive={profileGateActive}
+        >
+          {resolveView(currentView, userRole, isPersonalZone, setCurrentView)}
+        </DashboardLayout>
+      </OnboardingProvider>
     </>
   );
 };

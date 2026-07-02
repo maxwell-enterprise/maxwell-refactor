@@ -23,6 +23,7 @@ import {
 } from '../lib/memberZoneSessionCache';
 import { WALLET_REFRESH_EVENT } from '../services/paymentService';
 import EventCampaignOfferStack from './marketing/EventCampaignOfferStack';
+import { useOnboardingOptional } from './onboarding/OnboardingProvider';
 
 interface MemberDashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -30,6 +31,7 @@ interface MemberDashboardProps {
 
 const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
   const { user, isProfileComplete } = useAuth();
+  const onboarding = useOnboardingOptional();
   const profileLocked = !isProfileComplete;
 
   const guardedNavigate = useCallback(
@@ -198,6 +200,12 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
     return () => window.removeEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
   }, [user, loadDashboard]);
 
+  useEffect(() => {
+    if (!loading) {
+      onboarding?.markViewReady();
+    }
+  }, [loading, onboarding]);
+
   const STAGES: { id: LifecycleStage, label: string }[] = useMemo(
     () => [
       { id: 'GUEST', label: 'Guest' },
@@ -250,7 +258,10 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
       <div className="page-container flex w-full flex-col gap-6 sm:gap-8">
         
         {/* Header */}
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div
+          className="flex flex-col justify-between gap-4 md:flex-row md:items-center"
+          data-tour="member-dashboard-header"
+        >
             <div>
                 <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
                     Hello,{' '}
@@ -266,7 +277,10 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
             <div className="space-y-8 lg:col-span-2">
                 
                 {/* Evolution Journey */}
-                <div className="rounded-[1.5rem] border border-slate-300 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
+                <div
+                  className="rounded-[1.5rem] border border-slate-300 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6"
+                  data-tour="member-dashboard-journey"
+                >
                     <div className="mb-6 flex flex-col gap-2 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
                         <h3 className="flex items-center font-bold text-slate-900">
                             <Award size={20} className="mr-2 text-blue-600" /> Evolution Journey
@@ -331,6 +345,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                       ? 'cursor-not-allowed opacity-60'
                       : 'cursor-pointer'
                   }`}
+                  data-tour="member-dashboard-next-event"
                   onClick={() => guardedNavigate(ViewState.WALLET)}
                 >
                     <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-all scale-125">
@@ -383,7 +398,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
                 </div>
             </div>
 
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1" data-tour="member-dashboard-wallet">
                 <WalletSummaryWidget walletItems={wallet} onNavigate={guardedNavigate} />
             </div>
         </div>

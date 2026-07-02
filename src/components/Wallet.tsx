@@ -22,6 +22,7 @@ import GiftClaimModal from './wallet/GiftClaimModal';
 import CreateGiftLinkModal from './wallet/CreateGiftLinkModal';
 import { Badge } from './ui/badge';
 import EventCampaignOfferStack from './marketing/EventCampaignOfferStack';
+import { useOnboardingOptional } from './onboarding/OnboardingProvider';
 import { isProfileComplete as resolveProfileComplete } from '../lib/profileCompletion';
 
 interface WalletProps {
@@ -116,6 +117,7 @@ function groupTicketsByEvent(
 const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const onboarding = useOnboardingOptional();
   const profileComplete = resolveProfileComplete(user);
   const [items, setItems] = useState<WalletItem[]>([]);
   const [pendingGifts, setPendingGifts] = useState<GiftAllocation[]>([]);
@@ -211,6 +213,12 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
     window.addEventListener(WALLET_REFRESH_EVENT, onRefresh);
     return () => window.removeEventListener(WALLET_REFRESH_EVENT, onRefresh);
   }, [user, loadWallet, loadPendingGifts, loadSentGifts]);
+
+  useEffect(() => {
+    if (!loading) {
+      onboarding?.markViewReady();
+    }
+  }, [loading, onboarding]);
 
   const ticketBuckets = useMemo(() => {
       const tickets = items.filter(
@@ -553,6 +561,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
   return (
     <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
       <div className="page-container flex w-full flex-col gap-5 sm:gap-6">
+        <div data-tour="member-wallet-header" className="space-y-4">
         {/* Mobile-only wallet chrome */}
         <div className="flex items-center justify-between rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:hidden">
             <div className="flex items-center gap-3">
@@ -569,6 +578,14 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
                     <Search size={20} />
                 </button>
             )}
+        </div>
+
+        <div className="hidden md:block">
+          <h1 className="text-2xl font-bold text-slate-900">Wallet</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Tiket, membership, dan aset digitalmu.
+          </p>
+        </div>
         </div>
 
         {/* Digital membership card — entitlement hub (Nest GET /wallet/member-hub) */}
@@ -627,7 +644,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
         )}
 
         {/* Centered pill tabs — matches reference */}
-        <div className="flex w-full justify-center">
+        <div className="flex w-full justify-center" data-tour="member-wallet-tabs">
           <div className="w-full max-w-xl overflow-x-scroll-touch rounded-2xl bg-slate-100 p-1 shadow-inner sm:max-w-2xl">
             <div className="flex min-w-0 gap-1">
               <button type="button" onClick={() => setActiveTab('TICKETS')} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:px-4 sm:text-sm ${activeTab === 'TICKETS' ? 'bg-white text-indigo-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>
@@ -778,7 +795,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
             )}
 
             {activeTab === 'TICKETS' && (
-                <div className="space-y-8">
+                <div className="space-y-8" data-tour="member-wallet-tickets">
                     {pendingGifts.length > 0 &&
                         renderTicketSection(
                             <Gift size={18} />,

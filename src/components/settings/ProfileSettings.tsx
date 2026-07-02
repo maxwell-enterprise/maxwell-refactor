@@ -21,6 +21,7 @@ import {
   type ProfileCompletionInput,
 } from '../../lib/profileCompletion';
 import ProfileCompletionBanner from './ProfileCompletionBanner';
+import { useOnboardingOptional } from '../onboarding/OnboardingProvider';
 
 const NOTIF_DEV_MSG =
   'These notification toggles cannot be enabled yet. This feature is still in development.';
@@ -72,6 +73,7 @@ type DeletionStatus =
 const ProfileSettings: React.FC = () => {
     const { user, logout, refreshSession, isProfileComplete } = useAuth();
     const { showToast } = useToast();
+    const onboarding = useOnboardingOptional();
     const avatarInputRef = useRef<HTMLInputElement | null>(null);
     
     const [activeTab, setActiveTab] = useState<'PROFILE' | 'SECURITY' | 'NOTIFICATIONS'>('PROFILE');
@@ -110,6 +112,15 @@ const ProfileSettings: React.FC = () => {
         emailMarketing: false,
         smsAlerts: false,
     });
+
+  useEffect(() => {
+    if (activeTab !== 'PROFILE') return;
+    onboarding?.markViewReady();
+  }, [activeTab, onboarding]);
+
+  useEffect(() => {
+    onboarding?.markViewReady();
+  }, [onboarding]);
 
     useEffect(() => {
         setFormData((prev) => ({
@@ -309,6 +320,7 @@ const ProfileSettings: React.FC = () => {
             setProfileShowErrors(false);
             await refreshSession();
             showToast('Profile updated successfully', 'success');
+            onboarding?.notifyProfileSaved();
         } catch {
             showToast('Network error — could not reach the server. Profile was not saved.', 'error');
         } finally {
@@ -606,7 +618,7 @@ const ProfileSettings: React.FC = () => {
                                         </p>
                                     </div>
                                 )}
-                                <div>
+                                <div data-tour="profile-welcome">
                                     <h2 className="text-lg font-bold text-slate-900">Personal Information</h2>
                                     <p className="text-sm text-slate-500">
                                         Update your public profile and contact details.{' '}
@@ -614,7 +626,7 @@ const ProfileSettings: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
+                                    <div data-tour="profile-full-name">
                                         <RequiredLabel>Full Name</RequiredLabel>
                                         <input 
                                             type="text" 
@@ -627,7 +639,7 @@ const ProfileSettings: React.FC = () => {
                                             placeholder="Full name"
                                         />
                                     </div>
-                                    <div>
+                                    <div data-tour="profile-job-title">
                                         <RequiredLabel>Position / Title</RequiredLabel>
                                         <input 
                                             type="text" 
@@ -640,7 +652,7 @@ const ProfileSettings: React.FC = () => {
                                             placeholder="e.g. CEO"
                                         />
                                     </div>
-                                    <div>
+                                    <div data-tour="profile-phone">
                                         <RequiredLabel>Phone</RequiredLabel>
                                         <input 
                                             type="tel" 
@@ -729,6 +741,7 @@ const ProfileSettings: React.FC = () => {
                                 </div>
                                 <div className="flex justify-end pt-4">
                                     <button 
+                                        data-tour="profile-save-button"
                                         onClick={handleSaveProfile}
                                         disabled={isLoading}
                                         className="flex w-full min-h-11 items-center justify-center rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-slate-800 disabled:opacity-50 sm:w-auto sm:min-h-0"

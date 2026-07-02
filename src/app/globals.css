@@ -128,3 +128,36 @@ body {
     @apply relative min-w-0 w-full max-w-full;
   }
 }
+
+/* Product tour (driver.js) — above dashboard header/sidebar */
+.driver-popover,
+.maxwell-driver-popover {
+  z-index: 10050 !important;
+}
+.driver-overlay {
+  z-index: 10040 !important;
+}
+.driver-active-element {
+  z-index: 10045 !important;
+}
+
+/* Mobile: keep popover inside viewport when sidebar is open */
+@media (max-width: 1023px) {
+  .maxwell-driver-popover.driver-popover {
+    max-width: min(20rem, calc(100vw - 1.5rem)) !important;
+  }
+
+  .maxwell-driver-popover.driver-popover .driver-popover-title {
+    font-size: 0.95rem;
+    line-height: 1.35;
+  }
+
+  .maxwell-driver-popover.driver-popover .driver-popover-description {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .maxwell-driver-popover.driver-popover .driver-popover-footer {
+    margin-top: 0.75rem;
+  }
+}
