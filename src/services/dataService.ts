@@ -36,6 +36,11 @@ export const DataService = {
     email?: string | null;
   }): Promise<Member | null> => {
     const repo = RepositoryFactory.getMemberRepository();
+    const userId = String(user.id ?? '').trim();
+    if (userId) {
+      const byUserId = await repo.getByWorkspaceUserId(userId);
+      if (byUserId) return byUserId;
+    }
     const emailLc = user.email?.trim().toLowerCase();
     if (emailLc) {
       const hits = await repo.searchForMemberLookup(emailLc);
@@ -43,9 +48,7 @@ export const DataService = {
         hits.find((m) => m.email.trim().toLowerCase() === emailLc) ?? null;
       if (byEmail) return byEmail;
     }
-    const trimmedId = String(user.id ?? '').trim();
-    if (!trimmedId) return null;
-    return await repo.getById(trimmedId);
+    return null;
   },
 
   updateMember: async (id: string, updates: Partial<Member & { notes?: string }>): Promise<void> => {

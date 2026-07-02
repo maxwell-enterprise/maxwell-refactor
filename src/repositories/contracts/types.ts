@@ -53,6 +53,8 @@ export interface IMemberRepository {
      * Used for My Zone / dashboards — never load the full members table for one row.
      */
     searchForMemberLookup(query: string): Promise<Member[]>;
+    /** CRM member linked to a workspace User id (`members.user_id`). */
+    getByWorkspaceUserId(workspaceUserId: string): Promise<Member | null>;
     create(member: Member): Promise<void>;
     update(id: string, data: Partial<Member>): Promise<void>;
 }

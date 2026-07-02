@@ -46,6 +46,13 @@ export class MockMemberRepository implements IMemberRepository {
             .slice(0, 50);
     }
 
+    async getByWorkspaceUserId(workspaceUserId: string): Promise<Member | null> {
+        const uid = workspaceUserId.trim();
+        if (!uid) return null;
+        const members = await this.getAll();
+        return members.find((m) => m.userId === uid) ?? null;
+    }
+
     async create(member: Member): Promise<void> {
         const newMember = { ...member };
         newMember.lifecycleStage = normalizeLifecycleStageForStoredEmail(
