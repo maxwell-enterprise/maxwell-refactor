@@ -15,7 +15,7 @@ const ProfileCompletionBanner: React.FC<ProfileCompletionBannerProps> = ({
   const preview =
     missingLabels.length > 0
       ? missingLabels.slice(0, 3).join(', ') +
-        (missingLabels.length > 3 ? ` +${missingLabels.length - 3} lainnya` : '')
+        (missingLabels.length > 3 ? ` +${missingLabels.length - 3} more` : '')
       : 'Personal Information';
 
   if (compact) {
@@ -26,7 +26,7 @@ const ProfileCompletionBanner: React.FC<ProfileCompletionBannerProps> = ({
         className="flex w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-left text-sm text-amber-900 transition-colors hover:bg-amber-100"
       >
         <AlertCircle size={16} className="shrink-0 text-amber-600" />
-        <span className="flex-1 font-medium">Selesaikan verifikasi profil</span>
+        <span className="flex-1 font-medium">Complete your profile verification</span>
         <ArrowRight size={16} className="shrink-0 text-amber-700" />
       </button>
     );
@@ -41,12 +41,12 @@ const ProfileCompletionBanner: React.FC<ProfileCompletionBannerProps> = ({
           </div>
           <div>
             <p className="text-sm font-bold text-amber-950">
-              Selesaikan verifikasi profil Anda
+              Complete your profile verification
             </p>
             <p className="mt-1 text-sm text-amber-900/80">
-              Lengkapi{' '}
-              <span className="font-semibold">{preview}</span> di Account Settings
-              sebelum menggunakan fitur lain.
+              Fill in{' '}
+              <span className="font-semibold">{preview}</span> in Account Settings
+              before using other features.
             </p>
           </div>
         </div>
@@ -55,7 +55,7 @@ const ProfileCompletionBanner: React.FC<ProfileCompletionBannerProps> = ({
           onClick={onGoToSettings}
           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-700"
         >
-          Buka Account Settings
+          Open Account Settings
           <ArrowRight size={16} />
         </button>
       </div>

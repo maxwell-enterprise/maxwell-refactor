@@ -61,7 +61,7 @@ export const UserVoucherService = {
   ): Promise<{ eligible: boolean; reason?: string }> => {
     const trimmed = code.trim();
     if (!trimmed) {
-      return { eligible: false, reason: 'Kode voucher wajib diisi.' };
+      return { eligible: false, reason: 'Voucher code is required.' };
     }
     const res = await workspaceFetch(
       `/me/voucher/eligibility?code=${encodeURIComponent(trimmed)}`,

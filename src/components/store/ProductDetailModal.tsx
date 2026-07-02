@@ -466,12 +466,12 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                         >
                                             {descriptionExpanded ? (
                                                 <>
-                                                    Tampilkan lebih sedikit
+                                                    Show less
                                                     <ChevronUp size={16} />
                                                 </>
                                             ) : (
                                                 <>
-                                                    Baca selengkapnya
+                                                    Read more
                                                     <ChevronDown size={16} />
                                                 </>
                                             )}

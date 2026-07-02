@@ -75,7 +75,7 @@ const App: React.FC = () => {
   const setCurrentView = useCallback((v: ViewState) => {
     if (profileGateActive && v !== ViewState.SETTINGS) {
       showToast(
-        'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+        'Complete Personal Information in Account Settings first.',
         'info',
       );
       return;

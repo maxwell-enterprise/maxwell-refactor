@@ -4,14 +4,14 @@ export const memberDashboardOnboardingSteps: OnboardingStep[] = [
   {
     target: '[data-tour="member-dashboard-header"]',
     title: 'My Zone Home',
-    content: 'Ini beranda pribadimu — lihat ringkasan perjalanan dan aktivitasmu di sini.',
+    content: 'This is your personal home — see a summary of your journey and activity here.',
     placement: 'bottom',
   },
   {
     target: '[data-tour="member-dashboard-journey"]',
     title: 'Evolution Journey',
     content:
-      'Lacak tahap perjalananmu: dari Guest hingga Facilitator. Semakin aktif, semakin maju.',
+      'Track your journey stage: from Guest to Facilitator. The more active you are, the further you progress.',
     placement: 'top',
     mobilePlacement: 'bottom',
   },
@@ -19,7 +19,7 @@ export const memberDashboardOnboardingSteps: OnboardingStep[] = [
     target: '[data-tour="member-dashboard-next-event"]',
     title: 'Next Event',
     content:
-      'Event atau masterclass terdekat tampil di sini. Klik kartu untuk buka Wallet.',
+      'Your nearest event or masterclass appears here. Click the card to open Wallet.',
     placement: 'top',
     mobilePlacement: 'bottom',
   },
@@ -27,7 +27,7 @@ export const memberDashboardOnboardingSteps: OnboardingStep[] = [
     target: '[data-tour="member-dashboard-wallet"]',
     title: 'Wallet Summary',
     content:
-      'Ringkasan tiket dan aset digitalmu. Tap menu Wallet di sidebar untuk detail lengkap.',
+      'A summary of your tickets and digital assets. Tap Wallet in the sidebar for full details.',
     placement: 'left',
     mobilePlacement: 'bottom',
   },

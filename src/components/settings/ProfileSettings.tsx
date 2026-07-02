@@ -622,7 +622,7 @@ const ProfileSettings: React.FC = () => {
                                     <h2 className="text-lg font-bold text-slate-900">Personal Information</h2>
                                     <p className="text-sm text-slate-500">
                                         Update your public profile and contact details.{' '}
-                                        <span className="text-red-500">*</span> wajib diisi.
+                                        <span className="text-red-500">*</span> required.
                                     </p>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

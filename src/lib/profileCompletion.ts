@@ -39,17 +39,17 @@ export function getProfileValidationError(
 ): string | null {
   for (const key of Object.keys(REQUIRED_PROFILE_FIELD_LABELS) as RequiredProfileField[]) {
     if (!String(data[key] ?? '').trim()) {
-      return `${REQUIRED_PROFILE_FIELD_LABELS[key]} wajib diisi.`;
+      return `${REQUIRED_PROFILE_FIELD_LABELS[key]} is required.`;
     }
   }
   if (data.fullName.trim().length < 2) {
-    return 'Full Name minimal 2 karakter.';
+    return 'Full Name must be at least 2 characters.';
   }
   if (!data.email.trim().includes('@')) {
-    return 'Email Address tidak valid.';
+    return 'Email Address is not valid.';
   }
   if (!hasIndonesianPhoneNumber(data.phone)) {
-    return 'Phone wajib diisi dengan nomor valid (contoh: +62 812...).';
+    return 'Phone is required with a valid number (e.g. +62 812...).';
   }
   return null;
 }

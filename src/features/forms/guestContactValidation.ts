@@ -18,19 +18,19 @@ export function validateGuestContact(input: {
   const phone = input.phone.trim();
 
   if (!name) {
-    errors.name = 'Nama lengkap wajib diisi.';
+    errors.name = 'Full name is required.';
   }
 
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.email = 'Format email tidak valid.';
+    errors.email = 'Email format is not valid.';
   }
 
   if (!phone) {
-    errors.phone = 'Nomor WhatsApp wajib diisi.';
+    errors.phone = 'WhatsApp number is required.';
   } else if (phone.length < GUEST_PHONE_MIN_LENGTH) {
-    errors.phone = `Nomor WhatsApp terlalu pendek. Minimal ${GUEST_PHONE_MIN_LENGTH} karakter (contoh: 08123456789).`;
+    errors.phone = `WhatsApp number is too short. At least ${GUEST_PHONE_MIN_LENGTH} characters (e.g. 08123456789).`;
   } else if (phone.length > GUEST_PHONE_MAX_LENGTH) {
-    errors.phone = `Nomor WhatsApp terlalu panjang. Maksimal ${GUEST_PHONE_MAX_LENGTH} karakter.`;
+    errors.phone = `WhatsApp number is too long. Maximum ${GUEST_PHONE_MAX_LENGTH} characters.`;
   }
 
   return errors;
@@ -44,23 +44,23 @@ export function mapApiGuestContactErrors(message: string): GuestFieldErrors {
     lower.includes('guestcontact.name') ||
     (lower.includes('name') && lower.includes('too_small'))
   ) {
-    errors.name = 'Nama lengkap wajib diisi.';
+    errors.name = 'Full name is required.';
   }
 
   if (
     lower.includes('guestcontact.email') ||
     (lower.includes('email') && (lower.includes('invalid') || lower.includes('email')))
   ) {
-    errors.email = 'Format email tidak valid.';
+    errors.email = 'Email format is not valid.';
   }
 
   if (
     lower.includes('guestcontact.phone') ||
     (lower.includes('phone') && lower.includes('too_small'))
   ) {
-    errors.phone = `Nomor WhatsApp terlalu pendek. Minimal ${GUEST_PHONE_MIN_LENGTH} karakter (contoh: 08123456789).`;
+    errors.phone = `WhatsApp number is too short. At least ${GUEST_PHONE_MIN_LENGTH} characters (e.g. 08123456789).`;
   } else if (lower.includes('guestcontact.phone') && lower.includes('too_big')) {
-    errors.phone = `Nomor WhatsApp terlalu panjang. Maksimal ${GUEST_PHONE_MAX_LENGTH} karakter.`;
+    errors.phone = `WhatsApp number is too long. Maximum ${GUEST_PHONE_MAX_LENGTH} characters.`;
   }
 
   return errors;

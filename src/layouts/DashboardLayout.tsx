@@ -88,7 +88,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     if (isPersonalZone) return;
     if (profileGateActive) {
       showToast(
-        'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+        'Complete Personal Information in Account Settings first.',
         'info',
       );
       return;
@@ -186,7 +186,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const handleNotificationItemClick = async (task: UnifiedTask) => {
     if (profileGateActive) {
       showToast(
-        'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+        'Complete Personal Information in Account Settings first.',
         'info',
       );
       return;
@@ -220,7 +220,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const handleGiftNotificationClick = (gift: GiftAllocation) => {
     if (profileGateActive) {
       showToast(
-        'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+        'Complete Personal Information in Account Settings first.',
         'info',
       );
       return;
@@ -540,7 +540,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                                         onClick={() => {
                                           if (profileGateActive) {
                                             showToast(
-                                              'Lengkapi Personal Information di Account Settings terlebih dahulu.',
+                                              'Complete Personal Information in Account Settings first.',
                                               'info',
                                             );
                                             return;

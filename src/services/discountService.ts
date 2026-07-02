@@ -247,23 +247,23 @@ export const DiscountService = {
   isValid: async (discount: Discount, userRole: UserRole, userId?: string): Promise<{ valid: boolean; reason?: string }> => {
     const now = new Date();
     if (discount.conditions?.deactivatedBySystem === true) {
-      return { valid: false, reason: 'Voucher ini sudah dinonaktifkan oleh sistem.' };
+      return { valid: false, reason: 'This voucher has been deactivated by the system.' };
     }
     if (new Date(discount.validFrom) > now) {
-      return { valid: false, reason: `Promo belum berlaku sampai ${formatDate(discount.validFrom)}.` };
+      return { valid: false, reason: `Promo is not valid until ${formatDate(discount.validFrom)}.` };
     }
     if (new Date(discount.validUntil) < now) {
-      return { valid: false, reason: `Voucher sudah berakhir pada ${formatDate(discount.validUntil)}.` };
+      return { valid: false, reason: `Voucher expired on ${formatDate(discount.validUntil)}.` };
     }
     if (discount.maxUsageLimit && discount.currentUsageCount >= discount.maxUsageLimit) {
-      return { valid: false, reason: 'Kuota voucher sudah habis.' };
+      return { valid: false, reason: 'Voucher usage quota has been exhausted.' };
     }
     if (discount.maxBudgetLimit && discount.currentBudgetBurned >= discount.maxBudgetLimit) {
-      return { valid: false, reason: 'Budget promo voucher ini sudah habis.' };
+      return { valid: false, reason: 'This promo voucher budget has been exhausted.' };
     }
 
     if (discount.scope === 'USER_ROLE_SPECIFIC' && discount.targetIds && !discount.targetIds.includes(userRole)) {
-      return { valid: false, reason: `Voucher ini khusus role: ${discount.targetIds.join(', ')}.` };
+      return { valid: false, reason: `This voucher is limited to roles: ${discount.targetIds.join(', ')}.` };
     }
 
     if (discount.conditions && userId) {
@@ -272,7 +272,7 @@ export const DiscountService = {
         // AbacCondition shape differs between domains (string[] vs enum[]); cast is intentional.
         const isEligible = PricingEngine.evaluateABAC(discount.conditions as any, userEntitlements);
         if (!isEligible) {
-          return { valid: false, reason: 'Kamu belum memenuhi syarat untuk voucher ini.' };
+          return { valid: false, reason: 'You do not meet the requirements for this voucher.' };
         }
       }
     }
@@ -287,7 +287,7 @@ export const DiscountService = {
             valid: false,
             reason:
               eligibility.reason ??
-              'Kamu sudah pernah menggunakan voucher ini (maksimal 1x per akun).',
+              'You have already used this voucher (maximum once per account).',
           };
         }
       } catch (err) {
@@ -314,22 +314,22 @@ export const DiscountService = {
     userId?: string,
   ): Promise<CartVoucherValidation> => {
     if (cart.length === 0) {
-      return { ok: false, code: 'EMPTY_CART', reason: 'Keranjang masih kosong. Tambahkan produk dulu sebelum memakai voucher.' };
+      return { ok: false, code: 'EMPTY_CART', reason: 'Your cart is empty. Add products before applying a voucher.' };
     }
 
     const baseValidity = await DiscountService.isValid(discount, userRole, userId);
     if (!baseValidity.valid) {
-      const reason = baseValidity.reason ?? 'Voucher tidak berlaku.';
+      const reason = baseValidity.reason ?? 'Voucher is not valid.';
       const code: VoucherFailureCode =
-        reason.toLowerCase().includes('sudah pernah')
+        reason.toLowerCase().includes('already used')
           ? 'ALREADY_REDEEMED'
-          : reason.includes('habis')
-            ? reason.includes('Budget')
+          : reason.toLowerCase().includes('exhausted')
+            ? reason.toLowerCase().includes('budget')
               ? 'BUDGET_EXHAUSTED'
               : 'USAGE_EXHAUSTED'
-            : reason.toLowerCase().includes('belum berlaku')
+            : reason.toLowerCase().includes('not valid until')
               ? 'NOT_STARTED'
-              : reason.toLowerCase().includes('berakhir')
+              : reason.toLowerCase().includes('expired')
                 ? 'EXPIRED'
                 : reason.toLowerCase().includes('role')
                   ? 'ROLE_MISMATCH'
@@ -352,8 +352,8 @@ export const DiscountService = {
           ok: false,
           code: 'PRODUCT_SCOPE_MISMATCH',
           reason: targetLabel
-            ? `Voucher ${discount.code} hanya berlaku untuk produk: ${targetLabel}. Tambahkan produk tersebut ke keranjangmu.`
-            : `Voucher ${discount.code} tidak berlaku untuk produk di keranjangmu.`,
+            ? `Voucher ${discount.code} only applies to products: ${targetLabel}. Add those products to your cart.`
+            : `Voucher ${discount.code} does not apply to products in your cart.`,
         };
       }
     }
@@ -365,7 +365,7 @@ export const DiscountService = {
         return {
           ok: false,
           code: 'CATEGORY_SCOPE_MISMATCH',
-          reason: `Voucher ${discount.code} hanya berlaku untuk kategori: ${targets.join(', ')}.`,
+          reason: `Voucher ${discount.code} only applies to categories: ${targets.join(', ')}.`,
         };
       }
     }
@@ -379,7 +379,7 @@ export const DiscountService = {
         return {
           ok: false,
           code: 'EVENT_SCOPE_MISMATCH',
-          reason: `Voucher ${discount.code} hanya berlaku untuk event tertentu.`,
+          reason: `Voucher ${discount.code} only applies to specific events.`,
         };
       }
     }
@@ -390,7 +390,7 @@ export const DiscountService = {
         return {
           ok: false,
           code: 'MIN_QTY_NOT_MET',
-          reason: `Minimum pembelian ${discount.minQty} item untuk pakai voucher ${discount.code}.`,
+          reason: `Minimum purchase of ${discount.minQty} item(s) required to use voucher ${discount.code}.`,
         };
       }
     }
@@ -434,7 +434,7 @@ export const DiscountService = {
       return {
         ok: false,
         code: 'PRODUCT_SCOPE_MISMATCH',
-        reason: `Voucher ${discount.code} tidak bisa diterapkan ke produk yang ada di keranjangmu.`,
+        reason: `Voucher ${discount.code} cannot be applied to products in your cart.`,
       };
     }
 

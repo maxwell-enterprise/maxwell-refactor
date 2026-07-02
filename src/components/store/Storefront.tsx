@@ -327,7 +327,7 @@ const Storefront: React.FC<StorefrontProps> = ({
           setStickyVoucher({ code: autoAppliedDiscount, productId: autoCheckoutProductId ?? undefined });
         } catch (error) {
           const message =
-            error instanceof Error ? error.message : 'Voucher campaign tidak dapat disimpan.';
+            error instanceof Error ? error.message : 'Could not save voucher campaign.';
           showToast(message, 'error');
         }
       })();

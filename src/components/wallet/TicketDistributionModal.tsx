@@ -135,7 +135,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
     const ensureSessionForTicketSend = async (): Promise<boolean> => {
         await refreshSession({ silent: true });
         if (getWorkspaceToken()) return true;
-        showToast('Sesi login habis atau belum siap. Silakan refresh halaman lalu login ulang.', 'error');
+        showToast('Session expired or not ready. Please refresh the page and sign in again.', 'error');
         return false;
     };
 
@@ -248,7 +248,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
 
     const handleImportClick = () => {
         if (assignableRows.length === 0) {
-            showToast('Tidak ada tiket yang bisa di-assign.', 'error');
+            showToast('No tickets available to assign.', 'error');
             return;
         }
         fileInputRef.current?.click();
@@ -262,17 +262,17 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
         if (!file) return;
 
         if (assignableRows.length === 0) {
-            showToast('Tidak ada tiket yang bisa di-assign.', 'error');
+            showToast('No tickets available to assign.', 'error');
             return;
         }
 
         const approved = await confirm({
-            title: 'Import dari Excel?',
+            title: 'Import from Excel?',
             message:
-                'Data recipient pada semua baris tiket yang tersedia akan ditimpa dengan isi file Excel. Lanjutkan?',
+                'Recipient data on all available ticket rows will be overwritten with the Excel file contents. Continue?',
             variant: 'warning',
-            confirmLabel: 'Ya, Import',
-            cancelLabel: 'Batal',
+            confirmLabel: 'Yes, Import',
+            cancelLabel: 'Cancel',
             icon: <Upload size={24} />,
         });
         if (!approved) return;
@@ -284,7 +284,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
 
             if (imported.length === 0) {
                 showToast(
-                    'Tidak ada baris valid untuk diimport. Pastikan kolom name, email, dan phone terisi dengan benar.',
+                    'No valid rows to import. Make sure the name, email, and phone columns are filled correctly.',
                     'error',
                 );
                 return;
@@ -295,32 +295,32 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
             const warnings: string[] = [];
             if (imported.length > slotCount) {
                 warnings.push(
-                    `${imported.length - slotCount} baris Excel diabaikan (tiket tidak cukup).`,
+                    `${imported.length - slotCount} Excel row(s) skipped (not enough tickets).`,
                 );
             }
             if (skippedInvalidEmail > 0) {
                 warnings.push(
-                    `${skippedInvalidEmail} baris dilewati karena email tidak valid.`,
+                    `${skippedInvalidEmail} row(s) skipped due to invalid email.`,
                 );
             }
             if (skippedEmpty > 0) {
-                warnings.push(`${skippedEmpty} baris kosong dilewati.`);
+                warnings.push(`${skippedEmpty} empty row(s) skipped.`);
             }
 
             if (warnings.length > 0) {
                 showToast(
-                    `${fillCount} baris diisi. ${warnings.join(' ')}`,
+                    `${fillCount} row(s) filled. ${warnings.join(' ')}`,
                     'info',
                 );
             } else {
-                showToast(`${fillCount} baris berhasil diimport dari Excel.`, 'success');
+                showToast(`${fillCount} row(s) imported from Excel.`, 'success');
             }
         } catch (e) {
             console.error('[TicketDistributionModal] import failed:', e);
             showToast(
                 e instanceof Error
                     ? e.message
-                    : 'Gagal membaca file Excel. Gunakan format .xlsx atau .xls.',
+                    : 'Failed to read Excel file. Use .xlsx or .xls format.',
                 'error',
             );
         } finally {
@@ -338,7 +338,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
             );
 
             if (rowsToDistribute.length === 0) {
-                showToast('Isi minimal 1 baris invitation sebelum mengirim.', 'error');
+                showToast('Fill in at least 1 invitation row before sending.', 'error');
                 return;
             }
 
@@ -351,7 +351,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
 
             if (incompleteRow) {
                 showToast(
-                    'Recipient name, email, and WhatsApp wajib lengkap untuk setiap baris invitation yang diisi.',
+                    'Recipient name, email, and WhatsApp are required for each filled invitation row.',
                     'error'
                 );
                 return;
@@ -425,7 +425,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
         const rowsToGift = assignableRows.filter((row) => hasAnyInvitationInput(row));
 
         if (rowsToGift.length === 0) {
-            showToast('Isi minimal 1 baris sebelum Send & Generate.', 'error');
+            showToast('Fill in at least 1 row before Send & Generate.', 'error');
             return;
         }
 
@@ -438,7 +438,7 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
 
         if (incompleteRow) {
             showToast(
-                'Nama dan WhatsApp wajib lengkap untuk setiap baris yang diisi. Email opsional.',
+                'Name and WhatsApp are required for each filled row. Email is optional.',
                 'error',
             );
             return;
@@ -506,11 +506,11 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
                 }
             } else if (giftsToSend.length > 1) {
                 const approved = await confirm({
-                    title: 'Kirim lewat WhatsApp?',
-                    message: `Buka WhatsApp untuk ${giftsToSend.length} penerima? Setiap penerima mendapat link unik.`,
+                    title: 'Send via WhatsApp?',
+                    message: `Open WhatsApp for ${giftsToSend.length} recipient(s)? Each recipient gets a unique link.`,
                     variant: 'info',
-                    confirmLabel: 'Ya, Kirim',
-                    cancelLabel: 'Nanti',
+                    confirmLabel: 'Yes, Send',
+                    cancelLabel: 'Later',
                     icon: <MessageSquare size={24} />,
                 });
                 if (approved) {
@@ -525,13 +525,13 @@ const TicketDistributionModal: React.FC<TicketDistributionModalProps> = ({
             setActiveTab('HISTORY');
 
             showToast(
-                `${giftsToSend.length} WA gift link dibuat${giftsToSend.length > 1 ? ' (link unik per tiket)' : ''}.`,
+                `${giftsToSend.length} WA gift link(s) created${giftsToSend.length > 1 ? ' (unique link per ticket)' : ''}.`,
                 'success',
             );
         } catch (error) {
             preOpenedWaWindow?.close();
             showToast(
-                error instanceof Error ? error.message : 'Gagal membuat WA gift link.',
+                error instanceof Error ? error.message : 'Failed to create WA gift link.',
                 'error',
             );
         } finally {

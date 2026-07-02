@@ -4,21 +4,21 @@ export const memberWalletOnboardingSteps: OnboardingStep[] = [
   {
     target: '[data-tour="member-wallet-header"]',
     title: 'Wallet',
-    content: 'Halaman ini menyimpan tiket, membership, dan aset digitalmu.',
+    content: 'This page holds your tickets, membership, and digital assets.',
     placement: 'bottom',
   },
   {
     target: '[data-tour="member-wallet-tabs"]',
-    title: 'Kategori Aset',
+    title: 'Asset Categories',
     content:
-      'Pindah tab untuk lihat tiket, kredit program, pesanan fisik, atau riwayat aktivitas.',
+      'Switch tabs to view tickets, program credits, physical orders, or activity history.',
     placement: 'bottom',
   },
   {
     target: '[data-tour="member-wallet-tickets"]',
-    title: 'Tiket & Hadiah',
+    title: 'Tickets & Gifts',
     content:
-      'Tiket event dan hadiah yang masuk akan tampil di sini. Tap tiket untuk detail atau QR gate.',
+      'Event tickets and incoming gifts appear here. Tap a ticket for details or gate QR.',
     placement: 'top',
     mobilePlacement: 'bottom',
   },

@@ -583,7 +583,7 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
         <div className="hidden md:block">
           <h1 className="text-2xl font-bold text-slate-900">Wallet</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Tiket, membership, dan aset digitalmu.
+            Your tickets, membership, and digital assets.
           </p>
         </div>
         </div>

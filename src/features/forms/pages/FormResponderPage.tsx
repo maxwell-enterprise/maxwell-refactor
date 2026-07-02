@@ -73,7 +73,7 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
             const payload = await FormService.getPublicForm(formId, sessionId);
             const f = payload.form;
             if (!f.active) {
-                setLoadError('Form ini tidak menerima respons saat ini.');
+                setLoadError('This form is not accepting responses right now.');
                 setForm(null);
                 return;
             }
@@ -118,9 +118,9 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
             setForm(null);
             if (error instanceof ApiRequestError) {
                 if (error.status === 404) {
-                    setLoadError('Form tidak ditemukan atau sudah tidak tersedia.');
+                    setLoadError('Form not found or no longer available.');
                 } else if (error.status === 429) {
-                    setLoadError('Terlalu banyak permintaan. Coba lagi dalam satu menit.');
+                    setLoadError('Too many requests. Try again in one minute.');
                 } else {
                     setLoadError(error.message);
                 }
@@ -128,7 +128,7 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                 setLoadError(
                     error instanceof Error
                         ? error.message
-                        : 'Gagal memuat form. Periksa koneksi Anda.',
+                        : 'Failed to load form. Check your connection.',
                 );
             }
         } finally {
@@ -159,7 +159,7 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
         for (const q of form.questions) {
             if (!q.required) continue;
             if (isAnswerEmpty(answers[q.id])) {
-                errors[q.id] = 'Pertanyaan ini wajib dijawab.';
+                errors[q.id] = 'This question is required.';
             }
         }
         return errors;
@@ -221,13 +221,13 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
             if (nextGuestErrors.email) lines.push(nextGuestErrors.email);
             if (nextGuestErrors.phone) lines.push(nextGuestErrors.phone);
             if (questionErrorCount > 0) {
-                lines.push(`${questionErrorCount} pertanyaan wajib belum dijawab.`);
+                lines.push(`${questionErrorCount} required question(s) not answered.`);
             }
 
             await showValidationDialog(
-                'Form belum lengkap',
+                'Form incomplete',
                 <div className="space-y-2">
-                    <p>Periksa kembali data berikut sebelum mengirim:</p>
+                    <p>Review the following before submitting:</p>
                     <ul className="list-disc pl-5 space-y-1 text-slate-600">
                         {lines.map((line) => (
                             <li key={line}>{line}</li>
@@ -262,9 +262,9 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                 if (Object.keys(apiGuestErrors).length > 0) {
                     setGuestErrors(apiGuestErrors);
                     await showValidationDialog(
-                        'Data kontak tidak valid',
+                        'Invalid contact data',
                         <div className="space-y-2">
-                            <p>Mohon perbaiki informasi kontak Anda:</p>
+                            <p>Please fix your contact information:</p>
                             <ul className="list-disc pl-5 space-y-1 text-slate-600">
                                 {apiGuestErrors.name ? <li>{apiGuestErrors.name}</li> : null}
                                 {apiGuestErrors.email ? <li>{apiGuestErrors.email}</li> : null}
@@ -289,9 +289,9 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
             const fallbackMessage =
                 error instanceof ApiRequestError
                     ? error.message
-                    : 'Gagal mengirim form. Silakan coba lagi.';
+                    : 'Failed to submit form. Please try again.';
 
-            await showValidationDialog('Gagal mengirim form', fallbackMessage);
+            await showValidationDialog('Failed to submit form', fallbackMessage);
         } finally {
             setSubmitting(false);
         }
@@ -400,7 +400,7 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                                     }
                                 }}
                                 className={guestInputClass('phone')}
-                                placeholder="Contoh: 08123456789"
+                                placeholder="e.g. 08123456789"
                                 onBlur={() => {
                                     void applyWorkspaceContactMatch({ phone: guestPhone });
                                 }}
@@ -410,7 +410,7 @@ const FormResponderPage: React.FC<FormResponderPageProps> = ({
                                 <p className="mt-1 text-xs font-medium text-red-600">{guestErrors.phone}</p>
                             ) : (
                                 <p className="mt-1 text-xs text-slate-400">
-                                    Wajib diisi. Minimal {GUEST_PHONE_MIN_LENGTH} karakter.
+                                    Required. At least {GUEST_PHONE_MIN_LENGTH} characters.
                                 </p>
                             )}
                         </div>

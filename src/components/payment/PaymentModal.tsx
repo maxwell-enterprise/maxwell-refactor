@@ -221,11 +221,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         if (options?.suppressMissing) {
           return savedPpnRatePercentRef.current;
         }
-        throw new Error('PPN wajib diisi untuk checkout workspace.');
+        throw new Error('PPN rate is required for workspace checkout.');
       }
       const parsed = Number(trimmed);
       if (!Number.isFinite(parsed)) {
-        throw new Error('PPN harus berupa angka yang valid.');
+        throw new Error('PPN must be a valid number.');
       }
       const normalizedPpn = clampPpnRatePercent(parsed);
       if (normalizedPpn === savedPpnRatePercentRef.current) {
@@ -294,13 +294,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     async (codeRaw: string, origin: 'auto' | 'manual' = 'manual') => {
       const codeToUse = codeRaw.trim();
       if (!codeToUse) {
-        setVoucherError('Masukkan kode voucher dulu.');
+        setVoucherError('Enter a voucher code first.');
         setAppliedDiscount(null);
         setAppliedDiscountOrigin(null);
         return;
       }
       if (cart.length === 0) {
-        setVoucherError('Keranjang masih kosong. Tambahkan produk dulu sebelum memakai voucher.');
+        setVoucherError('Your cart is empty. Add products before applying a voucher.');
         setAppliedDiscount(null);
         setAppliedDiscountOrigin(null);
         return;
@@ -312,7 +312,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       try {
         const discount = await DiscountService.findByCode(codeToUse);
         if (!discount) {
-          setVoucherError(`Kode "${codeToUse}" tidak ditemukan.`);
+          setVoucherError(`Code "${codeToUse}" was not found.`);
           setAppliedDiscount(null);
           setAppliedDiscountOrigin(null);
           return;
@@ -355,7 +355,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         if (totalDiscount === 0) {
           // validateForCart already covers scope, but BUNDLE_VOLUME / edge math may still zero out.
           setVoucherError(
-            `Voucher ${discount.code} tidak menghasilkan potongan untuk keranjang ini. Cek minimal pembelian.`,
+            `Voucher ${discount.code} does not reduce the total for this cart. Check minimum purchase.`,
           );
           setAppliedDiscount(null);
           setAppliedDiscountOrigin(null);
@@ -967,7 +967,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               </p>
           )}
           {!appliedDiscount && !voucherError && cart.length === 0 && (
-              <p className="text-[11px] text-slate-400 mt-1">Tambahkan produk dulu sebelum memakai voucher.</p>
+              <p className="text-[11px] text-slate-400 mt-1">Add products before applying a voucher.</p>
           )}
        </div>
 
@@ -992,7 +992,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               }}
               disabled={isLoadingCheckoutConfig || isSavingCheckoutConfig}
               className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
-              placeholder="Masukkan persentase PPN"
+              placeholder="Enter PPN percentage"
             />
             <button
               type="button"
@@ -1012,7 +1012,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </button>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">
-            Klik Set untuk menyimpan default checkout workspace.
+            Click Set to save the workspace checkout default.
           </p>
         </div>
       )}

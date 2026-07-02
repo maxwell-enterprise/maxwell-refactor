@@ -4,16 +4,16 @@ import { openSidebarForOnboarding } from '../onboarding-sidebar-events';
 export const memberSidebarOnboardingSteps: OnboardingStep[] = [
   {
     target: '[data-tour="mobile-menu-toggle"]',
-    title: 'Menu Navigasi',
+    title: 'Navigation Menu',
     content:
-      'Di layar kecil, tap ikon menu ini untuk membuka sidebar dan berpindah halaman.',
+      'On smaller screens, tap this menu icon to open the sidebar and switch pages.',
     placement: 'bottom',
   },
   {
     target: '[data-tour="myzone-sidebar-nav"]',
-    title: 'Sidebar My Zone',
+    title: 'My Zone Sidebar',
     content:
-      'Semua menu utama My Zone ada di sini — Dashboard, Event, Wallet, Store, dan lainnya.',
+      'All main My Zone menus are here — Dashboard, Event, Wallet, Store, and more.',
     placement: 'right',
     mobilePlacement: 'bottom',
     beforeShow: openSidebarForOnboarding,
@@ -21,7 +21,7 @@ export const memberSidebarOnboardingSteps: OnboardingStep[] = [
   {
     target: '[data-tour="myzone-nav-wallet"]',
     title: 'My Wallet',
-    content: 'Buka Wallet untuk lihat tiket, voucher, dan hadiah yang kamu miliki.',
+    content: 'Open Wallet to view your tickets, vouchers, and gifts.',
     placement: 'right',
     mobilePlacement: 'bottom',
     beforeShow: openSidebarForOnboarding,
@@ -29,7 +29,7 @@ export const memberSidebarOnboardingSteps: OnboardingStep[] = [
   {
     target: '[data-tour="myzone-nav-store"]',
     title: 'Store',
-    content: 'Jelajahi dan beli program, event, atau produk digital di Store.',
+    content: 'Browse and purchase programs, events, or digital products in the Store.',
     placement: 'right',
     mobilePlacement: 'bottom',
     beforeShow: openSidebarForOnboarding,
@@ -37,7 +37,7 @@ export const memberSidebarOnboardingSteps: OnboardingStep[] = [
   {
     target: '[data-tour="myzone-nav-settings"]',
     title: 'Settings',
-    content: 'Atur profil, keamanan akun, dan preferensi notifikasi di sini.',
+    content: 'Manage your profile, account security, and notification preferences here.',
     placement: 'right',
     mobilePlacement: 'bottom',
     beforeShow: openSidebarForOnboarding,
