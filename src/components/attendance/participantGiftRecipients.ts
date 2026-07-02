@@ -101,17 +101,42 @@ function inferBuyerEmailFromMember(
 
 function resolveRecipientIdentity(
   gift: GiftAllocation,
-  ticket?: WalletItem,
+  ticket: WalletItem | undefined,
+  userMap: Map<string, UserProfile>,
+  membersById: Map<string, Member>,
+  membersByEmail: Map<string, Member>,
 ): { name: string; email: string; phone: string } {
   const email =
     normalizeEmail(gift.targetEmail) ||
     normalizeEmail(readTicketRecipientEmail(ticket ?? ({} as WalletItem)));
-  const name =
+  const phone =
+    gift.recipientPhone?.trim() ||
+    readTicketRecipientPhone(ticket ?? ({} as WalletItem)) ||
+    '';
+
+  const senderLabel =
     gift.recipientName?.trim() ||
     readTicketRecipientName(ticket ?? ({} as WalletItem)) ||
     (email ? email.split('@')[0] : '') ||
     'Guest';
-  const phone = gift.recipientPhone?.trim() || readTicketRecipientPhone(ticket ?? ({} as WalletItem)) || '';
+
+  const isClaimed =
+    gift.status === 'CLAIMED' || Boolean(gift.claimedByUserId?.trim());
+  if (!isClaimed) {
+    return { name: senderLabel, email, phone };
+  }
+
+  const claimedUserId = gift.claimedByUserId?.trim();
+  const workspaceUser = claimedUserId ? userMap.get(claimedUserId) : undefined;
+  const memberById = claimedUserId ? membersById.get(claimedUserId) : undefined;
+  const memberByEmail = email ? membersByEmail.get(email) : undefined;
+
+  const name =
+    workspaceUser?.fullName?.trim() ||
+    memberById?.name?.trim() ||
+    memberByEmail?.name?.trim() ||
+    senderLabel;
+
   return { name, email, phone };
 }
 
@@ -133,7 +158,13 @@ export function buildGiftRecipientRows(params: {
     if (!ticketIds.has(gift.entitlementId)) continue;
     coveredTicketIds.add(gift.entitlementId);
     const ticket = ticketById.get(gift.entitlementId);
-    const recipient = resolveRecipientIdentity(gift, ticket);
+    const recipient = resolveRecipientIdentity(
+      gift,
+      ticket,
+      userMap,
+      membersById,
+      membersByEmail,
+    );
     const inviter = resolveInviterContact(
       gift.sourceUserId,
       gift.sourceUserName,
@@ -172,7 +203,13 @@ export function buildGiftRecipientRows(params: {
     if (ticket.isTransferable !== true) continue;
 
     const recipientEmail = normalizeEmail(readTicketRecipientEmail(ticket));
-    const recipientName = readTicketRecipientName(ticket);
+    const ticketOwner = userMap.get(ticket.userId);
+    const memberOwner = membersById.get(ticket.userId);
+    const isClaimedTicket = ticket.status === 'CLAIMED';
+    const recipientName =
+      (isClaimedTicket && ticketOwner?.fullName?.trim()) ||
+      (isClaimedTicket && memberOwner?.name?.trim()) ||
+      readTicketRecipientName(ticket);
     const recipientPhone = readTicketRecipientPhone(ticket);
     if (!recipientEmail && !recipientName && !recipientPhone) continue;
 

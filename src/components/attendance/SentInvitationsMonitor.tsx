@@ -172,6 +172,9 @@ const SentInvitationsMonitor: React.FC = () => {
                 senderId: gift.sourceUserId,
                 recipientName:
                     gift.recipientName?.trim() ||
+                    (gift.claimedByUserId || gift.status === 'CLAIMED'
+                      ? recipient?.name?.trim()
+                      : undefined) ||
                     recipient?.name ||
                     'Guest (By Email)',
                 recipientEmail: gift.targetEmail || recipient?.email || '',

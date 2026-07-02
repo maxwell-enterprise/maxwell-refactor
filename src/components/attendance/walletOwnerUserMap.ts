@@ -14,6 +14,8 @@ export function collectWalletOwnerIds(
   for (const gift of gifts) {
     const sourceUserId = gift.sourceUserId?.trim();
     if (sourceUserId) ids.add(sourceUserId);
+    const claimedByUserId = gift.claimedByUserId?.trim();
+    if (claimedByUserId) ids.add(claimedByUserId);
   }
   return [...ids];
 }
