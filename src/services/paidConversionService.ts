@@ -4,12 +4,14 @@ import { apiRequest } from '../repositories/api/apiClient';
 type PaidConversionListResponse = {
   items: PaidConversionRecord[];
   total: number;
+  counts: { all: number; signedIn: number; paid: number };
 };
 
 export const PaidConversionService = {
   list: async (params?: {
     search?: string;
     campaignSourceCode?: string;
+    campaignOnly?: boolean;
     picMemberId?: string;
     eventType?: string;
     startDate?: string;
@@ -22,6 +24,7 @@ export const PaidConversionService = {
     if (params?.campaignSourceCode) {
       query.set('campaignSourceCode', params.campaignSourceCode);
     }
+    if (params?.campaignOnly) query.set('campaignOnly', 'true');
     if (params?.picMemberId) query.set('picMemberId', params.picMemberId);
     if (params?.eventType) query.set('eventType', params.eventType);
     if (params?.startDate) query.set('startDate', params.startDate);

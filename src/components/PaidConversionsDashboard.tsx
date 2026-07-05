@@ -1,10 +1,14 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { PaidConversionRecord } from '../types/index';
 import { PaidConversionService } from '../services/paidConversionService';
 import { Search, Filter, DollarSign, User, Megaphone, Package, Calendar, LogIn } from 'lucide-react';
 
 type StageFilter = 'ALL' | 'SIGNED_IN' | 'PAID';
+
+type StageCounts = { all: number; signedIn: number; paid: number };
+
+const EMPTY_COUNTS: StageCounts = { all: 0, signedIn: 0, paid: 0 };
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('id-ID', {
@@ -62,53 +66,45 @@ const PaidConversionsDashboard: React.FC = () => {
   const [records, setRecords] = useState<PaidConversionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [campaignOnly, setCampaignOnly] = useState(false);
   const [stageFilter, setStageFilter] = useState<StageFilter>('ALL');
   const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<StageCounts>(EMPTY_COUNTS);
 
   useEffect(() => {
-    loadRecords();
-  }, []);
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
 
-  const loadRecords = async () => {
+  const loadRecords = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await PaidConversionService.list({ limit: 200 });
+      const res = await PaidConversionService.list({
+        limit: 200,
+        search: debouncedSearch || undefined,
+        eventType: stageFilter === 'ALL' ? undefined : stageFilter,
+        campaignOnly: campaignOnly || undefined,
+      });
       setRecords(res.items);
       setTotal(res.total);
+      setCounts(res.counts ?? EMPTY_COUNTS);
     } catch {
       setRecords([]);
       setTotal(0);
+      setCounts(EMPTY_COUNTS);
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, stageFilter, campaignOnly]);
 
-  const filteredRecords = records.filter((row) => {
-    const q = searchTerm.toLowerCase();
-    const matchesSearch =
-      !q ||
-      row.buyerName?.toLowerCase().includes(q) ||
-      row.buyerEmail.toLowerCase().includes(q) ||
-      (row.orderId || '').toLowerCase().includes(q) ||
-      row.campaignSourceCode?.toLowerCase().includes(q) ||
-      row.campaignName?.toLowerCase().includes(q) ||
-      row.picNameSnapshot?.toLowerCase().includes(q) ||
-      row.productsSummary?.toLowerCase().includes(q);
+  useEffect(() => {
+    void loadRecords();
+  }, [loadRecords]);
 
-    if (campaignOnly && !row.campaignSourceCode?.trim()) {
-      return false;
-    }
-
-    if (stageFilter !== 'ALL' && row.eventType !== stageFilter) {
-      return false;
-    }
-
-    return matchesSearch;
-  });
-
-  const signedInCount = records.filter((r) => r.eventType === 'SIGNED_IN').length;
-  const paidCount = records.filter((r) => r.eventType === 'PAID').length;
+  const shownCount = stageFilter === 'ALL' ? counts.all : total;
 
   return (
     <div className="page-container space-y-5 sm:space-y-6 animate-fade-in relative pb-8">
@@ -123,7 +119,7 @@ const PaidConversionsDashboard: React.FC = () => {
           </p>
           {!loading && (
             <p className="text-xs text-slate-400 mt-1">
-              {total} record(s) · {signedInCount} lead · {paidCount} paid
+              {shownCount} shown · {counts.signedIn} campaign lead · {counts.paid} paid
             </p>
           )}
         </div>
@@ -132,13 +128,15 @@ const PaidConversionsDashboard: React.FC = () => {
             value={stageFilter}
             onChange={(e) => setStageFilter(e.target.value as StageFilter)}
             className="mobile-safe-select rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+            title="Lead = campaign sign-in before payment. Paid = completed payment."
           >
             <option value="ALL">All stages</option>
-            <option value="SIGNED_IN">Lead only</option>
+            <option value="SIGNED_IN">Lead only (campaign sign-in)</option>
             <option value="PAID">Paid only</option>
           </select>
 
           <button
+            type="button"
             onClick={() => setCampaignOnly(!campaignOnly)}
             className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center transition-all ${
               campaignOnly
@@ -187,14 +185,14 @@ const PaidConversionsDashboard: React.FC = () => {
                     Loading attribution records...
                   </td>
                 </tr>
-              ) : filteredRecords.length === 0 ? (
+              ) : records.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-slate-400">
                     No records found.
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((row) => (
+                records.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-3 py-4 align-top">
                       <span
