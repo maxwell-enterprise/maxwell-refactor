@@ -7,9 +7,15 @@ interface RichTextEditorProps {
     value: string;
     onChange: (val: string) => void;
     availableVariables?: string[]; // Deprecated, now using global catalog
+    /** Dynamic data fields (e.g. {{member_name}}) — off for public CMS articles. */
+    enableDataFields?: boolean;
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange }) => {
+const RichTextEditor: React.FC<RichTextEditorProps> = ({
+    value,
+    onChange,
+    enableDataFields = true,
+}) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const isTypingRef = useRef(false);
 
@@ -72,9 +78,20 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange }) => {
                     <button onClick={handleImagePrompt} className="p-2 hover:bg-slate-100 text-slate-600"><ImageIcon size={14}/></button>
                 </div>
 
-                {/* Variable inserter: full row on narrow screens so toolbar doesn’t crush */}
+                {/* Data fields need a logged-in recipient context (email/WA). Public CMS articles do not resolve them yet. */}
                 <div className="w-full sm:w-auto sm:ml-auto flex justify-end pt-1 sm:pt-0 border-t border-slate-200/80 sm:border-0">
-                    <VariableInserter onInsert={insertVariable} buttonLabel="Data Field" />
+                    {enableDataFields ? (
+                        <VariableInserter onInsert={insertVariable} buttonLabel="Data Field" />
+                    ) : (
+                        <button
+                            type="button"
+                            disabled
+                            title="Data fields are not available for public articles yet. Variables like {{member_name}} would not be replaced for visitors who are not logged in."
+                            className="flex items-center px-3 py-1.5 bg-slate-100 text-slate-400 text-xs font-bold rounded-lg border border-slate-200 cursor-not-allowed opacity-60"
+                        >
+                            Data Field
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -331,6 +331,7 @@ const CMSAdmin: React.FC = () => {
                         <RichTextEditor 
                             value={editingPost.body || ''}
                             onChange={(val) => setEditingPost({...editingPost, body: val})}
+                            enableDataFields={false}
                         />
                     </div>
 
