@@ -41,8 +41,8 @@ export const CUSTOM_VIEW_FEATURES: readonly CustomViewFeature[] = [
   { id: toViewFeatureId(ViewState.AUTOMATION_CENTER), view: ViewState.AUTOMATION_CENTER, label: 'Automations', resourceId: 'sys_database' },
   { id: toViewFeatureId(ViewState.SECURITY), view: ViewState.SECURITY, label: 'Security', resourceId: 'sys_iam' },
   { id: toViewFeatureId(ViewState.DB_SCHEMA), view: ViewState.DB_SCHEMA, label: 'Database', resourceId: 'sys_database' },
-  { id: toViewFeatureId(ViewState.AI_USAGE), view: ViewState.AI_USAGE, label: 'AI Usage', resourceId: null },
-  { id: toViewFeatureId(ViewState.SYSTEM_MAINTENANCE), view: ViewState.SYSTEM_MAINTENANCE, label: 'Maintenance', resourceId: null },
+  { id: toViewFeatureId(ViewState.AI_USAGE), view: ViewState.AI_USAGE, label: 'AI Usage', resourceId: 'sys_ai_usage' },
+  { id: toViewFeatureId(ViewState.SYSTEM_MAINTENANCE), view: ViewState.SYSTEM_MAINTENANCE, label: 'Maintenance', resourceId: 'sys_maintenance' },
 ];
 
 export const CUSTOM_VIEW_FEATURE_BY_VIEW: ReadonlyMap<ViewState, CustomViewFeature> =

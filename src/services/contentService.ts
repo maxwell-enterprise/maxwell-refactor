@@ -4,6 +4,26 @@ import { CampaignService } from './campaignService';
 import { RepositoryFactory } from './repositories/index';
 import { apiRequest } from '../repositories/api/apiClient';
 
+function slugFromTitle(title: string): string {
+    const slug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    return slug || `post-${Date.now()}`;
+}
+
+function resolveUniqueSlug(baseSlug: string, existingSlugs: Set<string>): string {
+    let slug = baseSlug;
+    let attempt = 2;
+    while (existingSlugs.has(slug)) {
+        slug = `${baseSlug}-${attempt}`;
+        attempt += 1;
+    }
+    return slug;
+}
+
 export const ContentService = {
     
     getAllContent: async (): Promise<ContentPost[]> => {
@@ -23,10 +43,17 @@ export const ContentService = {
     },
 
     createContent: async (post: Partial<ContentPost>): Promise<ContentPost> => {
+        const all = await RepositoryFactory.getContentRepository().getAll();
+        const baseSlug = slugFromTitle(post.title || 'Untitled');
+        const slug = resolveUniqueSlug(
+            baseSlug,
+            new Set(all.map((item) => item.slug)),
+        );
+
         const newPost: ContentPost = {
             id: `CNT-${Date.now()}`,
             title: post.title || 'Untitled',
-            slug: post.title?.toLowerCase().replace(/\s+/g, '-') || `post-${Date.now()}`,
+            slug,
             body: post.body || '',
             imageUrl: post.imageUrl,
             type: post.type || 'ARTICLE',

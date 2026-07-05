@@ -100,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, togg
         { id: ViewState.AUTOMATION_CENTER, label: 'Automations', icon: <CircuitBoard size={18} />, resourceId: 'sys_database', roleReq: [UserRole.SUPER_ADMIN, UserRole.OPERATIONS, UserRole.MARKETING] }, 
         { id: ViewState.SECURITY, label: 'Security', icon: <ShieldAlert size={18} />, resourceId: 'sys_iam', roleReq: [UserRole.SUPER_ADMIN] },
         { id: ViewState.DB_SCHEMA, label: 'Database', icon: <Database size={18} />, resourceId: 'sys_database', roleReq: [UserRole.SUPER_ADMIN] },
-        { id: ViewState.AI_USAGE, label: 'AI Usage', icon: <BarChart2 size={18} />, resourceId: null, roleReq: [UserRole.SUPER_ADMIN] },
+        { id: ViewState.AI_USAGE, label: 'AI Usage', icon: <BarChart2 size={18} />, resourceId: 'sys_ai_usage', roleReq: [UserRole.SUPER_ADMIN] },
         { id: ViewState.SYSTEM_MAINTENANCE, label: 'Maintenance', icon: <HardDrive size={18} />, resourceId: null, roleReq: [UserRole.SUPER_ADMIN] }, // NEW
       ]
     }
