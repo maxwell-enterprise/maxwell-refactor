@@ -26,7 +26,7 @@ function resolveUniqueSlug(baseSlug: string, existingSlugs: Set<string>): string
 
 function buildContentWritePayload(
     post: Partial<ContentPost>,
-): Record<string, unknown> {
+): Partial<ContentPost> {
     const linked = post.linkedProductId?.trim();
     const cta = post.ctaLabel?.trim();
     const unpublish = post.unpublishDate?.trim();
@@ -36,13 +36,13 @@ function buildContentWritePayload(
         title: post.title,
         slug: post.slug,
         body: post.body ?? '',
-        imageUrl: image || null,
+        imageUrl: image || undefined,
         type: post.type ?? 'ARTICLE',
         status: post.status ?? 'DRAFT',
         publishDate: post.publishDate || new Date().toISOString(),
-        unpublishDate: unpublish || null,
-        linkedProductId: linked || null,
-        ctaLabel: cta || null,
+        unpublishDate: unpublish || undefined,
+        linkedProductId: linked || undefined,
+        ctaLabel: cta || undefined,
         author: post.author?.trim() || 'Admin',
         tags: post.tags ?? [],
     };
@@ -89,9 +89,19 @@ export const ContentService = {
 
         const payload = buildContentWritePayload({ ...post, slug });
         return await RepositoryFactory.getContentRepository().create({
-            ...(payload as ContentPost),
             id: `CNT-${Date.now()}`,
             slug,
+            title: payload.title ?? 'Untitled',
+            body: payload.body ?? '',
+            imageUrl: payload.imageUrl,
+            type: payload.type ?? 'ARTICLE',
+            status: payload.status ?? 'DRAFT',
+            publishDate: payload.publishDate ?? new Date().toISOString(),
+            unpublishDate: payload.unpublishDate,
+            linkedProductId: payload.linkedProductId,
+            ctaLabel: payload.ctaLabel,
+            author: payload.author ?? 'Admin',
+            tags: payload.tags ?? [],
             stats: {
                 views: 0,
                 shares: 0,
@@ -104,7 +114,7 @@ export const ContentService = {
 
     updateContent: async (id: string, updates: Partial<ContentPost>): Promise<ContentPost | null> => {
         const payload = buildContentWritePayload(updates);
-        return await RepositoryFactory.getContentRepository().update(id, payload as Partial<ContentPost>);
+        return await RepositoryFactory.getContentRepository().update(id, payload);
     },
 
     generateAiContent: async (input: {

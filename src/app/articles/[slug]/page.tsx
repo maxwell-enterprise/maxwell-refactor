@@ -6,7 +6,7 @@ import ArticleReaderView from '@/components/cms/ArticleReaderView';
 
 function ArticlePageInner() {
   const params = useParams<{ slug: string }>();
-  const slug = decodeURIComponent(params.slug ?? '');
+  const slug = decodeURIComponent(params?.slug ?? '');
 
   return <ArticleReaderView slug={slug} />;
 }
