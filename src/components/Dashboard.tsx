@@ -73,6 +73,12 @@ export type ExecutiveDashboardPayload = {
     payingCustomerCount: number;
     avgLtv: number;
   } | null;
+  conversions: {
+    pipelineLeadCount: number;
+    paidConversionsInPeriod: number;
+    leadToPaidRate: number;
+    momPercent: number | null;
+  } | null;
 };
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
@@ -175,12 +181,14 @@ const Dashboard: React.FC = () => {
 
   const members = data?.members;
   const finance = data?.finance;
+  const conversions = data?.conversions;
   const uniquePrograms = data?.uniquePrograms ?? [];
   const growthData = members?.growthData ?? [];
   const lifecycleData = members?.lifecycleBreakdown ?? [];
 
   const memberMom = formatMomPercent(members?.momPercent ?? null);
   const revenueMom = formatMomPercent(finance?.momPercent ?? null);
+  const conversionMom = formatMomPercent(conversions?.momPercent ?? null);
   const chartFilterKey = toChartDomId(
     `${timeRange}-${selectedProgram}-${selectedRegion}`,
   );
@@ -372,12 +380,13 @@ const Dashboard: React.FC = () => {
           )}
 
           <StatCard
-            title="Impact Scholarships"
-            value={members?.scholarshipCount ?? 0}
-            change={`${(members?.scholarshipRate ?? 0).toFixed(1)}%`}
-            subtitle="Scholarship flag among all members in cohort"
-            icon={<Award className="text-purple-600" size={24} />}
-            color="bg-purple-50"
+            title="Lead → Paid Rate"
+            value={`${(conversions?.leadToPaidRate ?? 0).toFixed(1)}%`}
+            change={conversionMom}
+            subtitle={`${conversions?.paidConversionsInPeriod ?? 0} paid in period · ${conversions?.pipelineLeadCount ?? 0} pipeline leads`}
+            isPositive={(conversions?.leadToPaidRate ?? 0) >= 20}
+            icon={<Target className="text-orange-600" size={24} />}
+            color="bg-orange-50"
           />
           <StatCard
             title="Engagement Score"

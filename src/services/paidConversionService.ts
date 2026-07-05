@@ -4,7 +4,7 @@ import { apiRequest } from '../repositories/api/apiClient';
 type PaidConversionListResponse = {
   items: PaidConversionRecord[];
   total: number;
-  counts: { all: number; signedIn: number; paid: number };
+  counts: { all: number; lead: number; paid: number };
 };
 
 export const PaidConversionService = {
@@ -13,6 +13,7 @@ export const PaidConversionService = {
     campaignSourceCode?: string;
     campaignOnly?: boolean;
     picMemberId?: string;
+    stageSegment?: 'ALL' | 'LEAD' | 'PAID';
     eventType?: string;
     startDate?: string;
     endDate?: string;
@@ -26,6 +27,9 @@ export const PaidConversionService = {
     }
     if (params?.campaignOnly) query.set('campaignOnly', 'true');
     if (params?.picMemberId) query.set('picMemberId', params.picMemberId);
+    if (params?.stageSegment && params.stageSegment !== 'ALL') {
+      query.set('stageSegment', params.stageSegment);
+    }
     if (params?.eventType) query.set('eventType', params.eventType);
     if (params?.startDate) query.set('startDate', params.startDate);
     if (params?.endDate) query.set('endDate', params.endDate);

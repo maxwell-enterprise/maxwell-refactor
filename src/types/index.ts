@@ -428,7 +428,12 @@ export interface Campaign {
 
 export interface PaidConversionRecord {
   id: string;
-  eventType: 'SIGNED_IN' | 'PAID' | string;
+  eventType: 'SIGNED_IN' | 'PAID' | 'LEAD' | string;
+  displayStage?: 'LEAD' | 'PAID';
+  lifecycleStage?: string | null;
+  hasPaidEvent?: boolean;
+  hasSignedInEvent?: boolean;
+  memberPublicId?: string | null;
   paymentTransactionId: string | null;
   orderId: string | null;
   buyerEmail: string;
