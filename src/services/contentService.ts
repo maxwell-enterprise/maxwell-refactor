@@ -2,7 +2,7 @@
 import { ContentPost } from '../types/index';
 import { CampaignService } from './campaignService';
 import { RepositoryFactory } from './repositories/index';
-import { apiRequest } from '../repositories/api/apiClient';
+import { apiRequest, ApiRequestError } from '../repositories/api/apiClient';
 
 function slugFromTitle(title: string): string {
     const slug = title
@@ -24,6 +24,30 @@ function resolveUniqueSlug(baseSlug: string, existingSlugs: Set<string>): string
     return slug;
 }
 
+function buildContentWritePayload(
+    post: Partial<ContentPost>,
+): Record<string, unknown> {
+    const linked = post.linkedProductId?.trim();
+    const cta = post.ctaLabel?.trim();
+    const unpublish = post.unpublishDate?.trim();
+    const image = post.imageUrl?.trim();
+
+    return {
+        title: post.title,
+        slug: post.slug,
+        body: post.body ?? '',
+        imageUrl: image || null,
+        type: post.type ?? 'ARTICLE',
+        status: post.status ?? 'DRAFT',
+        publishDate: post.publishDate || new Date().toISOString(),
+        unpublishDate: unpublish || null,
+        linkedProductId: linked || null,
+        ctaLabel: cta || null,
+        author: post.author?.trim() || 'Admin',
+        tags: post.tags ?? [],
+    };
+}
+
 export const ContentService = {
     
     getAllContent: async (): Promise<ContentPost[]> => {
@@ -42,6 +66,19 @@ export const ContentService = {
         }).sort((a,b) => new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime());
     },
 
+    getPublishedBySlug: async (slug: string): Promise<ContentPost | null> => {
+        try {
+            return await apiRequest<ContentPost>(
+                `/content/posts/published/${encodeURIComponent(slug)}`,
+            );
+        } catch (error) {
+            if (error instanceof ApiRequestError && error.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    },
+
     createContent: async (post: Partial<ContentPost>): Promise<ContentPost> => {
         const all = await RepositoryFactory.getContentRepository().getAll();
         const baseSlug = slugFromTitle(post.title || 'Untitled');
@@ -50,28 +87,24 @@ export const ContentService = {
             new Set(all.map((item) => item.slug)),
         );
 
-        const newPost: ContentPost = {
+        const payload = buildContentWritePayload({ ...post, slug });
+        return await RepositoryFactory.getContentRepository().create({
+            ...(payload as ContentPost),
             id: `CNT-${Date.now()}`,
-            title: post.title || 'Untitled',
             slug,
-            body: post.body || '',
-            imageUrl: post.imageUrl,
-            type: post.type || 'ARTICLE',
-            status: post.status || 'DRAFT',
-            publishDate: post.publishDate || new Date().toISOString(),
-            unpublishDate: post.unpublishDate,
-            linkedProductId: post.linkedProductId,
-            ctaLabel: post.ctaLabel || 'Learn More',
-            author: 'Admin',
-            tags: post.tags || [],
-            stats: { views: 0, shares: 0, clicks: 0, conversions: 0, revenueAttributed: 0 }
-        };
-
-        return await RepositoryFactory.getContentRepository().create(newPost);
+            stats: {
+                views: 0,
+                shares: 0,
+                clicks: 0,
+                conversions: 0,
+                revenueAttributed: 0,
+            },
+        });
     },
 
     updateContent: async (id: string, updates: Partial<ContentPost>): Promise<ContentPost | null> => {
-        return await RepositoryFactory.getContentRepository().update(id, updates);
+        const payload = buildContentWritePayload(updates);
+        return await RepositoryFactory.getContentRepository().update(id, payload as Partial<ContentPost>);
     },
 
     generateAiContent: async (input: {

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { ContentService } from '../services/contentService';
-import { ContentPost, ContentType, ContentStatus } from '../types/index';
+import { DataService } from '../services/dataService';
+import { ContentPost, ContentType, ContentStatus, Product } from '../types/index';
 import { STORE_PRODUCTS } from '../constants';
 import { useToast } from '../context/ToastContext';
 import { useAccess } from '../context/SecurityContext';
@@ -11,7 +12,8 @@ import {
     Edit3, Save, Sparkles, Image as ImageIcon, Link, Trash2
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import RichTextEditor from './communication/RichTextEditor'; // REUSED COMPONENT
+import RichTextEditor from './communication/RichTextEditor';
+import ContentLinkedProductCard from './cms/ContentLinkedProductCard';
 
 const createEmptyEditingPost = (): Partial<ContentPost> => ({
     title: '',
@@ -44,6 +46,14 @@ function formatCmsError(error: unknown, fallback: string): string {
     return fallback;
 }
 
+function toDatetimeLocalValue(iso?: string): string {
+    if (!iso?.trim()) return '';
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 const CMSAdmin: React.FC = () => {
     const { showToast } = useToast();
     const { confirm } = useDialog();
@@ -57,9 +67,23 @@ const CMSAdmin: React.FC = () => {
     const [isAiGenerating, setIsAiGenerating] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
+    const [catalogProducts, setCatalogProducts] = useState<Product[]>(STORE_PRODUCTS);
 
     useEffect(() => {
         loadContent();
+    }, []);
+
+    useEffect(() => {
+        void (async () => {
+            try {
+                const fromApi = await DataService.getProducts();
+                if (fromApi.length > 0) {
+                    setCatalogProducts(fromApi);
+                }
+            } catch {
+                /* keep seed catalog for offline / mock */
+            }
+        })();
     }, []);
 
     const loadContent = async () => {
@@ -84,8 +108,8 @@ const CMSAdmin: React.FC = () => {
         setEditingPost({
             ...createEmptyEditingPost(),
             ...post,
-            publishDate: post.publishDate.slice(0, 16),
-            unpublishDate: post.unpublishDate ? post.unpublishDate.slice(0, 16) : '',
+            publishDate: toDatetimeLocalValue(post.publishDate),
+            unpublishDate: post.unpublishDate ? toDatetimeLocalValue(post.unpublishDate) : '',
             ctaLabel: post.ctaLabel || '',
             linkedProductId: post.linkedProductId || '',
             imageUrl: post.imageUrl || '',
@@ -161,7 +185,7 @@ const CMSAdmin: React.FC = () => {
 
         setIsAiGenerating(true);
         try {
-            const product = STORE_PRODUCTS.find(p => p.id === editingPost.linkedProductId);
+            const product = catalogProducts.find(p => p.id === editingPost.linkedProductId);
             const result = await ContentService.generateAiContent({
                 prompt: aiPrompt,
                 contentType: (editingPost.type as 'ARTICLE' | 'ADVERTISEMENT' | 'NEWS') || 'ARTICLE',
@@ -304,12 +328,24 @@ const CMSAdmin: React.FC = () => {
                     </div>
 
                     <div className="flex-1 min-h-[260px] lg:min-h-0 border border-slate-200 rounded-lg overflow-hidden flex flex-col">
-                        {/* RICH TEXT EDITOR INTEGRATION */}
                         <RichTextEditor 
                             value={editingPost.body || ''}
                             onChange={(val) => setEditingPost({...editingPost, body: val})}
                         />
                     </div>
+
+                    {editingPost.linkedProductId && (
+                        <div className="mt-4 flex-shrink-0">
+                            <p className="text-xs font-bold text-slate-500 uppercase mb-2">
+                                Reader preview — linked product
+                            </p>
+                            <ContentLinkedProductCard
+                                productId={editingPost.linkedProductId}
+                                ctaLabel={editingPost.ctaLabel}
+                                variant="light"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -367,7 +403,7 @@ const CMSAdmin: React.FC = () => {
                             onChange={e => setEditingPost({...editingPost, linkedProductId: e.target.value})}
                         >
                             <option value="">-- None --</option>
-                            {STORE_PRODUCTS.map(p => (
+                            {catalogProducts.map(p => (
                                 <option key={p.id} value={p.id}>{p.title}</option>
                             ))}
                         </select>
