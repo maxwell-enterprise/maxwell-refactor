@@ -4,6 +4,7 @@ import { MEMBER_DATA } from '../constants';
 import { DevDatabase } from '../utils/devDatabase';
 import { APP_CONFIG } from '../lib/config';
 import { supabase } from '../lib/supabaseClient';
+import { apiRequest } from '../repositories/api/apiClient';
 
 // Helper to generate initial seed data if DB is empty
 const generateSeedLogs = (members: Member[]): JourneyEvent[] => {
@@ -58,6 +59,13 @@ export const AuditService = {
     },
 
     getUserJourney: async (member: Member): Promise<JourneyEvent[]> => {
+        if (!APP_CONFIG.USE_MOCK && APP_CONFIG.DOMAINS.MEMBERS === 'API') {
+            const events = await apiRequest<JourneyEvent[]>(
+                `/members/${encodeURIComponent(member.id)}/journey`,
+            );
+            return Array.isArray(events) ? events : [];
+        }
+
         const allLogs = await AuditService.getAllLogs(); // This handles seed check
         return allLogs
             .filter(e => e.userId === member.id)

@@ -3,15 +3,14 @@ import React, { useEffect, useState } from 'react';
 import { Member } from '../types/index';
 import { DataService } from '../services/dataService';
 import { isSalesPipelineLead } from '../lib/memberLifecycleViews';
-import { useToast } from '../context/ToastContext';
 import { Search, Filter, Mail, ChevronRight, Target, UserCog, CheckCircle, Square, CheckSquare, X } from 'lucide-react';
 import WhatsAppQuickAction from './common/WhatsAppQuickAction';
 import DeepResearchPanel from './crm/DeepResearchPanel';
 import MemberProfilingModal from './crm/MemberProfilingModal';
 import InviteMembersModal from './crm/InviteMembersModal'; // Import Invite Modal
+import LeadConversionModal from './crm/LeadConversionModal';
 
 const LeadsDashboard: React.FC = () => {
-    const { showToast } = useToast();
     const [leads, setLeads] = useState<Member[]>([]);
     const [loading, setLoading] = useState(true);
     const [researchTarget, setResearchTarget] = useState<Member | null>(null);
@@ -25,6 +24,7 @@ const LeadsDashboard: React.FC = () => {
     // SELECTION STATE
     const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+    const [conversionTarget, setConversionTarget] = useState<Member | null>(null);
 
     useEffect(() => {
         loadLeads();
@@ -38,12 +38,8 @@ const LeadsDashboard: React.FC = () => {
         setLoading(false);
     };
 
-    const handleConvert = async (lead: Member) => {
-        if (window.confirm(`Promote ${lead.name} to Full Member? This usually happens after payment.`)) {
-            await DataService.updateMember(lead.id, { lifecycleStage: 'MEMBER', joinMonth: new Date().toISOString().slice(0, 7) });
-            showToast(`${lead.name} converted to Member!`, 'success');
-            loadLeads();
-        }
+    const handleConvert = (lead: Member) => {
+        setConversionTarget(lead);
     };
 
     const toggleSelection = (id: string) => {
@@ -310,6 +306,14 @@ const LeadsDashboard: React.FC = () => {
                         setSelectedLeadIds(new Set());
                         loadLeads();
                     }}
+                />
+            )}
+
+            {conversionTarget && (
+                <LeadConversionModal
+                    lead={conversionTarget}
+                    onClose={() => setConversionTarget(null)}
+                    onSuccess={loadLeads}
                 />
             )}
 
