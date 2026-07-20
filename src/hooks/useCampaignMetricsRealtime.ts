@@ -1,9 +1,8 @@
 import { useEffect, type Dispatch, type SetStateAction } from 'react';
 import type { Campaign } from '../types/index';
 import { CampaignService } from '../services/campaignService';
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
+import { getNestRealtimeSocket } from '../lib/nestRealtimeClient';
 import {
-  CAMPAIGN_METRICS_BROADCAST_CHANNEL,
   CAMPAIGN_METRICS_BROADCAST_EVENT,
 } from '../constants/campaignRealtime';
 
@@ -16,14 +15,7 @@ type MetricsBroadcastPayload = {
 };
 
 /**
- * Live campaign metrics:
- * - **Primary:** Supabase Realtime **Broadcast** on `campaign_metrics_hub` (WebSocket).
- *   Nest emits with service role after atomic DB updates; clients use anon key only.
- * - **Fallback:** HTTP polling when Supabase is not configured (local API-only) or if
- *   Broadcast is unavailable — keeps dashboards usable without Realtime.
- *
- * We intentionally do **not** use postgres_changes as the main fan-out path; see
- * https://supabase.com/docs/guides/realtime/broadcast
+ * Live campaign metrics via Nest Socket.IO (+ polling fallback).
  */
 export function useCampaignMetricsRealtime(
   enabled: boolean,
@@ -32,8 +24,7 @@ export function useCampaignMetricsRealtime(
   useEffect(() => {
     if (!enabled) return;
 
-    const pollMs = isSupabaseConfigured() ? 12_000 : 3500;
-
+    const pollMs = 8_000;
     let cancelled = false;
     const refresh = async () => {
       if (cancelled || document.visibilityState !== 'visible') return;
@@ -41,7 +32,7 @@ export function useCampaignMetricsRealtime(
         const data = await CampaignService.getCampaigns();
         if (!cancelled) setCampaigns(data);
       } catch {
-        // Silent — same as previous background refresh
+        /* silent */
       }
     };
 
@@ -53,7 +44,6 @@ export function useCampaignMetricsRealtime(
       if (document.visibilityState === 'visible') void refresh();
     };
     document.addEventListener('visibilitychange', onVis);
-
     void refresh();
 
     return () => {
@@ -64,46 +54,36 @@ export function useCampaignMetricsRealtime(
   }, [enabled, setCampaigns]);
 
   useEffect(() => {
-    if (!enabled || !isSupabaseConfigured() || !supabase) return;
+    if (!enabled) return;
 
-    const client = supabase;
-    const channel = client
-      .channel(CAMPAIGN_METRICS_BROADCAST_CHANNEL)
-      .on(
-        'broadcast',
-        { event: CAMPAIGN_METRICS_BROADCAST_EVENT },
-        (msg: { payload?: MetricsBroadcastPayload }) => {
-          const p = msg.payload;
-          if (!p?.campaignId) return;
-          setCampaigns((prev) =>
-            prev.map((c) =>
-              c.id === p.campaignId
-                ? {
-                    ...c,
-                    clicks: Number(p.clicks ?? c.clicks),
-                    conversions: Number(p.conversions ?? c.conversions),
-                    revenue: Number(p.revenue ?? c.revenue),
-                  }
-                : c,
-            ),
-          );
-        },
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          void (async () => {
-            try {
-              const data = await CampaignService.getCampaigns();
-              setCampaigns(data);
-            } catch {
-              /* same as polling path */
-            }
-          })();
-        }
-      });
+    const socket = getNestRealtimeSocket();
+    const onMetrics = (p: MetricsBroadcastPayload) => {
+      if (!p?.campaignId) return;
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === p.campaignId
+            ? {
+                ...c,
+                clicks: Number(p.clicks ?? c.clicks),
+                conversions: Number(p.conversions ?? c.conversions),
+                revenue: Number(p.revenue ?? c.revenue),
+              }
+            : c,
+        ),
+      );
+    };
+
+    socket.on(CAMPAIGN_METRICS_BROADCAST_EVENT, onMetrics);
+    const onConnect = () => {
+      void CampaignService.getCampaigns()
+        .then((data) => setCampaigns(data))
+        .catch(() => undefined);
+    };
+    socket.on('connect', onConnect);
 
     return () => {
-      void client.removeChannel(channel);
+      socket.off(CAMPAIGN_METRICS_BROADCAST_EVENT, onMetrics);
+      socket.off('connect', onConnect);
     };
   }, [enabled, setCampaigns]);
 }

@@ -1,17 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
-import {
-  ACCOUNT_DELETION_BROADCAST_CHANNEL,
-  ACCOUNT_DELETION_BROADCAST_EVENT,
-} from '../constants/accountDeletionRealtime';
+import { getNestRealtimeSocket } from '../lib/nestRealtimeClient';
+import { ACCOUNT_DELETION_BROADCAST_EVENT } from '../constants/accountDeletionRealtime';
 
 /**
- * Live updates for the account-deletion queue (Super Admin) and `/me/account/deletion-status`
- * (requester). Primary path: Supabase Realtime **Broadcast** (WebSocket). Fallback: polling
- * when Realtime is unavailable or Supabase is not configured.
- *
- * `onRefresh` is kept in a ref so parent re-renders (new inline callbacks) do not tear down
- * the interval / Supabase channel every frame — that used to spam duplicate network requests.
+ * Account-deletion queue live updates via Nest Socket.IO + polling fallback.
  */
 export function useAccountDeletionRealtime(
   enabled: boolean,
@@ -23,7 +15,7 @@ export function useAccountDeletionRealtime(
   useEffect(() => {
     if (!enabled) return;
 
-    const pollMs = isSupabaseConfigured() ? 25_000 : 8000;
+    const pollMs = 12_000;
     let cancelled = false;
     const tick = () => {
       if (cancelled || document.visibilityState !== 'visible') return;
@@ -44,22 +36,16 @@ export function useAccountDeletionRealtime(
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled || !isSupabaseConfigured() || !supabase) return;
+    if (!enabled) return;
 
-    const client = supabase;
-    const channel = client
-      .channel(ACCOUNT_DELETION_BROADCAST_CHANNEL)
-      .on(
-        'broadcast',
-        { event: ACCOUNT_DELETION_BROADCAST_EVENT },
-        () => {
-          onRefreshRef.current();
-        },
-      )
-      .subscribe();
+    const socket = getNestRealtimeSocket();
+    const onEvent = () => onRefreshRef.current();
+    socket.on(ACCOUNT_DELETION_BROADCAST_EVENT, onEvent);
+    socket.on('connect', onEvent);
 
     return () => {
-      void client.removeChannel(channel);
+      socket.off(ACCOUNT_DELETION_BROADCAST_EVENT, onEvent);
+      socket.off('connect', onEvent);
     };
   }, [enabled]);
 }

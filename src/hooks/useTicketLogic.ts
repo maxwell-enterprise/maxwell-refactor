@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { WalletItem, Event, Member } from '../types/index';
 import { DataService } from '../services/dataService';
 import { AttendanceService } from '../services/attendanceService';
@@ -32,6 +32,26 @@ const parseEventStart = (dateValue?: string, timeValue?: string): Date | null =>
     return start;
 };
 
+const isAttendanceForTicket = (
+    record: { memberId?: string; memberEmail?: string; ticketUniqueId?: string },
+    ticket: WalletItem,
+): boolean => {
+    if (record.ticketUniqueId && record.ticketUniqueId === ticket.id) return true;
+    if (record.memberId && record.memberId === ticket.userId) return true;
+    const recipientEmail =
+        typeof ticket.meta?.recipientEmail === 'string'
+            ? ticket.meta.recipientEmail.trim().toLowerCase()
+            : '';
+    if (
+        recipientEmail &&
+        record.memberEmail &&
+        record.memberEmail.trim().toLowerCase() === recipientEmail
+    ) {
+        return true;
+    }
+    return false;
+};
+
 export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     const { showToast } = useToast();
     
@@ -44,14 +64,16 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TicketTab>('ACCESS');
     const [isJoining, setIsJoining] = useState(false);
-    const [isAttended, setIsAttended] = useState(item.status === 'USED' || item.status === 'CLAIMED');
+    // Per-session attendance — NOT derived from ticket USED (series passes stay ACTIVE).
+    const [isAttended, setIsAttended] = useState(false);
     
     // Drill Down State (For viewing a specific session within a container)
     const [selectedSession, setSelectedSession] = useState<Event | null>(null);
 
+    const isSeriesContainer = eventData?.type === 'CONTAINER';
+
     useEffect(() => {
         setLiveItem(item);
-        setIsAttended(item.status === 'USED' || item.status === 'CLAIMED');
     }, [item]);
 
     // 1. Fetch Real-time Event Data & Sub Events
@@ -95,6 +117,38 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
         fetchContext();
     }, [liveItem.meta?.eventId]);
 
+    const resolveAttendanceTargetId = useCallback((): string | null => {
+        if (selectedSession?.id) return selectedSession.id;
+        if (eventData?.type === 'CONTAINER') return null;
+        return eventData?.id || (typeof liveItem.meta?.eventId === 'string' ? liveItem.meta.eventId : null);
+    }, [selectedSession?.id, eventData?.type, eventData?.id, liveItem.meta?.eventId]);
+
+    const refreshSessionAttendance = useCallback(async () => {
+        const targetEventId = resolveAttendanceTargetId();
+        if (!targetEventId) {
+            setIsAttended(false);
+            return;
+        }
+
+        // Single-event ticket: USED means this event was already checked in.
+        if (!isSeriesContainer && liveItem.status === 'USED') {
+            setIsAttended(true);
+            return;
+        }
+
+        try {
+            const records = await AttendanceService.getAttendance(targetEventId);
+            const mine = records.some((record) => isAttendanceForTicket(record, liveItem));
+            setIsAttended(mine);
+        } catch {
+            // Keep prior state on transient failures
+        }
+    }, [resolveAttendanceTargetId, isSeriesContainer, liveItem]);
+
+    useEffect(() => {
+        void refreshSessionAttendance();
+    }, [refreshSessionAttendance]);
+
     useEffect(() => {
         let cancelled = false;
 
@@ -106,7 +160,6 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
                         latest.status === 'USED' &&
                         liveItem.status !== 'USED';
                     setLiveItem(latest);
-                    setIsAttended(latest.status === 'USED' || latest.status === 'CLAIMED');
                     if (becameUsed) {
                         window.dispatchEvent(new CustomEvent(WALLET_REFRESH_EVENT));
                     }
@@ -118,8 +171,14 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
 
         void refreshTicket();
         const unsubscribeAttendance = subscribeAttendanceUpdated((payload) => {
-            if (payload.eventId !== liveItem.meta?.eventId) return;
+            const targetId = resolveAttendanceTargetId();
+            const matchesCurrent =
+                payload.eventId === targetId ||
+                payload.eventId === liveItem.meta?.eventId ||
+                payload.eventId === selectedSession?.id;
+            if (!matchesCurrent) return;
             void refreshTicket();
+            void refreshSessionAttendance();
         });
         const intervalId = window.setInterval(() => {
             void refreshTicket();
@@ -130,7 +189,14 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
             unsubscribeAttendance();
             window.clearInterval(intervalId);
         };
-    }, [item.id, liveItem.meta?.eventId, liveItem.status]);
+    }, [
+        item.id,
+        liveItem.meta?.eventId,
+        liveItem.status,
+        selectedSession?.id,
+        resolveAttendanceTargetId,
+        refreshSessionAttendance,
+    ]);
 
     // 2. Determine Display Context (Master Event or Selected Session)
     const activeContext = selectedSession || eventData;
@@ -248,6 +314,7 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
 
     const handleSelectSession = (session: Event) => {
         setSelectedSession(session);
+        setIsAttended(false);
         // Auto switch tab based on session type
         if (session.locationMode === 'ONLINE') setActiveTab('VIRTUAL');
         else setActiveTab('ACCESS');
@@ -255,6 +322,7 @@ export const useTicketLogic = (item: WalletItem, onClose: () => void) => {
 
     const handleBackToSeries = () => {
         setSelectedSession(null);
+        setIsAttended(false);
         setActiveTab('SESSIONS');
     };
 

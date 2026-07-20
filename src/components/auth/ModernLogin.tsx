@@ -160,6 +160,7 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
         const payload = (await res.json()) as {
           bypass?: boolean;
           token?: string;
+          devVerifyUrl?: string;
         };
         if (payload.bypass) {
           if (!payload.token?.trim()) {
@@ -171,6 +172,18 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
           navigateAfterAuth(
             typeof window !== 'undefined' ? window.location.search || '' : '',
           );
+          return;
+        }
+        if (payload.devVerifyUrl?.trim()) {
+          const url = payload.devVerifyUrl.trim();
+          // Local Nest magic-link smoke when Resend cannot deliver to this recipient.
+          console.info('[dev] Nest magic link:', url);
+          showToast(
+            'Dev magic link ready — check browser console, or click OK to open.',
+            'info',
+          );
+          window.open(url, '_blank', 'noopener,noreferrer');
+          setStep('EMAIL_SENT');
           return;
         }
         setStep('EMAIL_SENT');

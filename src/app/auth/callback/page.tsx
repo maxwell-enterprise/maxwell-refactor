@@ -1,11 +1,22 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { setWorkspaceToken } from '../../../lib/workspaceAuthToken';
 import { consumeOAuthReturnSearch, consumeOAuthReturnPath } from '../../../lib/postAuthNavigation';
 import { workspaceApiUrl } from '../../../lib/workspaceApi';
 
+const MOBILE_APP_SCHEME = 'maxwellleadership';
+
+function buildMobileAppDeepLink(workspaceToken: string): string {
+  return `${MOBILE_APP_SCHEME}://auth/callback?token=${encodeURIComponent(workspaceToken)}`;
+}
+
 export default function AuthCallbackPage() {
+  const [mobileHandoff, setMobileHandoff] = useState<{
+    token: string;
+    deepLink: string;
+  } | null>(null);
+
   useEffect(() => {
     const getFirst = (params: URLSearchParams, keys: string[]): string | null => {
       for (const key of keys) {
@@ -25,6 +36,8 @@ export default function AuthCallbackPage() {
         ? new URLSearchParams(window.location.search)
         : new URLSearchParams('');
 
+    const isMobileClient = queryParams.get('client') === 'mobile';
+
     const tokenKeys = ['token', 'tokenKey', 'tokenkey', 'access_token'];
     const token = getFirst(hashParams, tokenKeys) || getFirst(queryParams, tokenKeys);
 
@@ -34,10 +47,12 @@ export default function AuthCallbackPage() {
       queryParams.get('auth_error');
 
     const watchdog = window.setTimeout(() => {
+      // Mobile handoff keeps this page as a fallback UI; don't bounce away.
+      if (isMobileClient) return;
       window.location.replace('/?auth_error=callback_timeout');
     }, 5000);
 
-    const finalize = (workspaceToken: string) => {
+    const goToWebDashboard = (workspaceToken: string) => {
       setWorkspaceToken(workspaceToken);
       window.clearTimeout(watchdog);
       const returnTo = queryParams.get('returnTo')?.trim();
@@ -68,6 +83,20 @@ export default function AuthCallbackPage() {
       }
       const search = params.toString();
       window.location.replace(`/dashboard${search ? `?${search}` : ''}`);
+    };
+
+    /** Default web path — unchanged when client is not mobile. */
+    const finalize = (workspaceToken: string) => {
+      if (isMobileClient) {
+        setWorkspaceToken(workspaceToken);
+        window.clearTimeout(watchdog);
+        const deepLink = buildMobileAppDeepLink(workspaceToken);
+        setMobileHandoff({ token: workspaceToken, deepLink });
+        // Prefer opening the installed app; keep this page as fallback.
+        window.location.href = deepLink;
+        return;
+      }
+      goToWebDashboard(workspaceToken);
     };
 
     if (token) {
@@ -127,8 +156,36 @@ export default function AuthCallbackPage() {
     window.location.replace('/');
   }, []);
 
+  if (mobileHandoff) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 px-6 text-center text-slate-600">
+        <p className="text-base font-semibold text-slate-800">Opening Maxwell app…</p>
+        <p className="max-w-sm text-sm">
+          If the app did not open automatically, tap the button below. You can also
+          continue in the browser.
+        </p>
+        <a
+          href={mobileHandoff.deepLink}
+          className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"
+        >
+          Open Maxwell app
+        </a>
+        <button
+          type="button"
+          className="text-sm font-semibold text-blue-600 underline"
+          onClick={() => {
+            setWorkspaceToken(mobileHandoff.token);
+            window.location.replace('/dashboard');
+          }}
+        >
+          Continue on web instead
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className='flex min-h-screen items-center justify-center bg-slate-50 text-slate-600'>
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-600">
       Signing you in…
     </div>
   );
