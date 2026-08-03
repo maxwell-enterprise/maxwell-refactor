@@ -66,6 +66,7 @@ export enum ViewState {
   MEMBER_ATTENDANCE = 'MEMBER_ATTENDANCE',
   FORMS_ADMIN = 'FORMS_ADMIN',
   MY_FORMS = 'MY_FORMS',
+  SOON_AVAILABLE = 'SOON_AVAILABLE',
 }
 
 export enum UserRole {

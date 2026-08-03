@@ -5,7 +5,7 @@ import { User, Lock, Bell, Camera, Save, LogOut, Trash2, AlertTriangle, X } from
 import { useToast } from '../../context/ToastContext';
 import { UserNotificationPreferencesService } from '../../services/userNotificationPreferencesService';
 import { workspaceFetch } from '../../lib/workspaceApi';
-import { UserRole } from '../../types/index';
+import { UserRole, ViewState } from '../../types/index';
 import { useAccountDeletionRealtime } from '../../hooks/useAccountDeletionRealtime';
 import {
   formatIndonesianPhoneInput,
@@ -22,6 +22,7 @@ import {
 } from '../../lib/profileCompletion';
 import ProfileCompletionBanner from './ProfileCompletionBanner';
 import { useOnboardingOptional } from '../onboarding/OnboardingProvider';
+import PageBackButton from '../common/PageBackButton';
 
 const NOTIF_DEV_MSG =
   'These notification toggles cannot be enabled yet. This feature is still in development.';
@@ -70,7 +71,9 @@ type DeletionStatus =
       rejectedAt?: string | null;
     };
 
-const ProfileSettings: React.FC = () => {
+const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
+    onNavigate,
+}) => {
     const { user, logout, refreshSession, isProfileComplete } = useAuth();
     const { showToast } = useToast();
     const onboarding = useOnboardingOptional();
@@ -484,7 +487,10 @@ const ProfileSettings: React.FC = () => {
                 </div>
             )}
 
-            <h1 className="mb-4 text-xl font-bold text-slate-900 sm:mb-6 sm:text-2xl">Account Settings</h1>
+            <div className="mb-4 flex items-center gap-2 sm:mb-6 sm:gap-3">
+                <PageBackButton view={ViewState.SETTINGS} onNavigate={onNavigate} />
+                <h1 className="min-w-0 text-xl font-bold text-slate-900 sm:text-2xl">Account Settings</h1>
+            </div>
 
             {!isProfileComplete && (
               <div className="mb-6 overflow-hidden rounded-xl border border-amber-200">

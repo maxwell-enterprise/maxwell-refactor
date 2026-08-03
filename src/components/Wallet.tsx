@@ -24,6 +24,7 @@ import { Badge } from './ui/badge';
 import EventCampaignOfferStack from './marketing/EventCampaignOfferStack';
 import { useOnboardingOptional } from './onboarding/OnboardingProvider';
 import { isProfileComplete as resolveProfileComplete } from '../lib/profileCompletion';
+import PageBackButton from './common/PageBackButton';
 
 interface WalletProps {
   /** Opens Event Catalogue so users can redeem program credits (Nest-backed events). */
@@ -564,11 +565,12 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
         <div data-tour="member-wallet-header" className="space-y-4">
         {/* Mobile-only wallet chrome */}
         <div className="flex items-center justify-between rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm md:hidden">
-            <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg">
+            <div className="flex min-w-0 items-center gap-3">
+                <PageBackButton view={ViewState.WALLET} onNavigate={onNavigate} />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg">
                     <QrCode size={24} />
                 </div>
-                <div>
+                <div className="min-w-0">
                     <h1 className="text-lg font-bold text-slate-900">Wallet</h1>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Secure ID: {user?.id.slice(-6).toUpperCase()}</p>
                 </div>
@@ -581,10 +583,15 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
         </div>
 
         <div className="hidden md:block">
-          <h1 className="text-2xl font-bold text-slate-900">Wallet</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Your tickets, membership, and digital assets.
-          </p>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <PageBackButton view={ViewState.WALLET} onNavigate={onNavigate} />
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-slate-900">Wallet</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Your tickets, membership, and digital assets.
+              </p>
+            </div>
+          </div>
         </div>
         </div>
 

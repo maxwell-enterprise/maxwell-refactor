@@ -85,16 +85,16 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
                     
                     {/* Dynamic Title with Back Support */}
                     <div className="relative min-h-[3rem] flex items-center justify-center">
-                        {selectedSession && (
-                            <button 
-                                onClick={handleBackToSeries}
-                                className="absolute left-0 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-full"
-                                title="Back to Series"
-                            >
-                                <ArrowLeft size={20}/>
-                            </button>
-                        )}
-                        <h2 className="text-xl font-black text-slate-900 leading-tight px-8 line-clamp-2">
+                        <button 
+                            type="button"
+                            onClick={selectedSession ? handleBackToSeries : onClose}
+                            className="touch-target absolute left-0 z-10 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                            aria-label={selectedSession ? 'Back to series' : 'Back'}
+                            title={selectedSession ? 'Back to Series' : 'Back'}
+                        >
+                            <ArrowLeft size={20} aria-hidden />
+                        </button>
+                        <h2 className="text-xl font-black text-slate-900 leading-tight px-10 line-clamp-2">
                             {displayTitle}
                         </h2>
                     </div>

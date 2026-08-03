@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { DataService } from '../services/dataService';
 import { EntitlementService } from '../services/entitlementService';
 import { InvitationService } from '../services/invitationService'; 
-import { Event, EventInvitation } from '../types/index';
+import { Event, EventInvitation, ViewState } from '../types/index';
 import { WalletItem } from '../types/access';
 import { 
     Calendar, MapPin, Clock, Ticket, Zap, UserPlus, 
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import InvitationBanner from './events/InvitationBanner'; 
+import PageBackButton from './common/PageBackButton';
 
 interface AssigneeForm {
     type: 'MYSELF' | 'GUEST' | 'DRAFT';
@@ -21,7 +22,9 @@ interface AssigneeForm {
     phone: string;
 }
 
-const EventMarketplace: React.FC = () => {
+const EventMarketplace: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
+    onNavigate,
+}) => {
     const { user } = useAuth();
     const { showToast } = useToast();
     const [events, setEvents] = useState<Event[]>([]);
@@ -274,6 +277,7 @@ const EventMarketplace: React.FC = () => {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
                 <div className="min-w-0">
                     <div className="flex items-start gap-3">
+                        <PageBackButton view={ViewState.EVENT_MARKETPLACE} onNavigate={onNavigate} className="mt-0.5" />
                         <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                             <ShoppingBag className="h-6 w-6" strokeWidth={2} aria-hidden />
                         </span>
