@@ -5,6 +5,8 @@ import { FormResponse, FormDefinition } from '../types';
 import { FormService } from '@/services/formService';
 import { useAuth } from '@/context/AuthContext';
 import { CheckCircle, Clock, Eye, ClipboardList, X, Loader2 } from 'lucide-react';
+import { ViewState } from '@/types/index';
+import PageBackButton from '@/components/common/PageBackButton';
 
 type EnrichedResponse = FormResponse & {
     formTitle?: string;
@@ -12,7 +14,9 @@ type EnrichedResponse = FormResponse & {
     formObj?: FormDefinition;
 };
 
-const FormHistoryPage: React.FC = () => {
+const FormHistoryPage: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
+    onNavigate,
+}) => {
     const { user } = useAuth();
     const [responses, setResponses] = useState<EnrichedResponse[]>([]);
     const [loading, setLoading] = useState(true);
@@ -47,35 +51,52 @@ const FormHistoryPage: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="page-container flex items-center justify-center gap-2 py-20 text-slate-400">
-                <Loader2 size={20} className="animate-spin" />
-                Loading history...
+            <div className="page-container animate-fade-in relative min-w-0 space-y-6 pb-8">
+                <div className="flex items-center gap-2">
+                    <PageBackButton view={ViewState.MY_FORMS} onNavigate={onNavigate} />
+                    <div className="flex items-center gap-2 py-2 text-slate-400">
+                        <Loader2 size={20} className="animate-spin" />
+                        Loading history...
+                    </div>
+                </div>
             </div>
         );
     }
 
     if (responses.length === 0) {
         return (
-            <div className="page-container py-16 text-center sm:py-20">
-                <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-                    <Clock size={32} />
+            <div className="page-container animate-fade-in relative min-w-0 space-y-6 pb-8">
+                <div className="flex items-center gap-2">
+                    <PageBackButton view={ViewState.MY_FORMS} onNavigate={onNavigate} />
+                    <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900 sm:text-2xl">
+                        <ClipboardList size={24} className="text-indigo-600" />
+                        My Quizzes & Forms
+                    </h1>
                 </div>
-                <h2 className="text-xl font-bold text-slate-800">No submissions yet</h2>
-                <p className="mx-auto mt-2 max-w-md text-slate-500">
-                    Forms and quizzes you complete will appear here.
-                </p>
+                <div className="py-10 text-center sm:py-14">
+                    <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                        <Clock size={32} />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-800">No submissions yet</h2>
+                    <p className="mx-auto mt-2 max-w-md text-slate-500">
+                        Forms and quizzes you complete will appear here.
+                    </p>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="page-container animate-fade-in relative min-w-0 space-y-6 pb-8">
-            <div>
-                <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900 sm:text-2xl">
-                    <ClipboardList size={24} className="text-indigo-600" />
-                    My Quizzes & Forms
-                </h1>
-                <p className="mt-1 text-sm text-slate-500">Your submitted responses and quiz scores</p>
+            <div className="flex items-start gap-2">
+                <PageBackButton view={ViewState.MY_FORMS} onNavigate={onNavigate} className="mt-0.5" />
+                <div>
+                    <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900 sm:text-2xl">
+                        <ClipboardList size={24} className="text-indigo-600" />
+                        My Quizzes & Forms
+                    </h1>
+                    <p className="mt-1 text-sm text-slate-500">Your submitted responses and quiz scores</p>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-6">

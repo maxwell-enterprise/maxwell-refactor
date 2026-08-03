@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import CommandPalette from '../components/common/CommandPalette'; 
 import { ViewState, UserRole } from '../types/index';
-import { Menu, Search, UserCircle, ChevronDown, CheckCircle, RefreshCw, Gift } from 'lucide-react';
-import { BellIcon } from '../components/ui/bell';
+import { Menu, Search, UserCircle, RefreshCw } from 'lucide-react';
+import HeaderNotificationBell from '../components/dashboard/HeaderNotificationBell';
 import { useAuth } from '../context/AuthContext';
 import {
   TaskService,
@@ -13,6 +13,7 @@ import {
   MAXWELL_TASKS_UPDATED_EVENT,
 } from '../services/taskService';
 import { EntitlementService } from '../services/entitlementService';
+import { WALLET_REFRESH_EVENT } from '../services/paymentService';
 import PersonaSwitcherModal from '../components/auth/PersonaSwitcherModal'; // NEW IMPORT
 import { useToast } from '../context/ToastContext';
 import { useDialog } from '../context/DialogContext';
@@ -25,6 +26,8 @@ import {
   ONBOARDING_CLOSE_SIDEBAR_EVENT,
   ONBOARDING_OPEN_SIDEBAR_EVENT,
 } from '../features/onboarding/onboarding-sidebar-events';
+import { useIsNarrowViewport } from '../features/myzone-mobile/hooks/useIsNarrowViewport';
+import MyZoneMobileShell from '../features/myzone-mobile/ui/MyZoneMobileShell';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -46,6 +49,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const { user, userRole, logout } = useAuth();
   const { showToast } = useToast();
   const { confirm } = useDialog();
+  const isNarrowViewport = useIsNarrowViewport();
+  const isMyZoneMobile = isPersonalZone && isNarrowViewport;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Replace simple menu state with modal state
@@ -146,6 +151,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   useEffect(() => {
       void loadGiftInbox();
+  }, [loadGiftInbox]);
+
+  useEffect(() => {
+      const onWalletRefresh = () => {
+        void loadGiftInbox();
+      };
+      window.addEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
+      return () => window.removeEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
   }, [loadGiftInbox]);
 
   useEffect(() => {
@@ -308,6 +321,59 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     };
   }, [isSidebarOpen]);
 
+  const openActionCenter = () => {
+    if (profileGateActive) {
+      showToast('Complete Personal Information in Account Settings first.', 'info');
+      return;
+    }
+    markNotificationsAsSeen();
+    onNavigate(ViewState.MY_TASKS);
+    setShowNotifications(false);
+  };
+
+  const notificationBell = (
+    <HeaderNotificationBell
+      tasks={pendingTasks}
+      gifts={pendingGifts}
+      isLoadingGifts={isLoadingGiftInbox}
+      hasUnread={hasUnreadNotifications}
+      highPriorityCount={highPriorityCount}
+      isOpen={showNotifications}
+      onToggle={() => {
+        setShowNotifications((open) => !open);
+        markNotificationsAsSeen();
+      }}
+      onSelectTask={(task) => void handleNotificationItemClick(task)}
+      onSelectGift={handleGiftNotificationClick}
+      onViewActionCenter={openActionCenter}
+    />
+  );
+
+  const profileGateBanner =
+    profileGateActive && currentView !== ViewState.SETTINGS ? (
+      <ProfileCompletionBanner
+        missingLabels={missingProfileLabels}
+        onGoToSettings={goToProfileSettings}
+      />
+    ) : null;
+
+  if (isMyZoneMobile) {
+    return (
+      <MyZoneMobileShell
+        currentView={currentView}
+        onNavigate={handleNavigate}
+        userName={user?.fullName}
+        avatarUrl={user?.avatarUrl}
+        pendingGiftCount={pendingGifts.length}
+        notificationSlot={notificationBell}
+        onboardingSlot={<OnboardingTrigger />}
+        banner={profileGateBanner}
+      >
+        {children}
+      </MyZoneMobileShell>
+    );
+  }
+
   return (
     <div className="flex h-screen w-full min-w-0 max-w-full overflow-hidden bg-slate-50 font-sans text-slate-900">
       <Sidebar 
@@ -438,126 +504,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
                 {/* Notification & Profile Group */}
                 <div className="flex items-center gap-1.5 sm:gap-3">
-                    {/* Notification Bell */}
-                    <div className="relative" data-notification-root>
-                        <button 
-                            type="button"
-                            aria-label={hasUnreadNotifications ? 'Notifications, unread' : 'Notifications'}
-                            aria-expanded={showNotifications}
-                            onClick={() => {
-                              setShowNotifications((open) => !open);
-                              markNotificationsAsSeen();
-                            }}
-                            className={`touch-target relative flex items-center justify-center rounded-full p-2 transition-all duration-200 sm:p-2.5 ${
-                              showNotifications
-                                ? 'bg-blue-50 text-blue-600'
-                                : hasUnreadNotifications
-                                  ? 'bg-blue-50/90 text-blue-600 shadow-sm ring-1 ring-blue-100'
-                                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                            }`}
-                        >
-                            <BellIcon
-                              size={20}
-                              className="shrink-0"
-                              aria-hidden
-                              alertLoop={hasUnreadNotifications}
-                            />
-                            {hasUnreadNotifications && (
-                                <span
-                                  className={`absolute top-2 right-2.5 h-2 w-2 rounded-full ring-2 ring-white ${
-                                    highPriorityCount > 0 ? 'bg-red-500' : 'bg-blue-500'
-                                  }`}
-                                />
-                            )}
-                        </button>
+                    {notificationBell}
 
-                        {showNotifications && (
-                            <div className="fixed right-2 top-[calc(3.75rem+env(safe-area-inset-top,0px))] z-50 w-[min(20rem,calc(100vw-1rem))] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl animate-fade-in-up origin-top-right sm:absolute sm:right-0 sm:top-full sm:mt-4 sm:w-80">
-                                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 backdrop-blur-sm">
-                                    <h4 className="font-bold text-sm text-slate-800">Notifications</h4>
-                                    <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                      {pendingTasks.length + pendingGifts.length} New
-                                    </span>
-                                </div>
-                                <div className="max-h-72 overflow-y-auto custom-scrollbar">
-                                    {isLoadingGiftInbox && pendingTasks.length === 0 && pendingGifts.length === 0 ? (
-                                        <div className="p-8 text-center text-slate-400">
-                                            <RefreshCw size={32} className="mx-auto mb-3 animate-spin text-slate-200"/>
-                                            <p className="text-xs">Loading invitations...</p>
-                                        </div>
-                                    ) : pendingTasks.length === 0 && pendingGifts.length === 0 ? (
-                                        <div className="p-8 text-center text-slate-400">
-                                            <CheckCircle size={32} className="mx-auto mb-3 text-slate-200"/>
-                                            <p className="text-xs">You're all caught up!</p>
-                                        </div>
-                                    ) : (
-                                        <>
-                                          {pendingGifts.slice(0, 5).map((gift) => (
-                                              <button
-                                                  key={gift.id}
-                                                  onClick={() => handleGiftNotificationClick(gift)}
-                                                  className="w-full text-left p-4 hover:bg-emerald-50/80 border-b border-slate-50 last:border-0 transition-colors group"
-                                              >
-                                                  <div className="flex justify-between items-start mb-1.5">
-                                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-100">
-                                                          <Gift size={10} />
-                                                          GIFT
-                                                      </span>
-                                                      <span className="text-[10px] text-slate-400 group-hover:text-slate-500">
-                                                        {new Date(gift.createdAt).toLocaleDateString()}
-                                                      </span>
-                                                  </div>
-                                                  <p className="text-sm font-semibold text-slate-800 truncate mb-0.5">
-                                                    {gift.itemName}
-                                                  </p>
-                                                  <p className="text-xs text-slate-500 truncate">
-                                                    From {gift.sourceUserName} · Tap to accept
-                                                  </p>
-                                              </button>
-                                          ))}
-                                          {pendingTasks.slice(0, 5).map(task => (
-                                              <button 
-                                                  key={task.id}
-                                                  onClick={() => void handleNotificationItemClick(task)}
-                                                  className="w-full text-left p-4 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors group"
-                                              >
-                                                  <div className="flex justify-between items-start mb-1.5">
-                                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${task.priority === 'HIGH' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                                          {task.priority}
-                                                      </span>
-                                                      <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{new Date(task.createdAt).toLocaleDateString()}</span>
-                                                  </div>
-                                                  <p className="text-sm font-semibold text-slate-800 truncate mb-0.5">{task.title}</p>
-                                                  <p className="text-xs text-slate-500 truncate">{task.description}</p>
-                                              </button>
-                                          ))}
-                                        </>
-                                    )}
-                                </div>
-                                <div className="p-2 border-t border-slate-100 bg-slate-50">
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                          if (profileGateActive) {
-                                            showToast(
-                                              'Complete Personal Information in Account Settings first.',
-                                              'info',
-                                            );
-                                            return;
-                                          }
-                                          markNotificationsAsSeen();
-                                          onNavigate(ViewState.MY_TASKS);
-                                          setShowNotifications(false);
-                                        }}
-                                        className="w-full py-2 text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                                    >
-                                        View Action Center
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    
                     {/* Profile */}
                     <div className="flex items-center gap-3 pl-1 cursor-pointer group" onClick={goToProfileSettings}>
                       <div className="text-right hidden md:block">
@@ -586,12 +534,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* --- MODERN HEADER END --- */}
 
         <main className="relative flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col overflow-y-auto bg-slate-50 overscroll-y-contain">
-          {profileGateActive && currentView !== ViewState.SETTINGS && (
-            <ProfileCompletionBanner
-              missingLabels={missingProfileLabels}
-              onGoToSettings={goToProfileSettings}
-            />
-          )}
+          {profileGateBanner}
           {children}
         </main>
 

@@ -11,7 +11,7 @@ const dynamicView = (importer: () => Promise<{ default: React.ComponentType<any>
   dynamic(withChunkLoadRecovery(importer), { loading: () => null, ssr: false });
 
 const Dashboard = dynamicView(() => import("../../../components/Dashboard"));
-const MemberDashboard = dynamicView(() => import("../../../components/MemberDashboard"));
+const MemberZoneHome = dynamicView(() => import("../../../components/member/MemberZoneHome"));
 const CRM = dynamicView(() => import("../../../components/CRM"));
 const LeadsDashboard = dynamicView(() => import("../../../components/LeadsDashboard"));
 const PaidConversionsDashboard = dynamicView(() => import("../../../components/PaidConversionsDashboard"));
@@ -50,6 +50,9 @@ const SystemMaintenance = dynamicView(() => import("../../../components/admin/Sy
 const EventMarketplace = dynamicView(() => import("../../../components/EventMarketplace"));
 const AdminFormsPage = dynamicView(() => import("../../../features/forms/pages/AdminFormsPage"));
 const FormHistoryPage = dynamicView(() => import("../../../features/forms/pages/FormHistoryPage"));
+const SoonAvailablePage = dynamicView(
+  () => import("../../../features/myzone-mobile/ui/SoonAvailablePage"),
+);
 
 /**
  * Pure view resolver: maps ViewState to the corresponding component.
@@ -64,7 +67,7 @@ export function resolveView(
   switch (currentView) {
     case ViewState.DASHBOARD:
       return userRole === UserRole.MEMBER || isPersonalZone ? (
-        <MemberDashboard onNavigate={onNavigate} />
+        <MemberZoneHome onNavigate={onNavigate} />
       ) : (
         <Dashboard />
       );
@@ -124,15 +127,17 @@ export function resolveView(
     case ViewState.STORE_CATALOG:
       return <Storefront />;
     case ViewState.EVENT_MARKETPLACE:
-      return <EventMarketplace />;
+      return <EventMarketplace onNavigate={onNavigate} />;
     case ViewState.ENABLEMENT:
       return <Enablement />;
     case ViewState.MY_FORMS:
-      return <FormHistoryPage />;
+      return <FormHistoryPage onNavigate={onNavigate} />;
+    case ViewState.SOON_AVAILABLE:
+      return <SoonAvailablePage onNavigate={onNavigate} />;
     case ViewState.AI_COACH:
-      return <AICoach />;
+      return <AICoach onNavigate={onNavigate} />;
     case ViewState.SETTINGS:
-      return <ProfileSettings />;
+      return <ProfileSettings onNavigate={onNavigate} />;
     case ViewState.GATE_SCANNER:
       return <GateScannerView />;
     case ViewState.MEMBER_ATTENDANCE:

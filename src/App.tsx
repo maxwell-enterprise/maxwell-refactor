@@ -21,6 +21,7 @@ import {
   persistView,
   readInitialPersonalZone,
   readStoredView,
+  rememberViewBefore,
   resolvePersonalZoneForView,
   toFeatureSlug,
 } from './lib/dashboardNavigation';
@@ -80,10 +81,15 @@ const App: React.FC = () => {
       );
       return;
     }
-    persistView(v);
     startTransition(() => {
-      setCurrentViewState(v);
+      setCurrentViewState((prev) => {
+        if (prev !== v) {
+          rememberViewBefore(v, prev);
+        }
+        return v;
+      });
     });
+    persistView(v);
   }, [profileGateActive, showToast]);
 
   /**

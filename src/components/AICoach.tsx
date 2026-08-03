@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { MessageCircleHeart, Send, Sparkles, User } from 'lucide-react';
+import { ViewState } from '../types/index';
+import PageBackButton from './common/PageBackButton';
 
-const AICoach: React.FC = () => {
+const AICoach: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
+  onNavigate,
+}) => {
   const [messages, setMessages] = useState([
     { id: 1, sender: 'ai', text: "Hello! I'm your Maxwell Leadership AI Coach. Based on your recent profile update, I see you're interested in 'Team Influence'. How can I help you grow today?" }
   ]);
@@ -28,7 +32,8 @@ const AICoach: React.FC = () => {
     <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
         {/* Header */}
         <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6 sm:py-4">
-            <div className="flex items-center">
+            <div className="flex items-center gap-1">
+                <PageBackButton view={ViewState.AI_COACH} onNavigate={onNavigate} />
                 <div className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg">
                     <Sparkles size={20} />
                 </div>
