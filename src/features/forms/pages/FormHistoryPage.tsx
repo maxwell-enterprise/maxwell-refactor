@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { FormResponse, FormDefinition } from '../types';
 import { FormService } from '@/services/formService';
 import { useAuth } from '@/context/AuthContext';
-import { CheckCircle, Clock, Eye, ClipboardList, X, Loader2 } from 'lucide-react';
+import { CheckCircle, Clock, Eye, ClipboardList, X } from 'lucide-react';
 import { ViewState } from '@/types/index';
 import PageBackButton from '@/components/common/PageBackButton';
+import { ListPageSkeleton } from '@/components/ui/page-skeletons';
 
 type EnrichedResponse = FormResponse & {
     formTitle?: string;
@@ -50,17 +51,7 @@ const FormHistoryPage: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
     };
 
     if (loading) {
-        return (
-            <div className="page-container animate-fade-in relative min-w-0 space-y-6 pb-8">
-                <div className="flex items-center gap-2">
-                    <PageBackButton view={ViewState.MY_FORMS} onNavigate={onNavigate} />
-                    <div className="flex items-center gap-2 py-2 text-slate-400">
-                        <Loader2 size={20} className="animate-spin" />
-                        Loading history...
-                    </div>
-                </div>
-            </div>
-        );
+        return <ListPageSkeleton titleWidth="w-56" cards={4} />;
     }
 
     if (responses.length === 0) {

@@ -37,6 +37,7 @@ import { pickNextUpcomingTicket, resolveUpcomingTicketWindow, resolveSessionWind
 import MyZoneMobileMoreSheet from './MyZoneMobileMoreSheet';
 import { SOON_AVAILABLE_FEATURE_KEY } from './SoonAvailablePage';
 import ContentHubHeroCarousel from './ContentHubHeroCarousel';
+import { MyZoneHomeSkeleton } from '../../../components/ui/page-skeletons';
 
 interface MyZoneMobileHomeProps {
   onNavigate: (view: ViewState) => void;
@@ -387,16 +388,7 @@ const MyZoneMobileHome: React.FC<MyZoneMobileHomeProps> = ({ onNavigate }) => {
   }, [trimmedQuery, upcomingEvents, articles]);
 
   if (loading) {
-    return (
-      <div className="flex w-full flex-col gap-6 px-4 pt-3 pb-6">
-        <div className="relative pb-5">
-          <div className="aspect-[16/9] min-h-[10.5rem] animate-pulse rounded-2xl bg-slate-200" />
-          <div className="absolute inset-x-3 -bottom-0 h-11 animate-pulse rounded-full bg-slate-100 shadow-md" />
-        </div>
-        <div className="h-44 animate-pulse rounded-3xl bg-slate-100" />
-        <div className="h-32 animate-pulse rounded-3xl bg-slate-100" />
-      </div>
-    );
+    return <MyZoneHomeSkeleton />;
   }
 
   return (

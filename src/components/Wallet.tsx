@@ -25,6 +25,7 @@ import EventCampaignOfferStack from './marketing/EventCampaignOfferStack';
 import { useOnboardingOptional } from './onboarding/OnboardingProvider';
 import { isProfileComplete as resolveProfileComplete } from '../lib/profileCompletion';
 import PageBackButton from './common/PageBackButton';
+import { WalletPageSkeleton } from './ui/page-skeletons';
 
 interface WalletProps {
   /** Opens Event Catalogue so users can redeem program credits (Nest-backed events). */
@@ -550,6 +551,10 @@ const Wallet: React.FC<WalletProps> = ({ onNavigate }) => {
     'rounded-[2rem] border-2 border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm sm:rounded-[2.5rem] sm:py-20';
 
   const pendingGiftCount = pendingGifts.length;
+
+  if (loading) {
+    return <WalletPageSkeleton />;
+  }
 
   const handlePendingGiftAccepted = () => {
     setActivePendingGift(null);

@@ -8,6 +8,7 @@ import { ContentPost } from '../../types/index';
 import { useToast } from '../../context/ToastContext';
 import ContentLinkedProductCard from './ContentLinkedProductCard';
 import { formatArticleDate, typeLabel } from '../../lib/cmsContentUtils';
+import { ArticleReaderSkeleton } from '../ui/page-skeletons';
 
 type ArticleReaderViewProps = {
   slug: string;
@@ -77,26 +78,7 @@ const ArticleReaderView: React.FC<ArticleReaderViewProps> = ({
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#faf9f7]">
-        <div className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-20">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
-            <div className="h-5 w-32 bg-slate-200 rounded animate-pulse" />
-          </div>
-        </div>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-6 animate-pulse">
-          <div className="h-4 w-24 bg-slate-200 rounded" />
-          <div className="h-10 w-full bg-slate-200 rounded" />
-          <div className="h-4 w-48 bg-slate-100 rounded" />
-          <div className="h-64 w-full bg-slate-100 rounded-2xl" />
-          <div className="space-y-3">
-            <div className="h-4 w-full bg-slate-100 rounded" />
-            <div className="h-4 w-full bg-slate-100 rounded" />
-            <div className="h-4 w-2/3 bg-slate-100 rounded" />
-          </div>
-        </div>
-      </div>
-    );
+    return <ArticleReaderSkeleton />;
   }
 
   if (notFound || !post) {

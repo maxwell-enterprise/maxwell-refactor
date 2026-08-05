@@ -24,6 +24,7 @@ import {
 import { WALLET_REFRESH_EVENT } from '../services/paymentService';
 import EventCampaignOfferStack from './marketing/EventCampaignOfferStack';
 import { useOnboardingOptional } from './onboarding/OnboardingProvider';
+import { MemberDashboardSkeleton } from './ui/page-skeletons';
 
 interface MemberDashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -240,17 +241,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ onNavigate }) => {
   }, [nextEvent]);
 
   if (loading) {
-    return (
-      <div className="relative w-full min-w-0 animate-fade-in bg-slate-50">
-        <div className="page-container flex w-full flex-col gap-6 sm:gap-8">
-          <div className="h-10 w-64 rounded-xl bg-slate-200 animate-pulse" />
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            <div className="h-64 animate-pulse rounded-[2rem] bg-slate-100 lg:col-span-2" />
-            <div className="h-72 animate-pulse rounded-2xl bg-slate-100" />
-          </div>
-        </div>
-      </div>
-    );
+    return <MemberDashboardSkeleton />;
   }
 
   return (

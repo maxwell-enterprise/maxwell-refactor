@@ -14,6 +14,7 @@ import {
 import { useToast } from '../context/ToastContext';
 import InvitationBanner from './events/InvitationBanner'; 
 import PageBackButton from './common/PageBackButton';
+import { EventCatalogueSkeleton } from './ui/page-skeletons';
 
 interface AssigneeForm {
     type: 'MYSELF' | 'GUEST' | 'DRAFT';
@@ -262,11 +263,7 @@ const EventMarketplace: React.FC<{ onNavigate?: (view: ViewState) => void }> = (
     };
 
     if (loading) {
-        return (
-            <div className="relative w-full min-w-0 bg-slate-50">
-                <div className="page-container py-16 text-center text-slate-400">Loading catalogue…</div>
-            </div>
-        );
+        return <EventCatalogueSkeleton />;
     }
 
     return (

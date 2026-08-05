@@ -7,6 +7,7 @@ import WhatsAppQuickAction from './common/WhatsAppQuickAction';
 import RoundTableModal from './tribe/RoundTableModal';
 import AddMemberModal from './tribe/AddMemberModal';
 import { useToast } from '../context/ToastContext';
+import { ListPageSkeleton } from './ui/page-skeletons';
 
 const MyTribe: React.FC = () => {
     const { user } = useAuth();
@@ -119,6 +120,10 @@ const MyTribe: React.FC = () => {
         }
     };
 
+    if (loading) {
+        return <ListPageSkeleton titleWidth="w-36" cards={4} />;
+    }
+
     return (
         <div className="page-container relative min-w-0 animate-fade-in space-y-6 sm:space-y-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
@@ -154,7 +159,7 @@ const MyTribe: React.FC = () => {
                         </div>
                     </div>
 
-                    {!loading && members.length === 0 && (
+                    {members.length === 0 && (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                             No tribe members assigned yet.
                             {tribeDataSourceMode === 'UNWIRED'
@@ -164,8 +169,7 @@ const MyTribe: React.FC = () => {
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {loading ? <div className="col-span-2 text-center text-slate-400 py-10">Loading Tribe...</div> :
-                         members.map((member) => {
+                        {members.map((member) => {
                             const memberNote = memberNotesById.get(member.memberId);
                             return (
                                 <div
