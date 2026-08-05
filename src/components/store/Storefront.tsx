@@ -36,6 +36,7 @@ import { UserVoucherService } from '../../services/userVoucherService';
 import { getWorkspaceToken } from '../../lib/workspaceAuthToken';
 import { formatStorePriceIdr } from '../../utils/formatStorePrice';
 import { useDialog } from '../../context/DialogContext';
+import { StoreCatalogueSkeleton } from '../ui/page-skeletons';
 
 const PAGE_SIZE = 18;
 
@@ -707,9 +708,7 @@ const Storefront: React.FC<StorefrontProps> = ({
 
             <div className="w-full p-3 sm:min-h-0 sm:flex-1 sm:overflow-auto sm:p-6" ref={scrollRootRef}>
                 {listLoading ? (
-                    <div className="flex min-h-[160px] items-center justify-center py-16">
-                        <p className="text-center text-sm text-slate-400">Loading products…</p>
-                    </div>
+                    <StoreCatalogueSkeleton />
                 ) : listLoadError ? (
                     <div className="flex min-h-[160px] flex-col items-center justify-center gap-3 py-16 px-4 text-center">
                         <AlertCircle className="shrink-0 text-slate-300" strokeWidth={1.25} size={44} aria-hidden />

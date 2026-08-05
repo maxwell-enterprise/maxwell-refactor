@@ -14,6 +14,7 @@ import {
 import { useToast } from '../context/ToastContext';
 import AiMentorChatComingSoon from './mentoring/AiMentorChatComingSoon';
 import MenteeProgressDashboard from './mentoring/MenteeProgressDashboard';
+import { ListPageSkeleton } from './ui/page-skeletons';
 
 const Enablement: React.FC = () => {
     const { user } = useAuth();
@@ -23,6 +24,7 @@ const Enablement: React.FC = () => {
     const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [history, setHistory] = useState<QuizAttempt[]>([]);
+    const [loading, setLoading] = useState(true);
     
     // Mentoring State
     const [session, setSession] = useState<MentoringSession | null>(null);
@@ -34,24 +36,29 @@ const Enablement: React.FC = () => {
     const [quizResult, setQuizResult] = useState<QuizAttempt | null>(null);
 
     useEffect(() => {
-        loadData();
+        void loadData();
     }, [user]);
 
     const loadData = async () => {
-        const [arts, qzs, hist] = await Promise.all([
-            EnablementService.getArticles(),
-            EnablementService.getQuizzes(),
-            user ? EnablementService.getUserHistory(user.id) : []
-        ]);
-        setArticles(arts);
-        setQuizzes(qzs);
-        setHistory(hist);
+        setLoading(true);
+        try {
+            const [arts, qzs, hist] = await Promise.all([
+                EnablementService.getArticles(),
+                EnablementService.getQuizzes(),
+                user ? EnablementService.getUserHistory(user.id) : Promise.resolve([]),
+            ]);
+            setArticles(arts);
+            setQuizzes(qzs);
+            setHistory(hist);
 
-        if (user) {
-            const sess = await MentoringService.getSession(user.id);
-            const pers = await DigitalTwinService.getPersona('fac-1');
-            setSession(sess);
-            setPersona(pers);
+            if (user) {
+                const sess = await MentoringService.getSession(user.id);
+                const pers = await DigitalTwinService.getPersona('fac-1');
+                setSession(sess);
+                setPersona(pers);
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -97,6 +104,10 @@ const Enablement: React.FC = () => {
             default: return <BookOpen size={16} className="text-slate-600"/>;
         }
     };
+
+    if (loading) {
+        return <ListPageSkeleton titleWidth="w-44" cards={6} />;
+    }
 
     return (
         <div className="animate-fade-in bg-slate-50">

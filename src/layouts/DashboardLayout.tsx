@@ -13,7 +13,12 @@ import {
   MAXWELL_TASKS_UPDATED_EVENT,
 } from '../services/taskService';
 import { EntitlementService } from '../services/entitlementService';
+import { DataService } from '../services/dataService';
 import { WALLET_REFRESH_EVENT } from '../services/paymentService';
+import {
+  readWalletSessionCache,
+  writeWalletSessionCache,
+} from '../lib/walletSessionCache';
 import PersonaSwitcherModal from '../components/auth/PersonaSwitcherModal'; // NEW IMPORT
 import { useToast } from '../context/ToastContext';
 import { useDialog } from '../context/DialogContext';
@@ -27,6 +32,10 @@ import {
   ONBOARDING_OPEN_SIDEBAR_EVENT,
 } from '../features/onboarding/onboarding-sidebar-events';
 import { useIsNarrowViewport } from '../features/myzone-mobile/hooks/useIsNarrowViewport';
+import {
+  buildMemberEventReminders,
+  type MemberEventReminder,
+} from '../features/myzone-mobile/logic/memberBellNotices';
 import MyZoneMobileShell from '../features/myzone-mobile/ui/MyZoneMobileShell';
 
 interface DashboardLayoutProps {
@@ -63,6 +72,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<UnifiedTask[]>([]);
   const [pendingGifts, setPendingGifts] = useState<GiftAllocation[]>([]);
+  const [memberEventReminders, setMemberEventReminders] = useState<MemberEventReminder[]>(
+    [],
+  );
   const [isLoadingGiftInbox, setIsLoadingGiftInbox] = useState(false);
   /** Digest of tasks last marked "seen" in the bell; new/changed tasks bring the badge back. */
   const [notificationsSeenDigest, setNotificationsSeenDigest] = useState<string | null>(null);
@@ -76,13 +88,23 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     () => pendingGifts.map((gift) => gift.id).sort().join('|'),
     [pendingGifts],
   );
+  const memberRemindersDigest = useMemo(
+    () => memberEventReminders.map((item) => item.id).sort().join('|'),
+    [memberEventReminders],
+  );
   const notificationsDigest = useMemo(
-    () => `${tasksDigest}::${giftsDigest}`,
-    [tasksDigest, giftsDigest],
+    () =>
+      isPersonalZone
+        ? `member::${giftsDigest}::${memberRemindersDigest}`
+        : `workspace::${tasksDigest}::${giftsDigest}`,
+    [isPersonalZone, giftsDigest, memberRemindersDigest, tasksDigest],
   );
 
-  const hasUnreadNotifications =
-    (pendingTasks.length > 0 || pendingGifts.length > 0) && notificationsSeenDigest !== notificationsDigest;
+  const memberNoticeCount = pendingGifts.length + memberEventReminders.length;
+  const workspaceNoticeCount = pendingTasks.length + pendingGifts.length;
+  const hasUnreadNotifications = isPersonalZone
+    ? memberNoticeCount > 0 && notificationsSeenDigest !== notificationsDigest
+    : workspaceNoticeCount > 0 && notificationsSeenDigest !== notificationsDigest;
 
   const missingProfileLabels = useMemo(
     () => (profileGateActive ? getMissingProfileFieldLabels(user) : []),
@@ -103,6 +125,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   useEffect(() => {
     if (isPersonalZone) setIsCmdOpen(false);
+  }, [isPersonalZone]);
+
+  useEffect(() => {
+    if (isPersonalZone) setShowPersonaModal(false);
   }, [isPersonalZone]);
 
   const markNotificationsAsSeen = useCallback(() => {
@@ -140,37 +166,69 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPersonalZone, openCommandPalette]);
 
-  // Tasks for header bell: role changes matter; view switches should not re-hit all backends.
+  // Staff Action Center feed — skip on My Zone (member-only notices there).
   useEffect(() => {
-      if (userRole !== UserRole.GUEST) {
-          TaskService.getMyTasks(userRole).then(tasks => {
-              setPendingTasks(tasks);
+    if (isPersonalZone || userRole === UserRole.GUEST) {
+      if (isPersonalZone) setPendingTasks([]);
+      return;
+    }
+    TaskService.getMyTasks(userRole).then((tasks) => {
+      setPendingTasks(tasks);
+    });
+  }, [userRole, isPersonalZone]);
+
+  useEffect(() => {
+    void loadGiftInbox();
+  }, [loadGiftInbox]);
+
+  const loadMemberEventReminders = useCallback(async () => {
+    if (!isPersonalZone || !user?.id || userRole === UserRole.GUEST) {
+      setMemberEventReminders([]);
+      return;
+    }
+    try {
+      const cached = readWalletSessionCache(user.id);
+      const tickets = cached
+        ? cached.items
+        : await Promise.all([
+            EntitlementService.getMyWallet(user.id),
+            EntitlementService.getWalletMemberHub(user.id),
+          ]).then(([items, hub]) => {
+            writeWalletSessionCache(user.id, items, hub);
+            return items;
           });
-      }
-  }, [userRole]);
+      const events = await DataService.getEvents();
+      setMemberEventReminders(buildMemberEventReminders(tickets, events));
+    } catch {
+      setMemberEventReminders([]);
+    }
+  }, [isPersonalZone, user?.id, userRole]);
 
   useEffect(() => {
+    void loadMemberEventReminders();
+  }, [loadMemberEventReminders]);
+
+  useEffect(() => {
+    const onWalletRefresh = () => {
       void loadGiftInbox();
-  }, [loadGiftInbox]);
+      void loadMemberEventReminders();
+    };
+    window.addEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
+    return () => window.removeEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
+  }, [loadGiftInbox, loadMemberEventReminders]);
 
   useEffect(() => {
-      const onWalletRefresh = () => {
-        void loadGiftInbox();
-      };
-      window.addEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
-      return () => window.removeEventListener(WALLET_REFRESH_EVENT, onWalletRefresh);
-  }, [loadGiftInbox]);
+    if (isPersonalZone || userRole === UserRole.GUEST) return;
+    const syncBell = () => {
+      TaskService.getMyTasks(userRole).then(setPendingTasks);
+    };
+    window.addEventListener(MAXWELL_TASKS_UPDATED_EVENT, syncBell);
+    return () => window.removeEventListener(MAXWELL_TASKS_UPDATED_EVENT, syncBell);
+  }, [userRole, isPersonalZone]);
 
-  useEffect(() => {
-      if (userRole === UserRole.GUEST) return;
-      const syncBell = () => {
-          TaskService.getMyTasks(userRole).then(setPendingTasks);
-      };
-      window.addEventListener(MAXWELL_TASKS_UPDATED_EVENT, syncBell);
-      return () => window.removeEventListener(MAXWELL_TASKS_UPDATED_EVENT, syncBell);
-  }, [userRole]);
-
-  const highPriorityCount = pendingTasks.filter(t => t.priority === 'HIGH').length;
+  const highPriorityCount = isPersonalZone
+    ? memberEventReminders.filter((item) => item.phase === 'live').length
+    : pendingTasks.filter((t) => t.priority === 'HIGH').length;
   const personaRoles = useMemo(() => {
     const assignedRoles = Array.isArray(user?.roles) && user.roles.length > 0
       ? user.roles
@@ -236,6 +294,29 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         'Complete Personal Information in Account Settings first.',
         'info',
       );
+      return;
+    }
+    markNotificationsAsSeen();
+    setShowNotifications(false);
+    onNavigate(ViewState.WALLET);
+  };
+
+  const handleEventReminderClick = (_reminder: MemberEventReminder) => {
+    if (profileGateActive) {
+      showToast(
+        'Complete Personal Information in Account Settings first.',
+        'info',
+      );
+      return;
+    }
+    markNotificationsAsSeen();
+    setShowNotifications(false);
+    onNavigate(ViewState.WALLET);
+  };
+
+  const openWalletFromBell = () => {
+    if (profileGateActive) {
+      showToast('Complete Personal Information in Account Settings first.', 'info');
       return;
     }
     markNotificationsAsSeen();
@@ -333,8 +414,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const notificationBell = (
     <HeaderNotificationBell
-      tasks={pendingTasks}
+      variant={isPersonalZone ? 'member' : 'workspace'}
+      tasks={isPersonalZone ? [] : pendingTasks}
       gifts={pendingGifts}
+      eventReminders={isPersonalZone ? memberEventReminders : []}
       isLoadingGifts={isLoadingGiftInbox}
       hasUnread={hasUnreadNotifications}
       highPriorityCount={highPriorityCount}
@@ -345,7 +428,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       }}
       onSelectTask={(task) => void handleNotificationItemClick(task)}
       onSelectGift={handleGiftNotificationClick}
-      onViewActionCenter={openActionCenter}
+      onSelectEventReminder={handleEventReminderClick}
+      onViewActionCenter={isPersonalZone ? undefined : openActionCenter}
+      onViewWallet={isPersonalZone ? openWalletFromBell : undefined}
     />
   );
 
@@ -476,8 +561,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </div>
                 )}
 
-                {/* --- NEW PERSONA SWITCHER --- */}
-                {canOpenPersonaSwitcher && !profileGateActive && (
+                {/* Persona switcher — workspace only */}
+                {canOpenPersonaSwitcher && !profileGateActive && !isPersonalZone && (
                 <div className="hidden md:block">
                     <button 
                         onClick={() => setShowPersonaModal(true)}
@@ -498,7 +583,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 )}
                  
                 {/* Divider */}
-                {canOpenPersonaSwitcher && !profileGateActive && (
+                {canOpenPersonaSwitcher && !profileGateActive && !isPersonalZone && (
                   <div className="hidden md:block w-px h-8 bg-slate-200 mx-1"></div>
                 )}
 
@@ -546,8 +631,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         />
         )}
         
-        {/* New Persona Switcher Modal */}
-        {showPersonaModal && (
+        {/* Persona switcher modal — workspace only */}
+        {showPersonaModal && !isPersonalZone && (
             <PersonaSwitcherModal onClose={() => setShowPersonaModal(false)} />
         )}
       </div>
