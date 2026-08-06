@@ -1,5 +1,5 @@
-import type { Event } from '../../types/index';
-import type { WalletItem } from '../../types/access';
+import type { Event } from '../../../types/index';
+import type { WalletItem } from '../../../types/access';
 import {
   classifyLivePhase,
   resolveSessionWindow,

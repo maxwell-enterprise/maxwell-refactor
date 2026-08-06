@@ -63,6 +63,7 @@ export function resolveView(
   userRole: UserRole,
   isPersonalZone: boolean,
   onNavigate: (v: ViewState) => void,
+  onToggleZone?: (isPersonal: boolean) => void,
 ): React.ReactNode {
   switch (currentView) {
     case ViewState.DASHBOARD:
@@ -137,7 +138,9 @@ export function resolveView(
     case ViewState.AI_COACH:
       return <AICoach onNavigate={onNavigate} />;
     case ViewState.SETTINGS:
-      return <ProfileSettings onNavigate={onNavigate} />;
+      return (
+        <ProfileSettings onNavigate={onNavigate} onToggleZone={onToggleZone} />
+      );
     case ViewState.GATE_SCANNER:
       return <GateScannerView />;
     case ViewState.MEMBER_ATTENDANCE:

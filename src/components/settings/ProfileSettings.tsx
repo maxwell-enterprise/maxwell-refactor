@@ -1,7 +1,19 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, Lock, Bell, Camera, Save, LogOut, Trash2, AlertTriangle, X } from 'lucide-react';
+import {
+  User,
+  Lock,
+  Bell,
+  Camera,
+  Save,
+  LogOut,
+  Trash2,
+  AlertTriangle,
+  X,
+  Pencil,
+  LayoutDashboard,
+} from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { UserNotificationPreferencesService } from '../../services/userNotificationPreferencesService';
 import { workspaceFetch } from '../../lib/workspaceApi';
@@ -54,11 +66,13 @@ const RequiredLabel: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   </label>
 );
 
-const profileInputClass = (hasError: boolean) =>
+const profileInputClass = (hasError: boolean, editable: boolean) =>
   `w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 ${
-    hasError
-      ? 'border-red-300 bg-red-50 focus:ring-red-400 focus:border-red-400'
-      : 'border-slate-300 focus:ring-blue-500 focus:border-blue-500'
+    !editable
+      ? 'border-slate-200 bg-slate-50 text-slate-700 cursor-default'
+      : hasError
+        ? 'border-red-300 bg-red-50 focus:ring-red-400 focus:border-red-400'
+        : 'border-slate-300 focus:ring-blue-500 focus:border-blue-500'
   }`;
 
 type DeletionStatus =
@@ -71,16 +85,34 @@ type DeletionStatus =
       rejectedAt?: string | null;
     };
 
-const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
-    onNavigate,
-}) => {
-    const { user, logout, refreshSession, isProfileComplete } = useAuth();
+const ProfileSettings: React.FC<{
+  onNavigate?: (view: ViewState) => void;
+  onToggleZone?: (isPersonal: boolean) => void;
+}> = ({ onNavigate, onToggleZone }) => {
+    const { user, userRole, logout, refreshSession, isProfileComplete } = useAuth();
     const { showToast } = useToast();
     const onboarding = useOnboardingOptional();
     const avatarInputRef = useRef<HTMLInputElement | null>(null);
     
     const [activeTab, setActiveTab] = useState<'PROFILE' | 'SECURITY' | 'NOTIFICATIONS'>('PROFILE');
     const [isLoading, setIsLoading] = useState(false);
+    /** Personal Information fields locked until user taps edit (incomplete profile starts open). */
+    const [isEditingProfile, setIsEditingProfile] = useState(!isProfileComplete);
+
+    /** Workspace staff if any assigned role is not Member/Guest (same access idea as Sidebar zone toggle). */
+    const isStaffUser = (() => {
+      const assigned =
+        Array.isArray(user?.roles) && user.roles.length > 0
+          ? user.roles
+          : user?.role
+            ? [user.role]
+            : userRole
+              ? [userRole]
+              : [];
+      return assigned.some(
+        (role) => role !== UserRole.MEMBER && role !== UserRole.GUEST,
+      );
+    })();
 
     // Profile State
     const [formData, setFormData] = useState({
@@ -224,10 +256,12 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
     };
 
     const handleAvatarClick = () => {
+        if (!isEditingProfile) return;
         avatarInputRef.current?.click();
     };
 
     const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!isEditingProfile) return;
         const file = e.target.files?.[0];
         if (!file) return;
         if (!file.type.startsWith('image/')) {
@@ -321,6 +355,7 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
             }
             setAvatarPayload(undefined);
             setProfileShowErrors(false);
+            setIsEditingProfile(false);
             await refreshSession();
             showToast('Profile updated successfully', 'success');
             onboarding?.notifyProfileSaved();
@@ -342,6 +377,44 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
             setPasswords({ current: '', new: '', confirm: '' });
             showToast('Password changed successfully (Mock)', 'success');
         }, 800);
+    };
+
+    const resetProfileFormFromUser = useCallback(() => {
+        setFormData({
+            fullName: capitalizeProfileWords(user?.fullName || ''),
+            email: user?.email || '',
+            phone: formatIndonesianPhoneInput(user?.phone || ''),
+            jobTitle: capitalizeProfileWords(user?.jobTitle || ''),
+            company: capitalizeProfileWords(user?.company || ''),
+            domicile: capitalizeProfileWords(user?.domicile || ''),
+            instagram: user?.instagram || '',
+            linkedinUrl: user?.linkedinUrl || '',
+        });
+        setAvatarPreview(user?.avatarUrl ?? null);
+        setAvatarPayload(undefined);
+        setIsAvatarBroken(false);
+        setProfileShowErrors(false);
+    }, [
+        user?.fullName,
+        user?.email,
+        user?.avatarUrl,
+        user?.phone,
+        user?.jobTitle,
+        user?.company,
+        user?.domicile,
+        user?.instagram,
+        user?.linkedinUrl,
+    ]);
+
+    const handleCancelEditProfile = () => {
+        resetProfileFormFromUser();
+        setIsEditingProfile(false);
+    };
+
+    const handleOpenAdminDashboard = () => {
+        if (!isStaffUser) return;
+        onToggleZone?.(false);
+        onNavigate?.(ViewState.DASHBOARD);
     };
 
     const openDeletionModal = () => {
@@ -507,7 +580,14 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                 <div className="w-full shrink-0 md:w-64">
                     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                         <div className="p-6 flex flex-col items-center border-b border-slate-100 bg-slate-50">
-                            <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0} onKeyDown={(e) => {
+                            <div
+                                className={`relative group ${isEditingProfile ? 'cursor-pointer' : 'cursor-default'}`}
+                                onClick={handleAvatarClick}
+                                role="button"
+                                tabIndex={isEditingProfile ? 0 : -1}
+                                aria-disabled={!isEditingProfile}
+                                onKeyDown={(e) => {
+                                if (!isEditingProfile) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
                                     handleAvatarClick();
@@ -519,15 +599,19 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                             src={avatarPreview}
                                             alt="Avatar"
                                             className="w-full h-full object-cover"
+                                            // Google CDN avatars 403 when Referer is sent from localhost / our domain.
+                                            referrerPolicy="no-referrer"
                                             onError={() => setIsAvatarBroken(true)}
                                         />
                                     ) : (
                                         <User size={40} className="w-full h-full p-4 text-slate-400" />
                                     )}
                                 </div>
+                                {isEditingProfile && (
                                 <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Camera size={24} className="text-white" />
                                 </div>
+                                )}
                                 <input
                                     ref={avatarInputRef}
                                     type="file"
@@ -547,6 +631,15 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                             >
                                 <User size={18} className="mr-3"/> Profile
                             </button>
+                            {isStaffUser && (
+                              <button
+                                type="button"
+                                onClick={handleOpenAdminDashboard}
+                                className="flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 md:w-full"
+                              >
+                                <LayoutDashboard size={18} className="mr-3" /> Admin Dashboard
+                              </button>
+                            )}
                             <button 
                                 disabled
                                 aria-disabled="true"
@@ -624,20 +717,47 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         </p>
                                     </div>
                                 )}
-                                <div data-tour="profile-welcome">
-                                    <h2 className="text-lg font-bold text-slate-900">Personal Information</h2>
-                                    <p className="text-sm text-slate-500">
-                                        Update your public profile and contact details.{' '}
-                                        <span className="text-red-500">*</span> required.
-                                    </p>
+                                <div
+                                    data-tour="profile-welcome"
+                                    className="flex items-start justify-between gap-3"
+                                >
+                                    <div className="min-w-0 flex-1 text-left">
+                                        <div className="flex items-center gap-2">
+                                            <h2 className="text-lg font-bold text-slate-900">
+                                                Personal Information
+                                            </h2>
+                                            {!isEditingProfile ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsEditingProfile(true)}
+                                                    aria-label="Edit personal information"
+                                                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                                                >
+                                                    <Pencil size={16} />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                        <p className="mt-0.5 text-sm text-slate-500">
+                                            {isEditingProfile
+                                                ? (
+                                                    <>
+                                                        Update your public profile and contact details.{' '}
+                                                        <span className="text-red-500">*</span> required.
+                                                    </>
+                                                  )
+                                                : 'View your public profile and contact details.'}
+                                        </p>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div data-tour="profile-full-name">
                                         <RequiredLabel>Full Name</RequiredLabel>
                                         <input 
                                             type="text" 
+                                            readOnly={!isEditingProfile}
                                             className={profileInputClass(
                                               profileShowErrors && !formData.fullName.trim(),
+                                              isEditingProfile,
                                             )}
                                             value={formData.fullName}
                                             onChange={(e) => setFormData({...formData, fullName: e.target.value})}
@@ -649,8 +769,10 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         <RequiredLabel>Position / Title</RequiredLabel>
                                         <input 
                                             type="text" 
+                                            readOnly={!isEditingProfile}
                                             className={profileInputClass(
                                               profileShowErrors && !formData.jobTitle.trim(),
+                                              isEditingProfile,
                                             )}
                                             value={formData.jobTitle}
                                             onChange={(e) => setFormData({...formData, jobTitle: e.target.value})}
@@ -662,12 +784,15 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         <RequiredLabel>Phone</RequiredLabel>
                                         <input 
                                             type="tel" 
+                                            readOnly={!isEditingProfile}
                                             className={profileInputClass(
                                               profileShowErrors &&
                                                 !hasIndonesianPhoneNumber(formData.phone),
+                                              isEditingProfile,
                                             )}
                                             value={formData.phone}
                                             onFocus={() => {
+                                              if (!isEditingProfile) return;
                                               if (!formData.phone.trim()) {
                                                 setFormData((prev) => ({
                                                   ...prev,
@@ -688,10 +813,12 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         <RequiredLabel>Email Address</RequiredLabel>
                                         <input 
                                             type="email" 
+                                            readOnly={!isEditingProfile}
                                             className={profileInputClass(
                                               profileShowErrors &&
                                                 (!formData.email.trim() ||
                                                   !formData.email.includes('@')),
+                                              isEditingProfile,
                                             )}
                                             value={formData.email}
                                             onChange={(e) => setFormData({...formData, email: e.target.value})}
@@ -702,8 +829,10 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         <RequiredLabel>Company</RequiredLabel>
                                         <input 
                                             type="text" 
+                                            readOnly={!isEditingProfile}
                                             className={profileInputClass(
                                               profileShowErrors && !formData.company.trim(),
+                                              isEditingProfile,
                                             )}
                                             value={formData.company}
                                             onChange={(e) => setFormData({...formData, company: e.target.value})}
@@ -715,8 +844,10 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         <RequiredLabel>Domicile</RequiredLabel>
                                         <input 
                                             type="text" 
+                                            readOnly={!isEditingProfile}
                                             className={profileInputClass(
                                               profileShowErrors && !formData.domicile.trim(),
+                                              isEditingProfile,
                                             )}
                                             value={formData.domicile}
                                             onChange={(e) => setFormData({...formData, domicile: e.target.value})}
@@ -728,7 +859,8 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instagram</label>
                                         <input 
                                             type="text" 
-                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            readOnly={!isEditingProfile}
+                                            className={profileInputClass(false, isEditingProfile)}
                                             value={formData.instagram}
                                             onChange={(e) => setFormData({...formData, instagram: e.target.value})}
                                             placeholder="@username"
@@ -738,14 +870,26 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">LinkedIn</label>
                                         <input 
                                             type="url" 
-                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            readOnly={!isEditingProfile}
+                                            className={profileInputClass(false, isEditingProfile)}
                                             value={formData.linkedinUrl}
                                             onChange={(e) => setFormData({...formData, linkedinUrl: e.target.value})}
                                             placeholder="linkedin.com/in/..."
                                         />
                                     </div>
                                 </div>
-                                <div className="flex justify-end pt-4">
+                                {isEditingProfile && (
+                                <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
+                                    {!isProfileComplete ? null : (
+                                    <button
+                                        type="button"
+                                        onClick={handleCancelEditProfile}
+                                        disabled={isLoading}
+                                        className="flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 sm:w-auto sm:min-h-0"
+                                    >
+                                        Cancel
+                                    </button>
+                                    )}
                                     <button 
                                         data-tour="profile-save-button"
                                         onClick={handleSaveProfile}
@@ -755,6 +899,7 @@ const ProfileSettings: React.FC<{ onNavigate?: (view: ViewState) => void }> = ({
                                         {isLoading ? 'Saving...' : <><Save size={16} className="mr-2"/> Save Changes</>}
                                     </button>
                                 </div>
+                                )}
                             </div>
                         )}
 

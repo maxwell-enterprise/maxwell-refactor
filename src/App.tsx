@@ -199,7 +199,13 @@ const App: React.FC = () => {
           onToggleZone={setPersonalZone}
           profileGateActive={profileGateActive}
         >
-          {resolveView(currentView, userRole, isPersonalZone, setCurrentView)}
+          {resolveView(
+            currentView,
+            userRole,
+            isPersonalZone,
+            setCurrentView,
+            setPersonalZone,
+          )}
         </DashboardLayout>
       </OnboardingProvider>
     </>

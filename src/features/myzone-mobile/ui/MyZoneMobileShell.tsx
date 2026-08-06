@@ -97,6 +97,8 @@ const MyZoneMobileShell: React.FC<MyZoneMobileShellProps> = ({
                     src={avatarUrl}
                     alt={userName ?? 'Profile'}
                     className="h-full w-full object-cover"
+                    // Google CDN avatars 403 when Referer is sent from localhost / our domain.
+                    referrerPolicy="no-referrer"
                     onError={() => setIsAvatarBroken(true)}
                   />
                 ) : (
