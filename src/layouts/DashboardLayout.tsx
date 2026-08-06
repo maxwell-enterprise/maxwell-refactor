@@ -604,6 +604,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                                   src={user.avatarUrl}
                                   alt={user.fullName}
                                   className="h-full w-full object-cover"
+                                  // Google CDN avatars 403 when Referer is sent from localhost / our domain.
+                                  referrerPolicy="no-referrer"
                                   onError={() => setIsHeaderAvatarBroken(true)}
                                 />
                             ) : (
