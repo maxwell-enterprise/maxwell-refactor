@@ -21,15 +21,15 @@ function getCartLineUnitPrice(product: Product, variantId?: string): number {
 
 /**
  * When true, Midtrans Snap is not loaded; checkout uses the in-app success modal + server
- * `simulate-settle` (same PAID + wallet path as a real webhook). Default: Snap off (`true`).
- * Production with real Midtrans: set `NEXT_PUBLIC_MIDTRANS_UI_DISABLED=false` and point the API
- * at live keys + webhook; the API should not allow simulation there (explicit or prod defaults).
+ * `simulate-settle` (same PAID + wallet path as a real webhook). Default: Snap ON (`false`)
+ * — QA must opt in via `NEXT_PUBLIC_MIDTRANS_UI_DISABLED=true` and BE `ALLOW_PAYMENT_SIMULATION`.
+ * Production with real Midtrans: leave unset/false and disable simulation on the API.
  */
 const MIDTRANS_UI_DISABLED = (() => {
   const v = String(
-    process.env.NEXT_PUBLIC_MIDTRANS_UI_DISABLED ?? 'true',
+    process.env.NEXT_PUBLIC_MIDTRANS_UI_DISABLED ?? 'false',
   ).trim().toLowerCase();
-  return v !== 'false' && v !== '0';
+  return v === 'true' || v === '1' || v === 'yes' || v === 'on';
 })();
 
 const isValidCheckoutEmail = (value: string): boolean =>
