@@ -20,25 +20,32 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const { showToast } = useToast();
 
-  // --- VARIABLE INJECTION STATE ---
-  const [dynamicGreeting, setDynamicGreeting] = useState({
-    title: 'Leaders Change the World',
-    subtitle:
-      "Join the world's most influential leadership community. Access proven strategies, connect with mentors, and grow your potential.",
-  });
+  // Safe personalized greeting — never inject query strings as HTML (XSS).
+  const [personalizedName, setPersonalizedName] = useState<string | null>(null);
+  const [greetingSubtitle, setGreetingSubtitle] = useState(
+    "Join the world's most influential leadership community. Access proven strategies, connect with mentors, and grow your potential.",
+  );
 
   useEffect(() => {
     // Logic: If query params exist (simulating a personalized link click), inject variables
     const params = new URLSearchParams(window.location.search);
-    const memberName = params.get('member_name') || params.get('name');
+    const rawName = params.get('member_name') || params.get('name');
     const authError = params.get('auth_error');
     const shouldOpenLogin = params.get('login') === '1' || window.location.pathname === '/login';
 
-    if (memberName) {
-      setDynamicGreeting({
-        title: `Welcome Back, <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">${memberName}</span>`,
-        subtitle: `We are ready to continue your growth journey. Check out the special offers curated just for you below.`,
-      });
+    if (rawName) {
+      // Strip tags/control chars; cap length so ?name= cannot dump payloads into the UI.
+      const safeName = rawName
+        .replace(/[<>]/g, '')
+        .replace(/[\u0000-\u001F\u007F]/g, '')
+        .trim()
+        .slice(0, 80);
+      if (safeName) {
+        setPersonalizedName(safeName);
+        setGreetingSubtitle(
+          'We are ready to continue your growth journey. Check out the special offers curated just for you below.',
+        );
+      }
     }
 
     if (authError) {
@@ -226,13 +233,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
             <span className='w-2 h-2 bg-blue-600 rounded-full mr-2'></span>
             Elevate Your Influence
           </div>
-          {/* Dynamic Title Injection */}
-          <h1
-            className='text-4xl md:text-6xl lg:text-7xl font-bold text-slate-900 tracking-tight leading-tight mb-6'
-            dangerouslySetInnerHTML={{ __html: dynamicGreeting.title }}
-          ></h1>
+          {/* Dynamic title — React-escaped text only (no dangerouslySetInnerHTML). */}
+          <h1 className='text-4xl md:text-6xl lg:text-7xl font-bold text-slate-900 tracking-tight leading-tight mb-6'>
+            {personalizedName ? (
+              <>
+                Welcome Back,{' '}
+                <span className='text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600'>
+                  {personalizedName}
+                </span>
+              </>
+            ) : (
+              'Leaders Change the World'
+            )}
+          </h1>
           <p className='mt-4 max-w-2xl mx-auto text-lg md:text-xl text-slate-600 leading-relaxed'>
-            {dynamicGreeting.subtitle}
+            {greetingSubtitle}
           </p>
           <div className='mt-10 flex flex-col sm:flex-row gap-4 justify-center'>
             <button className='px-8 py-4 rounded-full bg-slate-900 text-white font-semibold text-lg hover:bg-slate-800 hover:shadow-xl hover:-translate-y-1 transition-all'>
