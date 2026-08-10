@@ -8,6 +8,7 @@ import { ContentPost } from '../../types/index';
 import { useToast } from '../../context/ToastContext';
 import ContentLinkedProductCard from './ContentLinkedProductCard';
 import { formatArticleDate, typeLabel } from '../../lib/cmsContentUtils';
+import { sanitizeRichHtml } from '../../lib/sanitizeRichHtml';
 import { ArticleReaderSkeleton } from '../ui/page-skeletons';
 
 type ArticleReaderViewProps = {
@@ -170,7 +171,9 @@ const ArticleReaderView: React.FC<ArticleReaderViewProps> = ({
             prose-strong:text-slate-900
             prose-li:text-slate-700 prose-li:leading-relaxed
             prose-blockquote:border-l-blue-500 prose-blockquote:text-slate-600 prose-blockquote:italic"
-          dangerouslySetInnerHTML={{ __html: post.body || '' }}
+          dangerouslySetInnerHTML={{
+            __html: sanitizeRichHtml(post.body || ''),
+          }}
         />
 
         {post.linkedProductId && (

@@ -4,11 +4,61 @@ import { useEffect, useState } from 'react';
 import { setWorkspaceToken } from '../../../lib/workspaceAuthToken';
 import { consumeOAuthReturnSearch, consumeOAuthReturnPath } from '../../../lib/postAuthNavigation';
 import { workspaceApiUrl } from '../../../lib/workspaceApi';
+import { sanitizeInternalReturnPath } from '../../../lib/safeReturnPath';
 
 const MOBILE_APP_SCHEME = 'maxwellleadership';
 
-function buildMobileAppDeepLink(workspaceToken: string): string {
-  return `${MOBILE_APP_SCHEME}://auth/callback?token=${encodeURIComponent(workspaceToken)}`;
+/** B1: deep link carries one-time code only — never workspace JWT. */
+function buildMobileAppDeepLink(loginCode: string): string {
+  return `${MOBILE_APP_SCHEME}://auth/callback?code=${encodeURIComponent(loginCode)}`;
+}
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const payload = (await res.json()) as { message?: string | string[] };
+    if (typeof payload?.message === 'string') return payload.message;
+    if (Array.isArray(payload?.message) && payload.message[0]) {
+      return String(payload.message[0]);
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
+async function exchangeLoginCode(code: string): Promise<string> {
+  const res = await fetch(workspaceApiUrl('/auth/login-code/exchange'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, 'login_code_exchange_failed'));
+  }
+  const payload = (await res.json()) as { token?: string };
+  if (typeof payload.token !== 'string' || !payload.token.trim()) {
+    throw new Error('login_code_exchange_missing_token');
+  }
+  return payload.token.trim();
+}
+
+async function mintLoginCodeFromJwt(workspaceToken: string): Promise<string> {
+  const res = await fetch(workspaceApiUrl('/auth/login-code'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${workspaceToken}`,
+    },
+    body: JSON.stringify({ token: workspaceToken }),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, 'login_code_mint_failed'));
+  }
+  const payload = (await res.json()) as { code?: string };
+  if (typeof payload.code !== 'string' || !payload.code.trim()) {
+    throw new Error('login_code_mint_missing_code');
+  }
+  return payload.code.trim();
 }
 
 export default function AuthCallbackPage() {
@@ -38,6 +88,11 @@ export default function AuthCallbackPage() {
 
     const isMobileClient = queryParams.get('client') === 'mobile';
 
+    // B1 preferred: opaque one-time code from Nest redirect
+    const handoffCode =
+      getFirst(queryParams, ['code']) || getFirst(hashParams, ['code']);
+
+    // Legacy / Supabase: long-lived token may still appear (hash access_token, old clients)
     const tokenKeys = ['token', 'tokenKey', 'tokenkey', 'access_token'];
     const token = getFirst(hashParams, tokenKeys) || getFirst(queryParams, tokenKeys);
 
@@ -50,18 +105,23 @@ export default function AuthCallbackPage() {
       // Mobile handoff keeps this page as a fallback UI; don't bounce away.
       if (isMobileClient) return;
       window.location.replace('/?auth_error=callback_timeout');
-    }, 5000);
+    }, 8000);
+
+    const fail = (message: string) => {
+      window.clearTimeout(watchdog);
+      window.location.replace(`/?auth_error=${encodeURIComponent(message)}`);
+    };
 
     const goToWebDashboard = (workspaceToken: string) => {
       setWorkspaceToken(workspaceToken);
       window.clearTimeout(watchdog);
-      const returnTo = queryParams.get('returnTo')?.trim();
+      const returnTo = sanitizeInternalReturnPath(queryParams.get('returnTo'));
       const oauthPath = consumeOAuthReturnPath();
-      if (returnTo?.startsWith('/')) {
+      if (returnTo) {
         window.location.replace(returnTo);
         return;
       }
-      if (oauthPath.startsWith('/')) {
+      if (oauthPath) {
         window.location.replace(oauthPath);
         return;
       }
@@ -85,26 +145,43 @@ export default function AuthCallbackPage() {
       window.location.replace(`/dashboard${search ? `?${search}` : ''}`);
     };
 
-    /** Default web path — unchanged when client is not mobile. */
-    const finalize = (workspaceToken: string) => {
+    /** After we hold workspace JWT only in memory, open app via one-time code. */
+    const finalize = async (workspaceToken: string) => {
       if (isMobileClient) {
-        setWorkspaceToken(workspaceToken);
-        window.clearTimeout(watchdog);
-        const deepLink = buildMobileAppDeepLink(workspaceToken);
-        setMobileHandoff({ token: workspaceToken, deepLink });
-        // Prefer opening the installed app; keep this page as fallback.
-        window.location.href = deepLink;
+        try {
+          const loginCode = await mintLoginCodeFromJwt(workspaceToken);
+          setWorkspaceToken(workspaceToken);
+          window.clearTimeout(watchdog);
+          const deepLink = buildMobileAppDeepLink(loginCode);
+          setMobileHandoff({ token: workspaceToken, deepLink });
+          window.location.href = deepLink;
+        } catch (e) {
+          fail(e instanceof Error ? e.message : 'mobile_handoff_failed');
+        }
         return;
       }
       goToWebDashboard(workspaceToken);
     };
+
+    if (handoffCode) {
+      void (async () => {
+        try {
+          const workspaceToken = await exchangeLoginCode(handoffCode);
+          await finalize(workspaceToken);
+        } catch (e) {
+          fail(e instanceof Error ? e.message : 'login_code_exchange_failed');
+        }
+      })();
+      return;
+    }
 
     if (token) {
       const provider = queryParams.get('provider') || hashParams.get('provider');
       const shouldExchangeViaSupabase =
         provider === 'supabase' || hashParams.has('refresh_token');
       if (!shouldExchangeViaSupabase) {
-        finalize(token);
+        // Legacy query JWT path — still complete session, strip from URL via replace navigation.
+        void finalize(token);
         return;
       }
       void (async () => {
@@ -118,37 +195,23 @@ export default function AuthCallbackPage() {
             body: JSON.stringify({ accessToken: token }),
           });
           if (!res.ok) {
-            let message = 'supabase_exchange_failed';
-            try {
-              const payload = (await res.json()) as { message?: string | string[] };
-              if (typeof payload?.message === 'string') message = payload.message;
-              else if (Array.isArray(payload?.message) && payload.message[0]) {
-                message = String(payload.message[0]);
-              }
-            } catch {
-              /* ignore */
-            }
-            window.clearTimeout(watchdog);
-            window.location.replace(`/?auth_error=${encodeURIComponent(message)}`);
+            fail(await readErrorMessage(res, 'supabase_exchange_failed'));
             return;
           }
           const payload = (await res.json()) as { token?: string };
           if (typeof payload.token !== 'string' || !payload.token.trim()) {
-            window.clearTimeout(watchdog);
-            window.location.replace('/?auth_error=supabase_exchange_missing_token');
+            fail('supabase_exchange_missing_token');
             return;
           }
-          finalize(payload.token.trim());
+          await finalize(payload.token.trim());
         } catch {
-          window.clearTimeout(watchdog);
-          window.location.replace('/?auth_error=supabase_exchange_network');
+          fail('supabase_exchange_network');
         }
       })();
       return;
     }
     if (error) {
-      window.clearTimeout(watchdog);
-      window.location.replace(`/?auth_error=${encodeURIComponent(error)}`);
+      fail(error);
       return;
     }
     // Fallback: never stay forever on callback screen.
