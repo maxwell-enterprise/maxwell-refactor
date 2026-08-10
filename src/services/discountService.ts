@@ -237,9 +237,22 @@ export const DiscountService = {
   },
 
   findByCode: async (code: string): Promise<Discount | undefined> => {
-    // Now async to fetch from DB
-    const all = await DiscountService.getDiscounts();
     const needle = code.trim().toUpperCase();
+    if (!needle) return undefined;
+
+    // Batch C: public single-code lookup (does not fetch full catalog).
+    if (shouldUseApi()) {
+      try {
+        const discount = await apiRequest<Discount>(
+          `/store/discounts/lookup/${encodeURIComponent(needle)}`,
+        );
+        return discount;
+      } catch {
+        return undefined;
+      }
+    }
+
+    const all = await DiscountService.getDiscounts();
     return all.find((d) => String(d.code).trim().toUpperCase() === needle);
   },
 

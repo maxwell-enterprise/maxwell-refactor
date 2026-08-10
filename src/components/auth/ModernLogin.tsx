@@ -8,6 +8,7 @@ import { useToast } from '../../context/ToastContext';
 import { workspaceApiUrl } from '../../lib/workspaceApi';
 import { setWorkspaceToken } from '../../lib/workspaceAuthToken';
 import { stashOAuthReturnSearch, stashOAuthReturnPath, consumeOAuthReturnPath } from '../../lib/postAuthNavigation';
+import { sanitizeInternalReturnPath } from '../../lib/safeReturnPath';
 
 /** Nest `/fe/auth/*` — identity di backend, bukan Next/Prisma. */
 const USE_WORKSPACE =
@@ -18,13 +19,15 @@ const RECENT_EMAILS_LIMIT = 6;
 
 function navigateAfterAuth(returnSearch?: string) {
   if (typeof window === 'undefined') return;
-  const returnTo = new URLSearchParams(window.location.search).get('returnTo')?.trim();
+  const returnTo = sanitizeInternalReturnPath(
+    new URLSearchParams(window.location.search).get('returnTo'),
+  );
   const oauthPath = consumeOAuthReturnPath();
-  if (returnTo?.startsWith('/')) {
+  if (returnTo) {
     window.location.replace(returnTo);
     return;
   }
-  if (oauthPath.startsWith('/')) {
+  if (oauthPath) {
     window.location.replace(oauthPath);
     return;
   }
@@ -254,8 +257,10 @@ const ModernLogin: React.FC<ModernLoginProps> = ({ onLogin, onClose }) => {
         return;
       }
       stashOAuthReturnSearch(window.location.search || '');
-      const returnTo = new URLSearchParams(window.location.search).get('returnTo')?.trim();
-      if (returnTo?.startsWith('/')) {
+      const returnTo = sanitizeInternalReturnPath(
+        new URLSearchParams(window.location.search).get('returnTo'),
+      );
+      if (returnTo) {
         stashOAuthReturnPath(returnTo);
       }
       window.location.href = workspaceApiUrl('/auth/google');
